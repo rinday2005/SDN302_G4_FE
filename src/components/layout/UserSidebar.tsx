@@ -32,6 +32,26 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
   const { wishlistCount } = useCartWishlist();
   const location = useLocation();
 
+  // If the logged in user is an ADMIN, AdminLayout already provides AdminSidebar.
+  // Suppress UserSidebar to prevent duplicate sidebars when browsing public market pages.
+  const currentRole = useMemo(() => {
+    if (user?.role) return user.role.toUpperCase();
+    try {
+      const savedUser = localStorage.getItem("user");
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        return parsed?.role?.toUpperCase();
+      }
+    } catch {
+      // ignore
+    }
+    return undefined;
+  }, [user]);
+
+  if (currentRole === 'ADMIN') {
+    return null;
+  }
+
   // Internal collapse state (Default: false = EXPANDED / SHOWN)
   const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
     try {

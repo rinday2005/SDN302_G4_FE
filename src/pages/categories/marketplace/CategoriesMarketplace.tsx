@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../../hooks/useAuth';
 import { UserSidebar } from '../../../components/layout/UserSidebar';
 import {
   CATEGORIES_DATA,
@@ -9,6 +10,7 @@ import {
 import type { CategoryFilterKey, CategoryItem } from '../../data/categories/categoriesData';
 
 export const CategoriesMarketplace: React.FC = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<CategoryFilterKey>('all');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -86,7 +88,7 @@ export const CategoriesMarketplace: React.FC = () => {
         {/* ── MAIN CONTENT AREA ── */}
         <main className="flex-1 min-w-0 space-y-12">
           {/* Quick inline restore chip if user clicked 3-bar button to hide sidebar */}
-          {isSidebarCollapsed && (
+          {isSidebarCollapsed && user?.role !== 'ADMIN' && (
             <div className="flex items-center gap-2 -mb-6 animate-fade-in">
               <button
                 type="button"

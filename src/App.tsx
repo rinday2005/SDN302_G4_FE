@@ -40,10 +40,22 @@ import PaymentReturn from "./pages/payment/PaymentReturn";
 import PaymentSuccess from "./pages/payment/PaymentSuccess";
 import PaymentFailed from "./pages/payment/PaymentFailed";
 
+import Dashboard from "./pages/admin/Dashboard";
+import UserManagement from "./pages/admin/UserManagement";
+import UserDetail from "./pages/admin/UserDetail";
+import KycApproval from "./pages/admin/KycApproval";
+import KycReview from "./pages/admin/KycReview";
+import ListingApproval from "./pages/admin/ListingApproval";
+import ThriftListingApproval from "./pages/admin/ThriftListingApproval";
+import CategoryManagement from "./pages/admin/CategoryManagement";
+import DisputeManagement from "./pages/admin/DisputeManagement";
+import PlatformFinance from "./pages/admin/PlatformFinance";
+
 import PublicRoutes from "./routes/PublicRoutes";
 import ProtectedRoutes from "./routes/ProtectedRoutes";
 
 import { MasterLayout } from "./components/layout/MasterLayout";
+import { AdminLayout } from "./components/layout/admin/AdminLayout";
 import { AuthContext } from "./context/auth-context";
 
 import { NavigationLoader } from "./components/common/NavigationLoader";
@@ -92,37 +104,6 @@ const AppLayout = ({
   );
 };
 
-<<<<<<< HEAD
-const SavedItemsPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Danh Sách Yêu Thích (Wishlist)
-    </h1>
-  </div>
-);
-
-const NotificationsPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Thông Báo Của Tôi
-    </h1>
-  </div>
-);
-
-
-const MyOrdersPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Đơn Hàng Của Tôi
-    </h1>
-  </div>
-);
-
-import Dashboard from "./pages/admin/Dashboard";
-import { AdminLayout } from "./components/layout/admin/AdminLayout";
-
-=======
->>>>>>> b648e6bb7eae0a65ba880bfbeaf818236cb6dfc9
 const ShopDashboard = () => (
   <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <h1 className="text-2xl font-bold text-gray-800">
@@ -427,42 +408,157 @@ const App = () => {
 
             <Route
               path="/admin/users"
-              element={<Dashboard />}
+              element={<UserManagement />}
+            />
+
+            <Route
+              path="/admin/users/:id"
+              element={<UserDetail />}
+            />
+
+            <Route
+              path="/admin/user-detail/:id"
+              element={<UserDetail />}
+            />
+
+            <Route
+              path="/admin/user-management"
+              element={<UserManagement />}
             />
 
             <Route
               path="/admin/kyc"
-              element={<Dashboard />}
+              element={<KycApproval />}
+            />
+
+            <Route
+              path="/admin/kyc/:id"
+              element={<KycReview />}
+            />
+
+            <Route
+              path="/admin/kyc-review"
+              element={<KycReview />}
+            />
+
+            <Route
+              path="/admin/kyc-review/:id"
+              element={<KycReview />}
+            />
+
+            <Route
+              path="/admin/kyc-approval"
+              element={<KycApproval />}
+            />
+
+            <Route
+              path="/admin/kyc-verification"
+              element={<KycApproval />}
             />
 
             <Route
               path="/admin/rent/listings"
-              element={<Dashboard />}
+              element={<ListingApproval />}
+            />
+
+            <Route
+              path="/admin/rent/listings/:id"
+              element={<KycReview />}
+            />
+
+            <Route
+              path="/admin/rent-listings"
+              element={<ListingApproval />}
+            />
+
+            <Route
+              path="/admin/rent-approval"
+              element={<ListingApproval />}
+            />
+
+            <Route
+              path="/admin/duyet-rent"
+              element={<ListingApproval />}
+            />
+
+            <Route
+              path="/admin/duyet-rent/:id"
+              element={<KycReview />}
+            />
+
+            <Route
+              path="/admin/rent-review"
+              element={<KycReview />}
+            />
+
+            <Route
+              path="/admin/rent-review/:id"
+              element={<KycReview />}
             />
 
             <Route
               path="/admin/thrift/listings"
-              element={<Dashboard />}
+              element={<ThriftListingApproval />}
+            />
+
+            <Route
+              path="/admin/thrift-listings"
+              element={<ThriftListingApproval />}
+            />
+
+            <Route
+              path="/admin/thrift-approval"
+              element={<ThriftListingApproval />}
+            />
+
+            <Route
+              path="/admin/duyet-thrift"
+              element={<ThriftListingApproval />}
             />
 
             <Route
               path="/admin/listings"
-              element={<Dashboard />}
+              element={<ListingApproval />}
             />
 
             <Route
               path="/admin/categories"
-              element={<Dashboard />}
+              element={<CategoryManagement />}
+            />
+
+            <Route
+              path="/admin/category-management"
+              element={<CategoryManagement />}
+            />
+
+            <Route
+              path="/admin/danh-muc-san"
+              element={<CategoryManagement />}
             />
 
             <Route
               path="/admin/disputes"
-              element={<Dashboard />}
+              element={<DisputeManagement />}
+            />
+
+            <Route
+              path="/admin/tranh-chap"
+              element={<DisputeManagement />}
             />
 
             <Route
               path="/admin/finance"
-              element={<Dashboard />}
+              element={<PlatformFinance />}
+            />
+
+            <Route
+              path="/admin/tai-chinh"
+              element={<PlatformFinance />}
+            />
+
+            <Route
+              path="/admin/tai-chinh-san"
+              element={<PlatformFinance />}
             />
           </Route>
         </Route>

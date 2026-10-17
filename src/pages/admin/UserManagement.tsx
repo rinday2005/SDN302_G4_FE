@@ -903,13 +903,15 @@ export const UserManagement: React.FC = () => {
                         {/* Column 8: Thao Tác */}
                         <td className="py-4 px-4 pr-6 text-right align-middle relative">
                           <div className="inline-flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setInspectingUser(user)}
-                              className="px-3 py-1.5 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] font-bold text-xs transition-colors border border-[#ccc5bc]/30"
+                            <Link
+                              to={`/admin/users/${user._id}`}
+                              className="px-3 py-1.5 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] font-bold text-xs transition-colors border border-[#ccc5bc]/30 inline-flex items-center gap-1"
                             >
-                              Chi Tiết
-                            </button>
+                              <span className="material-symbols-outlined text-[15px]">
+                                visibility
+                              </span>
+                              <span>Chi Tiết</span>
+                            </Link>
                             <div className="relative">
                               <button
                                 type="button"
@@ -928,6 +930,17 @@ export const UserManagement: React.FC = () => {
                               {/* Action Popover Menu */}
                               {actionMenuUserId === user._id && (
                                 <div className="absolute right-0 top-full mt-1 w-48 bg-[#ffffff] rounded-xl shadow-xl border border-[#ccc5bc]/40 z-30 py-1.5 text-left text-xs font-medium animate-fade-in">
+                                  <Link
+                                    to={`/admin/users/${user._id}`}
+                                    onClick={() => setActionMenuUserId(null)}
+                                    className="w-full px-3 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2 text-[#1c1c18]"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px] text-[#7b766f]">
+                                      account_circle
+                                    </span>
+                                    <span>Hồ sơ chi tiết</span>
+                                  </Link>
+
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -944,7 +957,7 @@ export const UserManagement: React.FC = () => {
 
                                   {user.kycStatus === "PENDING" && (
                                     <Link
-                                      to="/admin/kyc"
+                                      to={`/admin/kyc-review/${user._id}`}
                                       onClick={() => setActionMenuUserId(null)}
                                       className="w-full px-3 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2 text-[#7b5227]"
                                     >
@@ -1269,10 +1282,20 @@ export const UserManagement: React.FC = () => {
               </button>
 
               <div className="flex items-center gap-2">
+                <Link
+                  to={`/admin/users/${inspectingUser._id}`}
+                  className="px-4 py-2 rounded-xl bg-[#292724] text-[#fdf9f2] text-xs font-bold hover:bg-[#141310] transition-colors flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[15px]">
+                    open_in_new
+                  </span>
+                  <span>Mở Hồ Sơ Chi Tiết</span>
+                </Link>
+
                 {inspectingUser.kycStatus === "PENDING" && (
                   <Link
-                    to="/admin/kyc"
-                    className="px-4 py-2 rounded-xl bg-[#292724] text-[#fdf9f2] text-xs font-bold hover:bg-[#141310] transition-colors"
+                    to={`/admin/kyc-review/${inspectingUser._id}`}
+                    className="px-4 py-2 rounded-xl bg-[#ebe8e1] text-[#1c1c18] text-xs font-bold hover:bg-[#ccc5bc] transition-colors"
                   >
                     Xem Hồ Sơ KYC
                   </Link>

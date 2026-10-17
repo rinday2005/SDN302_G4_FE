@@ -204,6 +204,7 @@ const ProductCard: React.FC<{
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 const RentMarketplace: React.FC = () => {
+  const { user } = useAuth();
   const [dbProducts, setDbProducts] = useState<Product[]>([]);
 
   useEffect(() => {
@@ -482,7 +483,7 @@ const RentMarketplace: React.FC = () => {
         {/* ── MAIN CONTENT AREA ── */}
         <main className="flex-1 min-w-0 space-y-8">
           {/* Quick inline restore chip if user clicked 3-bar button to hide sidebar */}
-          {isSidebarCollapsed && (
+          {isSidebarCollapsed && user?.role !== 'ADMIN' && (
             <div className="flex items-center gap-2 -mb-4 animate-fade-in">
               <button
                 type="button"

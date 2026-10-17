@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink, Link } from "react-router-dom";
+import { NavLink, Link, useLocation } from "react-router-dom";
 
 interface AdminSidebarProps {
   isOpen?: boolean;
@@ -18,6 +18,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   kycCount = 1,
   disputeCount = 0,
 }) => {
+  const location = useLocation();
   const sidebarNavItems = [
     {
       name: "Bảng Điều Khiển",
@@ -136,13 +137,28 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                 key={item.path}
                 to={item.path}
                 onClick={() => onClose && onClose()}
-                className={({ isActive }) =>
-                  `flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group ${
-                    isActive
+                className={({ isActive }) => {
+                  const isCurrentActive =
+                    isActive ||
+                    (item.path === "/admin/rent/listings" &&
+                      (location.pathname.startsWith("/admin/rent") ||
+                        location.pathname.startsWith("/admin/duyet-rent"))) ||
+                    (item.path === "/admin/kyc" &&
+                      (location.pathname.startsWith("/admin/kyc") ||
+                        location.pathname.startsWith("/admin/duyet-kyc"))) ||
+                    (item.path === "/admin/thrift/listings" &&
+                      (location.pathname.startsWith("/admin/thrift") ||
+                        location.pathname.startsWith("/admin/duyet-thrift"))) ||
+                    (item.path === "/admin/users" &&
+                      (location.pathname.startsWith("/admin/user") ||
+                        location.pathname.startsWith("/admin/nguoi-dung")));
+
+                  return `flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group ${
+                    isCurrentActive
                       ? "bg-[#292724] text-[#fdf9f2] shadow-sm font-semibold"
                       : "text-[#4a463f] hover:bg-[#ebe8e1] hover:text-[#1c1c18]"
-                  }`
-                }
+                  }`;
+                }}
               >
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-[19px]">
