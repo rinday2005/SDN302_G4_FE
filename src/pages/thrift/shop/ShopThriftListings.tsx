@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 interface ThriftListingItem {
@@ -16,42 +16,41 @@ interface ThriftListingItem {
   sourceTag: string;
 }
 
-export const ShopThriftListings: React.FC = () => {
-  const [listings, setListings] = useState<ThriftListingItem[]>([]);
-  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'SOLD'>('ALL');
+const DEFAULT_THRIFT_LISTINGS: ThriftListingItem[] = [
+  {
+    id: 'thrift-HBL-500CM-demo',
+    originalUnitId: 'INV-HB500-02',
+    sku: 'HBL-500CM',
+    title: 'Hasselblad 500C/M Body + 80mm Planar T* (Ex-Rental Vintage)',
+    category: 'Classic Medium Format Film',
+    condition: 'Good Vintage 86.0%',
+    price: '48.500.000 ₫',
+    description: 'Hiện vật di sản vintage Thụy Điển hoàn tất 22 chu kỳ thuê an toàn.',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuDUN8HCi3sOXhTeh0dmehNYmo57zAHDye6SQDMIHO6MV0gs1lM8acz6IPVme5655aZzTIZcuBfeWTIShx9pWOMGfQguL-0rQ48jmhYIGGP97rfl7-9ODCHu4Bfr8f0eug6R1WoUO8pCOMtEA18LBcsfab6iSn_7v87Rehv8FjtphcR29tVHavTUarY6T57TmL__j8QfWk--_feDS3RT8vWba8Bigrfx6CdXpyWA-ixS',
+    status: 'APPROVED',
+    submittedAt: '12/10/2026',
+    sourceTag: 'Returned RENT Inventory',
+  },
+];
 
-  useEffect(() => {
-    // Đọc từ localStorage
+const THRIFT_LISTINGS_STORAGE_KEY = 'REUSE_HUB_THRIFT_LISTINGS_V1';
+
+export const ShopThriftListings: React.FC = () => {
+  const [listings] = useState<ThriftListingItem[]>(() => {
     try {
-      const stored = localStorage.getItem('REUSE_HUB_THRIFT_LISTINGS_V1');
+      const stored = localStorage.getItem(THRIFT_LISTINGS_STORAGE_KEY);
       if (stored) {
-        setListings(JSON.parse(stored));
-      } else {
-        // Mock sẵn 2 item để màn hình luôn phong phú
-        const defaultListings: ThriftListingItem[] = [
-          {
-            id: 'thrift-HBL-500CM-demo',
-            originalUnitId: 'INV-HB500-02',
-            sku: 'HBL-500CM',
-            title: 'Hasselblad 500C/M Body + 80mm Planar T* (Ex-Rental Vintage)',
-            category: 'Classic Medium Format Film',
-            condition: 'Good Vintage 86.0%',
-            price: '48.500.000 ₫',
-            description: 'Hiện vật di sản vintage Thụy Điển hoàn tất 22 chu kỳ thuê an toàn.',
-            image:
-              'https://lh3.googleusercontent.com/aida-public/AB6AXuDUN8HCi3sOXhTeh0dmehNYmo57zAHDye6SQDMIHO6MV0gs1lM8acz6IPVme5655aZzTIZcuBfeWTIShx9pWOMGfQguL-0rQ48jmhYIGGP97rfl7-9ODCHu4Bfr8f0eug6R1WoUO8pCOMtEA18LBcsfab6iSn_7v87Rehv8FjtphcR29tVHavTUarY6T57TmL__j8QfWk--_feDS3RT8vWba8Bigrfx6CdXpyWA-ixS',
-            status: 'APPROVED',
-            submittedAt: '12/10/2026',
-            sourceTag: 'Returned RENT Inventory',
-          },
-        ];
-        setListings(defaultListings);
-        localStorage.setItem('REUSE_HUB_THRIFT_LISTINGS_V1', JSON.stringify(defaultListings));
+        return JSON.parse(stored);
       }
+      localStorage.setItem(THRIFT_LISTINGS_STORAGE_KEY, JSON.stringify(DEFAULT_THRIFT_LISTINGS));
+      return DEFAULT_THRIFT_LISTINGS;
     } catch (e) {
       console.error('Lỗi đọc THRIFT listings:', e);
+      return DEFAULT_THRIFT_LISTINGS;
     }
-  }, []);
+  });
+  const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'SOLD'>('ALL');
 
   const filtered = listings.filter((item) => {
     if (filter === 'PENDING') return item.status === 'PENDING_APPROVAL';

@@ -159,7 +159,7 @@ export const ManageRentProducts: React.FC = () => {
                   </td>
                   <td className="py-4 px-4 text-right space-x-2">
                     {/* Chức năng [FE-S4-04] Nút Chuyển sang thanh lý đồ cũ (Convert RENT to THRIFT) */}
-                    {(p as any).convertedToThrift ? (
+                    {p.convertedToThrift ? (
                       <Link
                         to={`/shop/rent/convert-thrift/${p.sku}`}
                         className="inline-flex items-center gap-1 px-2.5 py-1 bg-secondary text-white rounded font-semibold text-[11px] shadow-xs"
@@ -168,7 +168,7 @@ export const ManageRentProducts: React.FC = () => {
                         <span className="material-symbols-outlined text-[13px]">verified</span>
                         Đã sang THRIFT
                       </Link>
-                    ) : (p as any).rentingUnits > 0 && p.readyUnits === 0 ? (
+                    ) : p.rentingUnits > 0 && p.readyUnits === 0 ? (
                       <span
                         title="Không thể chuyển: Tất cả máy đang cho thuê (AC 1)"
                         className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-400 rounded font-semibold text-[10px] cursor-not-allowed opacity-60"

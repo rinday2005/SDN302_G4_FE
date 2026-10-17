@@ -9,12 +9,9 @@ import {
   AVAILABLE_CONVERT_SPECIMENS,
 } from '../../data/shop/thriftConvertData';
 
-export const ConvertToThrift: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   const navigate = useNavigate();
 
-  // Tìm hiện vật từ URL parameter hoặc mặc định là INV-HB907-01
-  const targetId = id || 'INV-HB907-01';
   const storageKey = `REUSE_HUB_THRIFT_CONVERT_${targetId}`;
 
   // State chính của form: Đọc từ localStorage theo targetId để F5 không bị reset
@@ -34,21 +31,6 @@ export const ConvertToThrift: React.FC = () => {
     // Nếu chưa có trong localStorage thì lấy data cấu hình chuẩn từ file data
     return getInitialThriftDataForUnit(targetId);
   });
-
-  // Khi URL thay đổi (user chọn hiện vật khác), nạp dữ liệu của hiện vật đó từ localStorage hoặc data
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setFormData(parsed);
-        return;
-      }
-    } catch (e) {
-      console.error('Lỗi đọc localStorage khi đổi ID:', e);
-    }
-    setFormData(getInitialThriftDataForUnit(targetId));
-  }, [targetId, storageKey]);
 
   // UI state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -76,7 +58,10 @@ export const ConvertToThrift: React.FC = () => {
     formData.status === 'PENDING_APPROVAL' || formData.status === 'CONVERTED_TO_THRIFT';
 
   // Handler cập nhật input
-  const handleInputChange = (field: keyof ThriftConvertData, value: any) => {
+  const handleInputChange = <K extends keyof ThriftConvertData>(
+    field: K,
+    value: ThriftConvertData[K]
+  ) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -96,7 +81,7 @@ export const ConvertToThrift: React.FC = () => {
   const handleAddImage = (url: string, label: string = 'INSPECT') => {
     if (!url.trim()) return;
     const newImg: GalleryImage = {
-      id: `img-${Date.now()}`,
+      id: `img-${formData.images.length + 1}-${encodeURIComponent(label.toLowerCase())}`,
       url: url.trim(),
       label,
     };
@@ -169,23 +154,27 @@ export const ConvertToThrift: React.FC = () => {
           submittedAt: now,
         };
         // Tránh trùng lặp
-        const filteredOld = existingThriftList.filter((item: any) => item.originalUnitId !== formData.unitId);
+        const filteredOld = existingThriftList.filter(
+          (item: { originalUnitId?: string }) => item.originalUnitId !== formData.unitId
+        );
         localStorage.setItem(thriftStoreKey, JSON.stringify([newThriftEntry, ...filteredOld]));
 
         // Đánh dấu sản phẩm RENT đã convert để ẩn khỏi sàn RENT
         const rentStoreKey = 'REUSE_HUB_RENT_PRODUCTS_STORE_V1';
         const existingRentProducts = JSON.parse(localStorage.getItem(rentStoreKey) || '[]');
-        const updatedRentProducts = existingRentProducts.map((p: any) => {
-          if (p.sku === formData.sku) {
-            return {
-              ...p,
-              isVisible: false, // Ẩn khỏi RENT Marketplace theo AC 2
-              convertedToThrift: true,
-              thriftListingId: newThriftEntry.id,
-            };
+        const updatedRentProducts = existingRentProducts.map(
+          (p: { sku?: string; [key: string]: unknown }) => {
+            if (p.sku === formData.sku) {
+              return {
+                ...p,
+                isVisible: false, // Ẩn khỏi RENT Marketplace theo AC 2
+                convertedToThrift: true,
+                thriftListingId: newThriftEntry.id,
+              };
+            }
+            return p;
           }
-          return p;
-        });
+        );
         localStorage.setItem(rentStoreKey, JSON.stringify(updatedRentProducts));
       } catch (err) {
         console.error('Lỗi khi ghi danh sách THRIFT / RENT:', err);
@@ -234,51 +223,6 @@ export const ConvertToThrift: React.FC = () => {
 
       {/* Main Inner Container */}
       <div className="max-w-[1536px] mx-auto px-4 lg:px-8 py-6 w-full flex flex-col">
-        {/* Sub-navigation Tabs */}
-        <div className="w-full bg-surface-container-low px-space-md py-space-xs rounded-lg mb-space-md shadow-sm border border-outline-variant/40">
-          <div className="flex items-center gap-space-sm overflow-x-auto text-nowrap">
-            <Link
-              to="/shop/rent/products"
-              className="px-space-md py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors rounded"
-            >
-              SẢN PHẨM RENT
-            </Link>
-            <Link
-              to="/shop/rent/inventory"
-              className="px-space-md py-space-xs font-label-md text-label-md bg-surface-container-high text-on-surface font-semibold rounded shadow-sm flex items-center gap-1.5"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
-              KHO HIỆN VẬT
-            </Link>
-            <Link
-              to="/shop/orders"
-              className="px-space-md py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors rounded"
-            >
-              ĐƠN THUÊ RENT
-            </Link>
-            <span className="text-outline-variant select-none">|</span>
-            <Link
-              to="/shop/thrift/listings"
-              className="px-space-md py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors rounded"
-            >
-              MỤC ĐĂNG THRIFT
-            </Link>
-            <Link
-              to="/shop/thrift/orders"
-              className="px-space-md py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors rounded"
-            >
-              ĐƠN BÁN THRIFT
-            </Link>
-            <span className="text-outline-variant select-none">|</span>
-            <Link
-              to="/shop/revenue"
-              className="px-space-md py-space-xs font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors rounded"
-            >
-              DOANH THU
-            </Link>
-          </div>
-        </div>
-
         {/* Breadcrumb & Specimen Quick Switcher */}
         <div className="flex flex-col gap-space-xs mb-space-lg">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
@@ -1466,6 +1410,13 @@ export const ConvertToThrift: React.FC = () => {
       )}
     </div>
   );
+};
+
+export const ConvertToThrift: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const targetId = id || 'INV-HB907-01';
+
+  return <ConvertToThriftForm key={targetId} targetId={targetId} />;
 };
 
 export default ConvertToThrift;
