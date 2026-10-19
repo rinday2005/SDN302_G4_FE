@@ -1042,7 +1042,7 @@ export const ListingApproval: React.FC = () => {
                                 ? "bg-[#ffdad6] text-[#ba1a1a] hover:bg-[#ffdad6]/80"
                                 : "bg-[#ece7e4] hover:bg-[#e6e2de] text-[#1c1b19]"
                             }`}
-                            title="Mở toàn màn hình trang thẩm định hồ sơ pháp lý & KYC"
+                            title="Mở toàn màn hình trang thẩm định hồ sơ niêm yết RENT"
                           >
                             <span className="material-symbols-outlined text-[15px]">
                               {item.status === "PENDING"

@@ -938,13 +938,13 @@ export const ThriftListingApproval: React.FC = () => {
                               />
                             </div>
                             <div className="flex flex-col min-w-0 max-w-[260px]">
-                              <span
-                                onClick={() => handleOpenReview(item)}
+                              <Link
+                                to={`/admin/thrift-review/${item.id}`}
                                 className="font-serif text-sm text-[#141310] font-semibold truncate hover:underline cursor-pointer"
                                 title={item.title}
                               >
                                 {item.title}
-                              </span>
+                              </Link>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className="font-mono text-[10px] text-[#4a463f] bg-[#f1ede6] px-1.5 py-0.2 rounded font-semibold">
                                   {item.sku}
@@ -1063,38 +1063,45 @@ export const ThriftListingApproval: React.FC = () => {
                         <td className="py-3.5 px-4 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
                             {isPending ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenReview(item)}
-                                className="px-3 py-1.5 rounded-lg bg-[#141310] text-[#fdf9f2] hover:bg-[#292724] text-xs font-semibold transition-colors shadow-sm"
+                              <Link
+                                to={`/admin/thrift-review/${item.id}`}
+                                className="px-3 py-1.5 rounded-lg bg-[#141310] text-[#fdf9f2] hover:bg-[#292724] text-xs font-semibold transition-colors shadow-sm inline-flex items-center gap-1"
                               >
                                 Review
-                              </button>
+                              </Link>
                             ) : isRejected ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenReview(item)}
-                                className="px-3 py-1.5 rounded-lg bg-[#141310] text-[#fdf9f2] hover:bg-[#292724] text-xs font-semibold transition-colors shadow-sm"
+                              <Link
+                                to={`/admin/thrift-review/${item.id}`}
+                                className="px-3 py-1.5 rounded-lg bg-[#141310] text-[#fdf9f2] hover:bg-[#292724] text-xs font-semibold transition-colors shadow-sm inline-flex items-center gap-1"
                               >
                                 Review Lại
-                              </button>
+                              </Link>
                             ) : isSold ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenReview(item)}
-                                className="px-3 py-1.5 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] text-xs font-semibold transition-colors"
+                              <Link
+                                to={`/admin/thrift-review/${item.id}`}
+                                className="px-3 py-1.5 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] text-xs font-semibold transition-colors inline-flex items-center gap-1"
                               >
                                 Sổ Lưu Trữ
-                              </button>
+                              </Link>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenReview(item)}
-                                className="px-3 py-1.5 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] text-xs font-semibold transition-colors"
+                              <Link
+                                to={`/admin/thrift-review/${item.id}`}
+                                className="px-3 py-1.5 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] text-xs font-semibold transition-colors inline-flex items-center gap-1"
                               >
                                 Chi Tiết
-                              </button>
+                              </Link>
                             )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReview(item)}
+                              className="p-1.5 rounded-lg text-[#7b766f] hover:text-[#1c1c18] hover:bg-[#ebe8e1] transition-colors"
+                              title="Xem nhanh tóm tắt modal"
+                            >
+                              <span className="material-symbols-outlined text-[17px]">
+                                info
+                              </span>
+                            </button>
 
                             {isApproved || isSold ? (
                               <Link

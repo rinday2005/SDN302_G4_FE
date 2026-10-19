@@ -1262,7 +1262,7 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#f1ede6]">
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-[#f1ede6]">
               <button
                 type="button"
                 onClick={() => setSelectedDisputeItem(null)}
@@ -1270,6 +1270,14 @@ export const Dashboard: React.FC = () => {
               >
                 Đóng
               </button>
+              <Link
+                to={`/admin/disputes/${selectedDisputeItem.code.replace("#", "")}`}
+                onClick={() => setSelectedDisputeItem(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#6c5937] text-white hover:bg-[#554424] transition-colors shadow-sm flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">visibility</span>
+                <span>Mở Bàn Trọng Tài</span>
+              </Link>
               <button
                 type="button"
                 onClick={() => {

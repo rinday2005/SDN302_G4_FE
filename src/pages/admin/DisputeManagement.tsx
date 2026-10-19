@@ -787,7 +787,12 @@ export const DisputeManagement: React.FC = () => {
                       {/* Code & SLA */}
                       <td className="py-3.5 px-4 align-top whitespace-nowrap">
                         <div className="flex flex-col gap-1">
-                          <span className="font-mono font-bold text-[#1c1b19]">{item.id}</span>
+                          <Link
+                            to={`/admin/disputes/${item.id.replace("#", "")}`}
+                            className="font-mono font-bold text-[#1c1b19] hover:text-[#6c5937] hover:underline"
+                          >
+                            {item.id}
+                          </Link>
                           {item.isUrgentSla ? (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#ffdad6] text-[#ba1a1a] text-[10px] font-bold w-fit">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#ba1a1a] animate-ping"></span>
@@ -909,24 +914,35 @@ export const DisputeManagement: React.FC = () => {
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 align-top text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenReview(item)}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm ${
-                            item.status === "OPEN" || item.status === "UNDER_REVIEW"
-                              ? "bg-[#1c1b19] text-white hover:bg-[#6c5937]"
-                              : "bg-[#f2ede9] hover:bg-[#ece7e4] text-[#1c1b19]"
-                          }`}
-                        >
-                          <span>
-                            {item.status === "OPEN" || item.status === "UNDER_REVIEW"
-                              ? "Review"
-                              : "Chi Tiết"}
-                          </span>
-                          <span className="material-symbols-outlined text-[14px]">
-                            arrow_forward
-                          </span>
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link
+                            to={`/admin/disputes/${item.id.replace("#", "")}`}
+                            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm ${
+                              item.status === "OPEN" || item.status === "UNDER_REVIEW"
+                                ? "bg-[#1c1b19] text-white hover:bg-[#6c5937]"
+                                : "bg-[#f2ede9] hover:bg-[#ece7e4] text-[#1c1b19]"
+                            }`}
+                          >
+                            <span>
+                              {item.status === "OPEN" || item.status === "UNDER_REVIEW"
+                                ? "Review"
+                                : "Chi Tiết"}
+                            </span>
+                            <span className="material-symbols-outlined text-[14px]">
+                              arrow_forward
+                            </span>
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReview(item)}
+                            title="Xử lý nhanh tại chỗ"
+                            className="p-1.5 rounded-lg text-[#7e766a] hover:text-[#1c1b19] hover:bg-white transition-colors border border-transparent hover:border-[#cfc5b8]/40"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">
+                              gavel
+                            </span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1201,7 +1217,7 @@ export const DisputeManagement: React.FC = () => {
                 />
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-[#cfc5b8]/30">
+              <div className="pt-3 flex flex-wrap items-center justify-end gap-2.5 border-t border-[#cfc5b8]/30">
                 <button
                   type="button"
                   onClick={() => setSelectedDispute(null)}
@@ -1209,6 +1225,13 @@ export const DisputeManagement: React.FC = () => {
                 >
                   Đóng
                 </button>
+                <Link
+                  to={`/admin/disputes/${selectedDispute.id.replace("#", "")}`}
+                  className="px-4 py-2 rounded-lg bg-[#6c5937] hover:bg-[#554424] text-white font-semibold transition-colors flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">visibility</span>
+                  <span>Mở Bàn Trọng Tài Đầy Đủ</span>
+                </Link>
                 <button
                   type="submit"
                   className="px-5 py-2 rounded-lg bg-[#1c1b19] hover:bg-[#6c5937] text-white font-semibold transition-colors shadow-sm flex items-center gap-1.5"

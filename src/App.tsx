@@ -45,10 +45,13 @@ import UserManagement from "./pages/admin/UserManagement";
 import UserDetail from "./pages/admin/UserDetail";
 import KycApproval from "./pages/admin/KycApproval";
 import KycReview from "./pages/admin/KycReview";
+import RentReview from "./pages/admin/RentReview";
+import ThriftReview from "./pages/admin/ThriftReview";
 import ListingApproval from "./pages/admin/ListingApproval";
 import ThriftListingApproval from "./pages/admin/ThriftListingApproval";
 import CategoryManagement from "./pages/admin/CategoryManagement";
 import DisputeManagement from "./pages/admin/DisputeManagement";
+import DisputeReview from "./pages/admin/DisputeReview";
 import PlatformFinance from "./pages/admin/PlatformFinance";
 
 import PublicRoutes from "./routes/PublicRoutes";
@@ -463,7 +466,7 @@ const App = () => {
 
             <Route
               path="/admin/rent/listings/:id"
-              element={<KycReview />}
+              element={<RentReview />}
             />
 
             <Route
@@ -483,22 +486,27 @@ const App = () => {
 
             <Route
               path="/admin/duyet-rent/:id"
-              element={<KycReview />}
+              element={<RentReview />}
             />
 
             <Route
               path="/admin/rent-review"
-              element={<KycReview />}
+              element={<RentReview />}
             />
 
             <Route
               path="/admin/rent-review/:id"
-              element={<KycReview />}
+              element={<RentReview />}
             />
 
             <Route
               path="/admin/thrift/listings"
               element={<ThriftListingApproval />}
+            />
+
+            <Route
+              path="/admin/thrift/listings/:id"
+              element={<ThriftReview />}
             />
 
             <Route
@@ -514,6 +522,21 @@ const App = () => {
             <Route
               path="/admin/duyet-thrift"
               element={<ThriftListingApproval />}
+            />
+
+            <Route
+              path="/admin/duyet-thrift/:id"
+              element={<ThriftReview />}
+            />
+
+            <Route
+              path="/admin/thrift-review"
+              element={<ThriftReview />}
+            />
+
+            <Route
+              path="/admin/thrift-review/:id"
+              element={<ThriftReview />}
             />
 
             <Route
@@ -542,8 +565,28 @@ const App = () => {
             />
 
             <Route
+              path="/admin/disputes/:id"
+              element={<DisputeReview />}
+            />
+
+            <Route
+              path="/admin/dispute-review"
+              element={<DisputeReview />}
+            />
+
+            <Route
+              path="/admin/dispute-review/:id"
+              element={<DisputeReview />}
+            />
+
+            <Route
               path="/admin/tranh-chap"
               element={<DisputeManagement />}
+            />
+
+            <Route
+              path="/admin/tranh-chap/:id"
+              element={<DisputeReview />}
             />
 
             <Route

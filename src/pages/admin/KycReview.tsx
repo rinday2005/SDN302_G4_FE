@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useParams, useLocation } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { fetchAdminUsers } from "../../services/admin.api";
 
 export type KycReviewStatus = "pending" | "approved" | "rejected";
@@ -102,27 +102,8 @@ const DEFAULT_APPLICANT: KycApplicantDetail = {
   },
 };
 
-const RENT_ITEMS_LOOKUP: Record<string, { title: string; sku: string }> = {
-  "rent-1": { title: "Canon EOS R6 Mark II Kit", sku: "#HB-RNT-907X" },
-  "rent-2": { title: "Hasselblad 907X & CFV II 50C Kit", sku: "#HB-RNT-50CM" },
-  "rent-3": { title: "Leica Summilux-M 35mm f/1.4 ASPH", sku: "#HB-LCA-35AP" },
-  "rent-4": { title: "Sony FX6 Cinema Line Full-Frame", sku: "#HB-SNY-FX60" },
-  "rent-5": { title: "Arri Orbiter LED High-Output Set", sku: "#HB-ARR-ORBT" },
-};
-
 export const KycReview: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const location = useLocation();
-
-  const isRentContext =
-    location.pathname.includes("rent") ||
-    id?.toLowerCase().startsWith("rent") ||
-    id?.includes("RNT");
-
-  const linkedRent = (id && RENT_ITEMS_LOOKUP[id]) || {
-    title: "Canon EOS R6 Mark II Kit",
-    sku: "#HB-RNT-907X",
-  };
 
   const [applicant, setApplicant] = useState<KycApplicantDetail>(DEFAULT_APPLICANT);
   const [currentStatus, setCurrentStatus] = useState<KycReviewStatus>("pending");
@@ -285,21 +266,13 @@ export const KycReview: React.FC = () => {
             </Link>
             <Link
               to="/admin/kyc"
-              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                !isRentContext
-                  ? "bg-[#86724d] text-[#fffbff] font-semibold shadow-xs"
-                  : "text-[#4c463c] hover:text-[#1c1b19] hover:bg-[#ece7e4]"
-              }`}
+              className="px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors bg-[#86724d] text-[#fffbff] font-semibold shadow-xs"
             >
               Duyệt KYC
             </Link>
             <Link
               to="/admin/rent/listings"
-              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                isRentContext
-                  ? "bg-[#86724d] text-[#fffbff] font-semibold shadow-xs"
-                  : "text-[#4c463c] hover:text-[#1c1b19] hover:bg-[#ece7e4]"
-              }`}
+              className="px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors text-[#4c463c] hover:text-[#1c1b19] hover:bg-[#ece7e4]"
             >
               Duyệt RENT
             </Link>
@@ -365,26 +338,26 @@ export const KycReview: React.FC = () => {
             </Link>
             <span className="text-[#cfc5b8]">/</span>
             <Link
-              to={isRentContext ? "/admin/rent/listings" : "/admin/kyc"}
+              to="/admin/kyc"
               className="hover:text-[#6c5937] transition-colors"
             >
-              {isRentContext ? "Duyệt RENT" : "Duyệt KYC"}
+              Duyệt KYC
             </Link>
             <span className="text-[#cfc5b8]">/</span>
             <span className="text-[#6c5937] font-semibold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#6c5937] inline-block"></span>
-              <span>{isRentContext ? `Hồ Sơ Chủ Xưởng (${applicant.code})` : `Thẩm Định Hồ Sơ (${applicant.code})`}</span>
+              <span>Thẩm Định Hồ Sơ ({applicant.code})</span>
             </span>
           </div>
 
           <Link
-            to={isRentContext ? "/admin/rent/listings" : "/admin/kyc"}
+            to="/admin/kyc"
             className="inline-flex items-center gap-2 text-xs text-[#1c1b19] hover:text-[#6c5937] transition-colors py-1.5 px-3 rounded-lg bg-[#f7f3ef] hover:bg-[#ece7e4] shadow-xs border border-[#cfc5b8]/30 self-start md:self-auto"
           >
             <span className="material-symbols-outlined text-[18px]">
               arrow_back
             </span>
-            <span>{isRentContext ? "Quay lại danh sách Đơn Duyệt RENT" : "Quay lại danh sách KYC"}</span>
+            <span>Quay lại danh sách KYC</span>
           </Link>
         </div>
 
@@ -979,24 +952,7 @@ export const KycReview: React.FC = () => {
                   </span>
                 </div>
 
-                {isRentContext && (
-                  <div className="p-3 rounded-xl bg-[#86724d]/10 border border-[#86724d]/30 text-xs text-[#1c1b19] flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-[#6c5937] block">
-                        Đơn Duyệt RENT Kèm Theo:
-                      </span>
-                      <span className="font-semibold text-xs block mt-0.5">
-                        {linkedRent.title}
-                      </span>
-                      <span className="text-[11px] font-mono text-[#7e766a]">
-                        {linkedRent.sku}
-                      </span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded bg-[#ffdcc1] text-[#673d14] text-[10px] font-bold">
-                      Đang Thẩm Định
-                    </span>
-                  </div>
-                )}
+
               </div>
 
               <Link
@@ -1152,17 +1108,13 @@ export const KycReview: React.FC = () => {
 
               <div className="pt-2 text-center border-t border-[#cfc5b8]/20">
                 <Link
-                  to={isRentContext ? "/admin/rent/listings" : "/admin/kyc"}
+                  to="/admin/kyc"
                   className="inline-flex items-center gap-1.5 text-xs text-[#4c463c] hover:text-[#6c5937] font-semibold transition-colors"
                 >
                   <span className="material-symbols-outlined text-[16px]">
                     arrow_back
                   </span>
-                  <span>
-                    {isRentContext
-                      ? "Quay lại danh sách Đơn Duyệt RENT"
-                      : "Quay lại danh sách hàng đợi KYC"}
-                  </span>
+                  <span>Quay lại danh sách hàng đợi KYC</span>
                 </Link>
               </div>
             </div>
