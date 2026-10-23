@@ -1,10 +1,11 @@
-import React, { useContext, useState, useMemo, useRef } from 'react';
+import React, { useContext, useState, useMemo, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/auth-context';
 import { useCartWishlist } from '../../context/CartWishlistContext';
+import { getMyThriftOrdersApi } from '../../services/thriftOrder.api';
 import { UserSidebar } from '../../components/layout/UserSidebar';
 import AddressSelector, { type AddressValue } from '../../components/form/AddressSelector';
-import { uploadAvatarApi } from '../../services/user.api';
+import { uploadAvatarApi, updateProfileApi } from '../../services/user.api';
 
 interface SavedProfileData {
   fullName?: string;
@@ -26,7 +27,7 @@ export const Profile: React.FC = () => {
 const ProfileContent: React.FC = () => {
   const auth = useContext(AuthContext);
   const navigate = useNavigate();
-  const { cart, cartCount, wishlist, wishlistCount } = useCartWishlist();
+  const { cart, cartCount, wishlistCount } = useCartWishlist();
 
   const currentUserId = auth?.user?._id || auth?.user?.id || '';
   const profileStorageKey = currentUserId ? `user_profile_${currentUserId}` : '';
@@ -79,6 +80,26 @@ const ProfileContent: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState<string>(() => {
     return initialSaved?.avatarUrl || auth?.user?.avatarUrl || auth?.user?.avatar || '';
   });
+
+  // Track sidebar collapsed state to display inline restore chip when collapsed
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsSidebarCollapsed(customEvent.detail);
+      }
+    };
+    window.addEventListener('reuse_user_sidebar_toggle', handleSync);
+    return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
+  }, []);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   // UI Toast & Modal States
@@ -92,8 +113,9 @@ const ProfileContent: React.FC = () => {
   // ── Dynamic User Identification ──
   const emailDisplay = auth?.user?.email || '';
   const roleDisplay = auth?.user?.role || 'CUSTOMER';
-  const userIdDisplay = (auth?.user?._id || auth?.user?.id)
-    ? `#KYC-VN-${(auth.user._id || auth.user.id).slice(0, 6).toUpperCase()}`
+  const rawId = auth?.user?._id || auth?.user?.id || '';
+  const userIdDisplay = rawId
+    ? `#KYC-VN-${String(rawId).slice(0, 6).toUpperCase()}`
     : '#KYC-VN-884192';
 
   // Compute Avatar Initials
@@ -126,9 +148,24 @@ const ProfileContent: React.FC = () => {
   }, []);
 
   // Rental & Thrift count from cart or active orders
-  const rentItemsCount = cart.filter((i) => i.mode === 'rent' || !i.mode).length || 1;
-  const thriftItemsCount = cart.filter((i) => i.mode === 'thrift').length || 3;
-  const activeWishlistCount = wishlistCount || (wishlist.length > 0 ? wishlist.length : 6);
+  const rentItemsCount = cart.filter((i) => i.mode === 'rent' || !i.mode).length;
+  const thriftItemsCount = cart.filter((i) => i.mode === 'thrift').length;
+  const [dbThriftOrdersCount, setDbThriftOrdersCount] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    getMyThriftOrdersApi()
+      .then((res) => {
+        if (!isMounted) return;
+        const total = res?.orders?.length || 0;
+        setDbThriftOrdersCount(total);
+      })
+      .catch((err) => {
+        console.warn('Could not load thrift orders count:', err);
+      });
+    return () => { isMounted = false; };
+  }, []);
+  const activeWishlistCount = wishlistCount;
 
   // Address string representation
   const formattedAddress = useMemo(() => {
@@ -142,12 +179,14 @@ const ProfileContent: React.FC = () => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Vui lòng chọn tệp hình ảnh hợp lệ (PNG, JPG, WEBP)!');
+      setPasswordToastMessage('Vui lòng chọn tệp hình ảnh hợp lệ (PNG, JPG, WEBP)!');
+      setTimeout(() => setPasswordToastMessage(''), 3000);
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert('Kích thước ảnh tối đa là 5MB!');
+      setPasswordToastMessage('Kích thước ảnh tối đa là 5MB!');
+      setTimeout(() => setPasswordToastMessage(''), 3000);
       return;
     }
 
@@ -283,10 +322,20 @@ const ProfileContent: React.FC = () => {
     }, 4000);
   };
 
-  // Handle Account & Delivery form submit
-  const handleProfileSave = (e: React.FormEvent) => {
+  // Handle Account & Delivery form submit (Persist to MongoDB and localStorage)
+  const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // 1. Send PUT request to Backend API to persist address & profile into MongoDB
+      await updateProfileApi({
+        fullName,
+        phoneNumber: phone,
+        phone,
+        address,
+        avatarUrl,
+      });
+
+      // 2. Synchronize local storage cache
       const profileData = {
         fullName,
         phone,
@@ -309,8 +358,9 @@ const ProfileContent: React.FC = () => {
           detail: { avatarUrl, fullName },
         })
       );
-    } catch {
-      // ignore
+      window.dispatchEvent(new Event('user_profile_updated'));
+    } catch (err) {
+      console.warn('Backend updateProfileApi notice, falling back to local sync:', err);
     }
 
     setShowSaveToast(true);
@@ -343,11 +393,13 @@ const ProfileContent: React.FC = () => {
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) {
-      alert('Mật khẩu mới phải có ít nhất 6 ký tự!');
+      setPasswordToastMessage('Mật khẩu mới phải có ít nhất 6 ký tự!');
+      setTimeout(() => setPasswordToastMessage(''), 3000);
       return;
     }
     if (newPassword !== confirmPassword) {
-      alert('Xác nhận mật khẩu mới không khớp!');
+      setPasswordToastMessage('Xác nhận mật khẩu mới không khớp!');
+      setTimeout(() => setPasswordToastMessage(''), 3000);
       return;
     }
 
@@ -382,17 +434,33 @@ const ProfileContent: React.FC = () => {
 
       {/* Main Container with Sidebar + Content Area */}
       <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
-        {/* User Sidebar (Left Navigation) */}
+        {/* User Sidebar (Left Navigation - Fixed on left) */}
         <UserSidebar
           activeKey="profile"
           avatarUrl={avatarUrl}
           displayName={fullName}
           displayEmail={emailDisplay}
-          className="hidden lg:block shrink-0"
         />
 
         {/* Right Main Content */}
         <div className="flex-1 min-w-0 flex flex-col w-full">
+          {/* Quick inline restore chip if user clicked 3-bar button to hide sidebar */}
+          {isSidebarCollapsed && (
+            <div className="flex items-center gap-2 mb-3 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: false }))}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-[#E8E4DC] text-xs font-semibold text-[#1C1A18] hover:bg-[#F6F3EE] hover:border-[#1C1A18]/40 transition-all shadow-2xs cursor-pointer group"
+                title="Mở lại menu điều hướng (Dấu 3 gạch)"
+              >
+                <span className="material-symbols-outlined text-[18px] text-[#5E6D5B] group-hover:scale-110 transition-transform">
+                  menu
+                </span>
+                <span>Hiện menu điều hướng</span>
+              </button>
+            </div>
+          )}
+
           {/* 1. BREADCRUMB & PAGE HEADER */}
           <header className="mb-8">
             <div className="flex items-center gap-2 mb-3">
@@ -608,7 +676,7 @@ const ProfileContent: React.FC = () => {
                   Đơn THRIFT sở hữu
                 </p>
                 <p className="font-serif text-2xl text-[#141310] font-bold flex items-baseline gap-1.5">
-                  0{thriftItemsCount}{' '}
+                  {dbThriftOrdersCount > 0 ? (dbThriftOrdersCount < 10 ? `0${dbThriftOrdersCount}` : dbThriftOrdersCount) : (thriftItemsCount < 10 ? `0${thriftItemsCount}` : thriftItemsCount)}{' '}
                   <span className="font-sans text-xs text-[#7B766F] font-normal">
                     di sản lưu trữ
                   </span>
@@ -673,9 +741,9 @@ const ProfileContent: React.FC = () => {
                   <h4 className="font-serif text-base font-bold text-[#141310] group-hover:text-[#3A6843] transition-colors">
                     Đơn thuê của tôi
                   </h4>
-                  <p className="text-xs text-[#7B766F] mt-1">1 đơn đang lưu giữ:</p>
+                  <p className="text-xs text-[#7B766F] mt-1">{rentItemsCount > 0 ? `${rentItemsCount} thiết bị trong giỏ:` : 'Chưa có đơn thuê nào'}</p>
                   <p className="text-xs text-[#141310] font-medium line-clamp-1 mt-0.5">
-                    Canon EOS R6 Mark II + RF 24-70mm
+                    {rentItemsCount > 0 ? 'Xem giỏ hàng để hoàn tất thuê' : 'Khám phá kho thiết bị RENT'}
                   </p>
                 </div>
                 <div className="mt-5 pt-3 border-t border-[#EFEEEB] flex items-center justify-between text-[#7B766F] group-hover:text-[#141310] transition-colors text-xs font-semibold">
@@ -703,9 +771,9 @@ const ProfileContent: React.FC = () => {
                   <h4 className="font-serif text-base font-bold text-[#141310] group-hover:text-[#3A6843] transition-colors">
                     Đơn THRIFT sở hữu
                   </h4>
-                  <p className="text-xs text-[#7B766F] mt-1">Sở hữu vĩnh viễn:</p>
+                  <p className="text-xs text-[#7B766F] mt-1">{thriftItemsCount > 0 ? `${thriftItemsCount} sản phẩm:` : 'Chưa có đơn mua nào'}</p>
                   <p className="text-xs text-[#141310] font-medium line-clamp-1 mt-0.5">
-                    Leica M6, Teenage Engineering OP-1...
+                    {thriftItemsCount > 0 ? 'Xem giỏ hàng đồ THRIFT' : 'Săn đồ độc bản 1-of-1'}
                   </p>
                 </div>
                 <div className="mt-5 pt-3 border-t border-[#EFEEEB] flex items-center justify-between text-[#7B766F] group-hover:text-[#141310] transition-colors text-xs font-semibold">
@@ -718,7 +786,7 @@ const ProfileContent: React.FC = () => {
 
               {/* Card 3: Wishlist */}
               <Link
-                to="/saved-items"
+                to="/wishlist"
                 className="group bg-white p-5 rounded-2xl shadow-xs hover:shadow-md transition-all flex flex-col justify-between border border-[#E4E2DF] hover:border-[#3A6843]"
               >
                 <div>
@@ -733,9 +801,9 @@ const ProfileContent: React.FC = () => {
                   <h4 className="font-serif text-base font-bold text-[#141310] group-hover:text-[#3A6843] transition-colors">
                     Danh sách yêu thích
                   </h4>
-                  <p className="text-xs text-[#7B766F] mt-1">Các món đồ đang theo dõi:</p>
+                  <p className="text-xs text-[#7B766F] mt-1">{activeWishlistCount > 0 ? 'Đang theo dõi:' : 'Lưu trữ cá nhân:'}</p>
                   <p className="text-xs text-[#141310] font-medium line-clamp-1 mt-0.5">
-                    Hasselblad 500C/M, Áo khoác Barbour Bedale
+                    {activeWishlistCount > 0 ? `${activeWishlistCount} sản phẩm quan tâm` : 'Chưa lưu sản phẩm nào'}
                   </p>
                 </div>
                 <div className="mt-5 pt-3 border-t border-[#EFEEEB] flex items-center justify-between text-[#7B766F] group-hover:text-[#141310] transition-colors text-xs font-semibold">

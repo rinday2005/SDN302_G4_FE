@@ -8,6 +8,13 @@ import {
   NANUK_SHIPPING_FEE,
 } from '../../data/rent/rentCheckoutData';
 import { redirectToVnPayGateway } from '../../../services/payment.api';
+import {
+  getProductBookedDates,
+  hasDateRangeConflict,
+  findEarliestAvailableRentalRange,
+} from '../../data/rent/rentOrderDetailData';
+import { getUserProfileAddress } from '../../../utils/address';
+import { resolveWishlistProduct } from '../../../services/wishlistProductResolver';
 
 export const RentCheckout: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
@@ -53,33 +60,46 @@ export const RentCheckout: React.FC = () => {
       return cartRent;
     }
 
-    // 5. Default rich demo items from data file if cart was empty
-    return DEFAULT_CHECKOUT_RENT_ITEMS;
+    // 5. Cart was empty, return empty list (no fake mock items)
+    return [];
   }, [cart, id, location.state]);
 
   // ── 3. COMMON RENTAL DATES ("ngày thuê chung" cho toàn bộ thiết bị) ──
   const [startDate, setStartDate] = useState(() => {
-    const fromItem = (rentItems[0] as { startDate?: string })?.startDate;
-    if (fromItem) return fromItem;
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const y = tomorrow.getFullYear();
-    const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
-    const d = String(tomorrow.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    const fromItem = (rentItems[0] as { startDate?: string; id?: string; title?: string })?.startDate;
+    const fromItemEnd = (rentItems[0] as { endDate?: string })?.endDate;
+    const bDates = getProductBookedDates(rentItems[0]);
+    if (fromItem && !hasDateRangeConflict(fromItem, fromItemEnd || fromItem, bDates)) {
+      return fromItem;
+    }
+    return findEarliestAvailableRentalRange(bDates, 3).startDate;
   });
 
   const [endDate, setEndDate] = useState(() => {
-    const fromItem = (rentItems[0] as { endDate?: string })?.endDate;
-    if (fromItem) return fromItem;
-    const end = new Date();
-    end.setDate(end.getDate() + 4);
-    const y = end.getFullYear();
-    const m = String(end.getMonth() + 1).padStart(2, '0');
-    const d = String(end.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    const fromItem = (rentItems[0] as { startDate?: string; id?: string; title?: string })?.startDate;
+    const fromItemEnd = (rentItems[0] as { endDate?: string })?.endDate;
+    const bDates = getProductBookedDates(rentItems[0]);
+    if (fromItemEnd && fromItem && !hasDateRangeConflict(fromItem, fromItemEnd, bDates)) {
+      return fromItemEnd;
+    }
+    return findEarliestAvailableRentalRange(bDates, 3).endDate;
   });
   const [isChangingDates, setIsChangingDates] = useState(false);
+
+  // Tự động kiểm tra và chuyển ngày sang khoảng trống nếu rentItems thay đổi
+  const [prevRentItems, setPrevRentItems] = useState(rentItems);
+  if (prevRentItems !== rentItems) {
+    setPrevRentItems(rentItems);
+    const firstItem = rentItems[0];
+    if (firstItem) {
+      const bDates = getProductBookedDates(firstItem);
+      if (hasDateRangeConflict(startDate, endDate, bDates)) {
+        const earliest = findEarliestAvailableRentalRange(bDates, 3);
+        setStartDate(earliest.startDate);
+        setEndDate(earliest.endDate);
+      }
+    }
+  }
 
   // Compute common rental days
   const rentalDays = useMemo(() => {
@@ -145,6 +165,8 @@ export const RentCheckout: React.FC = () => {
     }
   }, [user]);
 
+  const userProfileAddress = useMemo(() => getUserProfileAddress(user), [user]);
+
   const [custodyHolder, setCustodyHolder] = useState(() => {
     return (
       storedProfile.fullName ||
@@ -163,13 +185,7 @@ export const RentCheckout: React.FC = () => {
   });
 
   const [shippingAddress, setShippingAddress] = useState(() => {
-    if (storedProfile.address) {
-      const addr = storedProfile.address;
-      if (typeof addr === 'string') return addr;
-      const parts = [addr.detail, addr.ward, addr.district, addr.province].filter(Boolean);
-      if (parts.length > 0) return parts.join(', ');
-    }
-    return '48 Bạch Đằng, Tầng 4 Archive Suite, Phường Hải Châu 1, Quận Hải Châu, TP. Đà Nẵng';
+    return userProfileAddress.full;
   });
 
   const [isEditingAddress, setIsEditingAddress] = useState(false);
@@ -177,11 +193,45 @@ export const RentCheckout: React.FC = () => {
   const [tempHolder, setTempHolder] = useState(custodyHolder);
   const [tempPhone, setTempPhone] = useState(phone);
 
+  useEffect(() => {
+    const handleProfileSync = () => {
+      const fresh = getUserProfileAddress(user);
+      setShippingAddress(fresh.full);
+      setTempAddress(fresh.full);
+    };
+    window.addEventListener('user_profile_updated', handleProfileSync);
+    return () => {
+      window.removeEventListener('user_profile_updated', handleProfileSync);
+    };
+  }, [user]);
+
   const handleSaveAddress = () => {
     setShippingAddress(tempAddress);
     setCustodyHolder(tempHolder);
     setPhone(tempPhone);
     setIsEditingAddress(false);
+    try {
+      const uId = user?._id || user?.id;
+      if (uId) {
+        const raw = localStorage.getItem(`user_profile_${uId}`);
+        const currentProfile = raw ? JSON.parse(raw) : {};
+        localStorage.setItem(
+          `user_profile_${uId}`,
+          JSON.stringify({
+            ...currentProfile,
+            fullName: tempHolder || currentProfile.fullName,
+            phone: tempPhone || currentProfile.phone,
+            address: {
+              ...(typeof currentProfile.address === 'object' ? currentProfile.address : {}),
+              detail: tempAddress,
+            },
+          })
+        );
+        window.dispatchEvent(new Event('user_profile_updated'));
+      }
+    } catch {
+      // ignore
+    }
   };
 
   // ── 5. FINANCIAL CALCULATIONS & LEDGER ("tổng tiền cọc & một phí shipping") ──
@@ -246,10 +296,47 @@ export const RentCheckout: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStep, setSubmitStep] = useState('');
 
+  // In-app Toast Feedback State
+  const [toast, setToast] = useState<{
+    show: boolean;
+    message: string;
+    icon: string;
+    type?: 'success' | 'info' | 'error' | 'warning';
+  }>({
+    show: false,
+    message: '',
+    icon: 'check_circle',
+    type: 'success',
+  });
+
+  const showToast = (
+    message: string,
+    icon = 'check_circle',
+    type: 'success' | 'info' | 'error' | 'warning' = 'success'
+  ) => {
+    setToast({ show: true, message, icon, type });
+    setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+    }, 4000);
+  };
+
   // Handle Order Placement & Direct VNPay Sandbox Redirect
   const handleProcessCheckout = async () => {
     if (!agreedTerms) {
-      alert('Vui lòng đồng ý với Quy ước Lưu giữ Bền vững và Điều khoản Ký quỹ Escrow để tiếp tục.');
+      showToast('Vui lòng đồng ý với Quy ước Lưu giữ Bền vững và Điều khoản Ký quỹ Escrow để tiếp tục.', 'info', 'warning');
+      return;
+    }
+
+    const conflictItem = rentItems.find((item) => {
+      const bDates = getProductBookedDates(item);
+      return hasDateRangeConflict(startDate, endDate, bDates);
+    });
+    if (conflictItem) {
+      showToast(
+        `Kỳ thuê bạn chọn (${startDate} → ${endDate}) của sản phẩm "${conflictItem.title}" bị trùng ngày đã có khách đặt trước. Vui lòng chọn lại kỳ thuê còn trống!`,
+        'event_busy',
+        'warning'
+      );
       return;
     }
 
@@ -288,7 +375,14 @@ export const RentCheckout: React.FC = () => {
       createdAt: new Date().toISOString(),
       custodyHolder,
       phone,
-      shippingAddress,
+      shippingAddress: {
+        recipientName: custodyHolder || user?.fullName || 'Khách hàng',
+        recipientPhone: phone || user?.phoneNumber || user?.phone || '',
+        province: userProfileAddress.province,
+        district: userProfileAddress.district,
+        ward: userProfileAddress.ward,
+        detail: shippingAddress || userProfileAddress.detail,
+      },
       startDate,
       endDate,
       rentalDays,
@@ -306,28 +400,11 @@ export const RentCheckout: React.FC = () => {
       const uId = user?._id || user?.id || '';
       const userKey = uId ? `user_rental_orders_${uId}` : null;
 
-      const existingOrders = JSON.parse(localStorage.getItem('user_rental_orders') || '[]');
-      localStorage.setItem('user_rental_orders', JSON.stringify([newOrder, ...existingOrders]));
-
+      // Only save to the currently logged in user's key to ensure strict account isolation
       if (userKey) {
         const userOrders = JSON.parse(localStorage.getItem(userKey) || '[]');
         localStorage.setItem(userKey, JSON.stringify([newOrder, ...userOrders]));
       }
-
-      // Lưu các khoảng ngày đã đặt vào bộ nhớ chung để chặn trùng lịch
-      const sharedRaw = localStorage.getItem('reuse_shared_booked_dates') || '[]';
-      const sharedList = JSON.parse(sharedRaw);
-      rentItems.forEach((item) => {
-        sharedList.push({
-          productId: String(item.id),
-          title: item.title,
-          startDate,
-          endDate,
-          note: `Đã có khách đặt thuê (${item.title})`,
-          customerName: custodyHolder || 'Khách hàng ReUse Hub',
-        });
-      });
-      localStorage.setItem('reuse_shared_booked_dates', JSON.stringify(sharedList));
     } catch {
       // ignore
     }
@@ -344,6 +421,18 @@ export const RentCheckout: React.FC = () => {
         productId: rentItems[0]?.id,
         startDate,
         endDate,
+        items: mappedOrderItems,
+        shippingAddress: {
+          recipientName: custodyHolder || user?.fullName || 'Khách hàng',
+          recipientPhone: phone || user?.phoneNumber || '0901234567',
+          province: userProfileAddress.province,
+          district: userProfileAddress.district,
+          ward: userProfileAddress.ward,
+          detail: shippingAddress || userProfileAddress.detail,
+        },
+        rentalFee: totalRentFee,
+        depositAmount: totalDeposit,
+        shippingFee: NANUK_SHIPPING_FEE,
       });
     } catch (error: unknown) {
       console.error('Error redirecting to VNPay:', error);
@@ -359,10 +448,7 @@ export const RentCheckout: React.FC = () => {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1E1E1E] font-sans antialiased selection:bg-[#E8EFE9] selection:text-[#2D5A43] min-h-screen flex flex-col">
-      {/* ── TOP ANNOUNCEMENT BAR ── */}
-      <aside className="bg-[#1E1E1E] text-[#E2DFD8] text-[11px] tracking-widest font-medium uppercase py-2 text-center border-b border-[#292724] px-4">
-        RENT WHAT YOU NEED. REUSE WHAT ALREADY EXISTS. COMPLIMENTARY INSURED SHIPPING ON VERIFIED RENTALS.
-      </aside>
+      
 
       {/* ── PAGE TITLE AREA & TRUST BADGES ── */}
       <section className="bg-[#FDFCF9] border-b border-[#E5E0D8] py-7">
@@ -440,7 +526,27 @@ export const RentCheckout: React.FC = () => {
 
       {/* ── MAIN CONTENT GRID ── */}
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8 flex-1 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {rentItems.length === 0 ? (
+          <div className="bg-white border border-[#E5E0D8] rounded-3xl p-12 text-center max-w-lg mx-auto shadow-sm space-y-4 my-8">
+            <div className="w-16 h-16 rounded-full bg-[#F5F2EB] flex items-center justify-center mx-auto text-[#2D5A43]">
+              <span className="material-symbols-outlined text-3xl">shopping_cart</span>
+            </div>
+            <h2 className="font-serif text-xl font-bold text-[#1E1E1E]">Giỏ hàng thuê đang trống</h2>
+            <p className="text-xs text-stone-500 leading-relaxed">
+              Bạn chưa chọn thiết bị nào để tiến hành thuê. Vui lòng khám phá thiết bị trong sàn giao dịch RENT và thêm vào giỏ hàng trước khi thanh toán.
+            </p>
+            <div className="pt-2">
+              <Link
+                to="/rent"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#1E1E1E] text-white text-xs font-semibold hover:bg-black transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">search</span>
+                <span>Khám phá thiết bị thuê ngay</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* LEFT COLUMN: WORKFLOW & ORDER SETUP (65%) */}
           <section className="lg:col-span-8 space-y-6">
             {/* SECTION 1: Selected Rental Items */}
@@ -557,7 +663,13 @@ export const RentCheckout: React.FC = () => {
                         <img
                           alt={item.title}
                           className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                          src={item.image}
+                          src={item.image || resolveWishlistProduct(item.id)?.image || 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80'}
+                          onError={(e) => {
+                            const res = resolveWishlistProduct(item.id);
+                            if (res?.image && e.currentTarget.src !== res.image) {
+                              e.currentTarget.src = res.image;
+                            }
+                          }}
                         />
                         <span className="absolute bottom-1.5 left-1.5 bg-[#1E1E1E]/90 text-white text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded backdrop-blur-xs">
                           {category}
@@ -1092,6 +1204,7 @@ export const RentCheckout: React.FC = () => {
             </div>
           </aside>
         </div>
+        )}
       </main>
 
       {/* ── MODAL: EDIT SHIPPING ADDRESS ── */}
@@ -1174,6 +1287,31 @@ export const RentCheckout: React.FC = () => {
           </div>
         </div>
       )}
+      {/* In-app Toast Notification */}
+      <div
+        className={`fixed bottom-6 right-6 z-50 transform transition-all duration-300 pointer-events-none px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm font-medium ${
+          toast.show ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-12 opacity-0 scale-95'
+        } ${
+          toast.type === 'error'
+            ? 'bg-rose-950 text-rose-100 border border-rose-800/80'
+            : toast.type === 'warning'
+            ? 'bg-amber-950 text-amber-100 border border-amber-800/80'
+            : 'bg-[#141310] text-[#FBF9F6] border border-stone-800'
+        }`}
+      >
+        <span
+          className={`material-symbols-outlined text-[20px] ${
+            toast.type === 'error'
+              ? 'text-rose-400'
+              : toast.type === 'warning'
+              ? 'text-amber-400'
+              : 'text-emerald-400'
+          }`}
+        >
+          {toast.icon}
+        </span>
+        <span>{toast.message}</span>
+      </div>
     </div>
   );
 };

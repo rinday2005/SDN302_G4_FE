@@ -1,10 +1,29 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { AppSidebar } from '../../components/layout/AppSidebar';
 import { FAQ_SECTIONS } from '../data/home/faqData';
 import type { FaqSectionData } from '../data/home/faqData';
 
 
 export const FAQ: React.FC = () => {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsSidebarCollapsed(customEvent.detail);
+      }
+    };
+    window.addEventListener('reuse_user_sidebar_toggle', handleSync);
+    return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
+  }, []);
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({ 'rent-1': true });
@@ -50,7 +69,31 @@ export const FAQ: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased py-6 sm:py-10 px-4 sm:px-6 lg:px-8 faq-page-scope">
       {/* Vùng giới hạn độ rộng cân đối ở giữa trang */}
-      <div className="max-w-7xl mx-auto flex flex-col w-full">
+            {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
+      <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
+        {/* Navigation Sidebar */}
+        <AppSidebar activeKey="faq" />
+
+        {/* ── MAIN CONTENT AREA ── */}
+        <main className="flex-1 min-w-0 space-y-8">
+          {/* Quick inline restore chip if user clicked collapse button to hide sidebar */}
+          {isSidebarCollapsed && (
+            <div className="flex items-center gap-2 -mb-4 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: false }))}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-[#E8E4DC] text-xs font-semibold text-[#1C1A18] hover:bg-[#F6F3EE] hover:border-[#1C1A18]/40 transition-all shadow-2xs cursor-pointer group"
+                title="Mở lại menu điều hướng"
+              >
+                <span className="material-symbols-outlined text-[18px] text-[#5E6D5B] group-hover:scale-110 transition-transform">
+                  menu
+                </span>
+                <span>Hiện menu điều hướng</span>
+              </button>
+            </div>
+          )}
+
+          <div className="w-full flex flex-col">
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
           @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
@@ -246,6 +289,8 @@ export const FAQ: React.FC = () => {
             </div>
           </div>
         </section>
+          </div>
+        </main>
       </div>
     </div>
   );

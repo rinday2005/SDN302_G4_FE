@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/incompatible-library */
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import axios from "axios";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -63,9 +63,9 @@ const Register = () => {
   const [registerSuccess, setRegisterSuccess] = useState(false);
 
   const {
+    control,
     register,
     handleSubmit,
-    watch,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
@@ -77,7 +77,7 @@ const Register = () => {
     },
   });
 
-  const password = watch("password", "");
+  const password = useWatch({ control, name: "password", defaultValue: "" });
 
   const getPasswordStrength = () => {
     if (!password) {

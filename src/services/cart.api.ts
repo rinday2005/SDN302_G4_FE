@@ -3,12 +3,16 @@ import api from "./api";
 export interface CartProductRent {
   _id: string;
   name: string;
-  pricePerDay: number;
-  depositAmount: number;
+  pricePerDay?: number;
+  price?: number;
+  depositAmount?: number;
   images: string[];
   status: string;
-  totalQuantity: number;
+  totalQuantity?: number;
   ownerId?: string;
+  location?: string;
+  condition?: string;
+  gradeBadge?: string;
 }
 
 export interface CartItemApi {

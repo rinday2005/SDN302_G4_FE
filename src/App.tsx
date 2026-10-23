@@ -21,10 +21,14 @@ import RentProductDetail from "./pages/rent/detail/RentProductDetail";
 import RentOrderDetail from "./pages/rent/orders/RentOrderDetail";
 import MyRentOrders from "./pages/rent/orders/MyRentOrders";
 import RentCheckout from "./pages/rent/checkout/RentCheckout";
+import ReturnRequest from "./pages/rent/return/ReturnRequest";
+import UserWallet from "./pages/wallet/UserWallet";
 
 import ThriftMarketplace from "./pages/thrift/marketplace/ThriftMarketplace";
 import ThriftDetail from "./pages/thrift/detail/ThriftDetail";
 import ThriftCheckout from "./pages/thrift/checkout/ThriftCheckout";
+import MyThriftOrders from "./pages/thrift/orders/MyThriftOrders";
+import ThriftOrderDetail from "./pages/thrift/orders/ThriftOrderDetail";
 
 import CategoriesMarketplace from "./pages/categories/marketplace/CategoriesMarketplace";
 import CategoryDetail from "./pages/categories/detail/CategoryDetail";
@@ -32,9 +36,13 @@ import CategoryDetail from "./pages/categories/detail/CategoryDetail";
 import UserDashboard from "./pages/home/User/UserDashboard";
 import Cart from "./pages/cart/Cart";
 import Profile from "./pages/profile/Profile";
+import Wishlist from "./pages/wishlist/Wishlist";
+import NotificationCenter from "./pages/notification/NotificationCenter";
 import PaymentReturn from "./pages/payment/PaymentReturn";
 import PaymentSuccess from "./pages/payment/PaymentSuccess";
 import PaymentFailed from "./pages/payment/PaymentFailed";
+import CustomerKyc from "./pages/kyc/CustomerKyc";
+import ChatPage from "./pages/chat/ChatPage";
 
 import PublicRoutes from "./routes/PublicRoutes";
 import ProtectedRoutes from "./routes/ProtectedRoutes";
@@ -88,31 +96,6 @@ const AppLayout = ({
   );
 };
 
-const SavedItemsPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Danh Sách Yêu Thích (Wishlist)
-    </h1>
-  </div>
-);
-
-const NotificationsPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Thông Báo Của Tôi
-    </h1>
-  </div>
-);
-
-
-const MyOrdersPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Đơn Hàng Của Tôi
-    </h1>
-  </div>
-);
-
 const ShopDashboard = () => (
   <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <h1 className="text-2xl font-bold text-gray-800">
@@ -128,6 +111,14 @@ const AdminDashboard = () => (
     </h1>
   </div>
 );
+
+const DashboardRouter = () => {
+  const auth = useContext(AuthContext);
+  if (auth?.user) {
+    return <UserDashboard />;
+  }
+  return <Home />;
+};
 
 const App = () => {
   return (
@@ -157,6 +148,11 @@ const App = () => {
           />
 
           <Route
+            path="/dashboard"
+            element={<DashboardRouter />}
+          />
+
+          <Route
             path="/rent"
             element={<RentMarketplace />}
           />
@@ -174,6 +170,14 @@ const App = () => {
           <Route
             path="/rent/orders/:id"
             element={<RentOrderDetail />}
+          />
+          <Route
+            path="/rent/orders/:id/return"
+            element={<ReturnRequest />}
+          />
+          <Route
+            path="/rent/return-inspection/:id"
+            element={<ReturnRequest />}
           />
 
           <Route
@@ -231,6 +235,21 @@ const App = () => {
           />
 
           <Route
+            path="/thrift/orders"
+            element={<MyThriftOrders />}
+          />
+
+          <Route
+            path="/thrift/orders/:id"
+            element={<ThriftOrderDetail />}
+          />
+
+          <Route
+            path="/my-thrift-orders"
+            element={<MyThriftOrders />}
+          />
+
+          <Route
             path="/categories"
             element={<CategoriesMarketplace />}
           />
@@ -281,6 +300,16 @@ const App = () => {
           />
 
           <Route
+            path="/kyc"
+            element={<CustomerKyc />}
+          />
+
+          <Route
+            path="/chat"
+            element={<ChatPage />}
+          />
+
+          <Route
             path="/about"
             element={<AboutPage />}
           />
@@ -320,24 +349,21 @@ const App = () => {
               element={<UserDashboard />}
             />
 
-            <Route
-              path="/dashboard"
-              element={<UserDashboard />}
-            />
+
 
             <Route
               path="/saved-items"
-              element={<SavedItemsPage />}
+              element={<Wishlist />}
             />
 
             <Route
               path="/wishlist"
-              element={<SavedItemsPage />}
+              element={<Wishlist />}
             />
 
             <Route
               path="/notifications"
-              element={<NotificationsPage />}
+              element={<NotificationCenter />}
             />
 
             <Route
@@ -347,7 +373,37 @@ const App = () => {
 
             <Route
               path="/my-orders"
-              element={<MyOrdersPage />}
+              element={<Navigate to="/rent/orders" replace />}
+            />
+
+            <Route
+              path="/wallet"
+              element={<UserWallet />}
+            />
+
+            <Route
+              path="/user/wallet"
+              element={<UserWallet />}
+            />
+
+            <Route
+              path="/kyc"
+              element={<CustomerKyc />}
+            />
+
+            <Route
+              path="/user/kyc"
+              element={<CustomerKyc />}
+            />
+
+            <Route
+              path="/chat"
+              element={<ChatPage />}
+            />
+
+            <Route
+              path="/user/chat"
+              element={<ChatPage />}
             />
           </Route>
         </Route>

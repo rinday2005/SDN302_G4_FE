@@ -35,6 +35,9 @@ export interface RentalProductApi {
   location: string;
   status: string;
   totalQuantity: number;
+  category?: CategoryInfo | string;
+  size?: string;
+  sizes?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

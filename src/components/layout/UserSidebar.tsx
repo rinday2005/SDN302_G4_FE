@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useCartWishlist } from '../../context/CartWishlistContext';
+import { getMyRentalOrdersApi } from '../../services/order.api';
 
 export interface UserSidebarProps {
   className?: string;
@@ -10,6 +11,9 @@ export interface UserSidebarProps {
   avatarUrl?: string;
   displayName?: string;
   displayEmail?: string;
+  isCollapsed?: boolean;
+  onToggleCollapse?: (collapsed: boolean) => void;
+  hideFloatingToggle?: boolean;
 }
 
 const HEADER_H = 112;
@@ -17,16 +21,75 @@ const HEADER_H = 112;
 export const UserSidebar: React.FC<UserSidebarProps> = ({
   className = '',
   activeKey,
-  mode = 'static',
   avatarUrl: propAvatarUrl,
   displayName: propDisplayName,
   displayEmail: propDisplayEmail,
+  isCollapsed: propIsCollapsed,
+  onToggleCollapse,
+  hideFloatingToggle = false,
 }) => {
   const { user } = useAuth();
-  const { cartCount, wishlistCount } = useCartWishlist();
+  const { wishlistCount } = useCartWishlist();
   const location = useLocation();
-  const [isOpen, setIsOpen] = useState(false);
+
+  // Internal collapse state (Default: false = EXPANDED / SHOWN)
+  const [internalCollapsed, setInternalCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [avatarImgError, setAvatarImgError] = useState(false);
+
+  const effectiveCollapsed = propIsCollapsed !== undefined ? propIsCollapsed : internalCollapsed;
+
+  const handleToggle = () => {
+    // If mobile (<1024px), toggle mobile drawer
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setMobileDrawerOpen((prev) => !prev);
+      return;
+    }
+    // Desktop: toggle collapse
+    const next = !effectiveCollapsed;
+    setInternalCollapsed(next);
+    try {
+      localStorage.setItem('reuse_user_sidebar_collapsed', String(next));
+    } catch {
+      // ignore
+    }
+    if (onToggleCollapse) {
+      onToggleCollapse(next);
+    }
+    window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: next }));
+  };
+
+  const handleDesktopCollapse = () => {
+    const next = !effectiveCollapsed;
+    setInternalCollapsed(next);
+    try {
+      localStorage.setItem('reuse_user_sidebar_collapsed', String(next));
+    } catch {
+      // ignore
+    }
+    if (onToggleCollapse) {
+      onToggleCollapse(next);
+    }
+    window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: next }));
+  };
+
+  // Sync with global toggle events
+  React.useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (typeof customEvent.detail === 'boolean') {
+        setInternalCollapsed(customEvent.detail);
+      }
+    };
+    window.addEventListener('reuse_user_sidebar_toggle', handleSync);
+    return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
+  }, []);
 
   // Scoped profile data from current user in localStorage
   const userProfileKey = (user?._id || user?.id) ? `user_profile_${user?._id || user?.id}` : '';
@@ -49,8 +112,8 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
     propAvatarUrl !== undefined
       ? propAvatarUrl
       : (avatarOverride !== null
-          ? avatarOverride
-          : (savedProfile?.avatarUrl || user?.avatarUrl || user?.avatar || ''));
+        ? avatarOverride
+        : (savedProfile?.avatarUrl || user?.avatarUrl || user?.avatar || ''));
 
   const currentName =
     propDisplayName ||
@@ -64,14 +127,37 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
   const uId = user?._id || user?.id || '';
   const [syncVersion, setSyncVersion] = useState<number>(0);
 
+  const [apiRentCount, setApiRentCount] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (!uId) return;
+    let isMounted = true;
+    getMyRentalOrdersApi().then((res) => {
+      if (!isMounted) return;
+      if (Array.isArray(res)) {
+        const active = res.filter((o) =>
+          ['PAID', 'RENTING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(o.status || '')
+        );
+        setApiRentCount(active.length);
+      }
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, [uId, syncVersion]);
+
   const { rentalOrdersCount, thriftOrdersCount } = useMemo(() => {
+    // Explicitly reference syncVersion and location.pathname to re-calculate on route changes or sync events
+    void syncVersion;
+    void location.pathname;
     try {
+      if (!uId) {
+        return { rentalOrdersCount: 0, thriftOrdersCount: 0 };
+      }
       let rCount = 0;
       let tCount = 0;
 
-      // 1. Rental orders count
-      const rKey = uId ? `user_rental_orders_${uId}` : null;
-      const rRaw = (rKey && localStorage.getItem(rKey)) || localStorage.getItem('user_rental_orders');
+      // 1. Rental orders count strictly scoped to current user
+      const rKey = `user_rental_orders_${uId}`;
+      const rRaw = localStorage.getItem(rKey);
       if (rRaw) {
         const arr = JSON.parse(rRaw);
         if (Array.isArray(arr)) {
@@ -82,9 +168,9 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         }
       }
 
-      // 2. Thrift orders count
-      const tKey = uId ? `user_thrift_orders_${uId}` : null;
-      const tRaw = (tKey && localStorage.getItem(tKey)) || localStorage.getItem('user_thrift_orders');
+      // 2. Thrift orders count strictly scoped to current user
+      const tKey = `user_thrift_orders_${uId}`;
+      const tRaw = localStorage.getItem(tKey);
       if (tRaw) {
         const arr = JSON.parse(tRaw);
         if (Array.isArray(arr)) {
@@ -93,16 +179,14 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         }
       }
 
-      // Trigger recalculation on route navigation or event sync
-      if (syncVersion < 0 || !location.pathname) {
-        return { rentalOrdersCount: 0, thriftOrdersCount: 0 };
-      }
+      // If backend API returned a verified count, prefer it for accuracy
+      const finalRentCount = apiRentCount !== null ? apiRentCount : rCount;
 
-      return { rentalOrdersCount: rCount, thriftOrdersCount: tCount };
+      return { rentalOrdersCount: finalRentCount, thriftOrdersCount: tCount };
     } catch {
       return { rentalOrdersCount: 0, thriftOrdersCount: 0 };
     }
-  }, [uId, syncVersion, location.pathname]);
+  }, [uId, syncVersion, location.pathname, apiRentCount]);
 
   // Listen to profile & order updates
   React.useEffect(() => {
@@ -135,7 +219,6 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
   }, []);
 
   const currentPath = location.pathname;
-  const isDashboard = currentPath.startsWith('/user/dashboard') || currentPath === '/dashboard';
 
   const isCurrent = (key: string, path: string) => {
     if (activeKey) return activeKey === key;
@@ -143,9 +226,7 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
   };
 
   const handleLinkClick = () => {
-    if (mode === 'drawer') {
-      setIsOpen(false);
-    }
+    setMobileDrawerOpen(false);
   };
 
   // Initials computation
@@ -197,11 +278,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         <Link
           to="/user/dashboard"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-colors shadow-2xs ${
-            isCurrent('dashboard', '/user/dashboard') || currentPath === '/dashboard'
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-xs transition-colors shadow-2xs ${isCurrent('dashboard', '/user/dashboard') || currentPath === '/dashboard'
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -223,11 +303,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         <Link
           to="/rent"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('rent', '/rent')
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('rent', '/rent')
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg
@@ -254,11 +333,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         <Link
           to="/thrift"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('thrift', '/thrift')
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('thrift', '/thrift')
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg
@@ -281,12 +359,49 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
           </span>
         </Link>
 
-        {/* Cart */}
+        {/* Categories Bộ sưu tầm */}
         <Link
-          to="/cart"
+          to="/categories"
+          onClick={handleLinkClick}
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('categories', '/categories')
+              ? 'bg-[#1C1A18] text-white'
+              : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
+            }`}
+        >
+          <div className="flex items-center gap-3">
+            <svg
+              className="w-4 h-4 text-[#76726B] group-hover:text-[#1C1A18]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+            <span>Categories bộ sưu tầm</span>
+          </div>
+          <span className="text-[10px] text-[#76726B] bg-[#EFECE6] px-1.5 py-0.5 rounded font-medium">
+            Mục
+          </span>
+        </Link>
+      </div>
+
+      {/* Navigation Group 2: Đơn hàng & Tiện ích */}
+      <div className="space-y-1">
+        <div className="px-3 pb-1.5 text-[10px] uppercase font-bold tracking-wider text-[#76726B]">
+          Đơn hàng &amp; Tiện ích
+        </div>
+
+        {/* Smart Escrow Wallet / Ví lưu ký hoàn cọc */}
+        <Link
+          to="/user/wallet"
           onClick={handleLinkClick}
           className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('cart', '/cart')
+            isCurrent('wallet', '/user/wallet') || currentPath === '/wallet'
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
           }`}
@@ -299,35 +414,27 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
               viewBox="0 0 24 24"
             >
               <path
-                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"
+                d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="1.8"
               />
             </svg>
-            <span>Giỏ hàng tuần hoàn</span>
+            <span>Ví cọc &amp; Hoàn tiền (Escrow)</span>
           </div>
-          <span className="text-[10px] bg-[#1C1A18] text-white px-2 py-0.5 rounded-full font-bold">
-            {cartCount}
+          <span className="text-[10px] text-[#4A6B53] bg-[#EBF3ED] px-1.5 py-0.5 rounded font-bold">
+            900.000₫
           </span>
         </Link>
-      </div>
-
-      {/* Navigation Group 2: Đơn hàng & Tiện ích */}
-      <div className="space-y-1">
-        <div className="px-3 pb-1.5 text-[10px] uppercase font-bold tracking-wider text-[#76726B]">
-          Đơn hàng &amp; Tiện ích
-        </div>
 
         {/* My Rentals */}
         <Link
           to="/rent/orders"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('rent-orders', '/rent/orders')
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('rent-orders', '/rent/orders')
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg
@@ -354,11 +461,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         <Link
           to="/thrift/orders"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('thrift-orders', '/thrift/orders')
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('thrift-orders', '/thrift/orders')
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg
@@ -385,11 +491,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         <Link
           to="/wishlist"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('wishlist', '/wishlist') || currentPath === '/saved-items'
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('wishlist', '/wishlist') || currentPath === '/saved-items'
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg
@@ -414,11 +519,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         <Link
           to="/chat"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('chat', '/chat')
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('chat', '/chat')
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg
@@ -450,11 +554,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         <Link
           to="/profile"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('profile', '/profile') || currentPath === '/account-settings'
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('profile', '/profile') || currentPath === '/account-settings'
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg
@@ -478,11 +581,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         <Link
           to="/kyc"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
-            isCurrent('kyc', '/kyc')
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('kyc', '/kyc')
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-          }`}
+            }`}
         >
           <div className="flex items-center gap-3">
             <svg
@@ -521,78 +623,95 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
     </div>
   );
 
-  // ── Mode: Drawer (overlay for browsing pages / MasterLayout) ──
-  if (mode === 'drawer') {
-    return (
-      <>
-        {/* Backdrop Overlay */}
-        {isOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-xs transition-opacity animate-fade-in"
-            onClick={() => setIsOpen(false)}
-          />
-        )}
-
-        {/* Toggle Button on left */}
+  return (
+    <>
+      {/* ── 1. Floating 3-bar hamburger toggle button at fixed left-3 ── */}
+      {!hideFloatingToggle && (
         <button
           type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          aria-label={isOpen ? 'Đóng menu cá nhân' : 'Mở menu cá nhân'}
+          onClick={handleToggle}
+          aria-label={effectiveCollapsed ? 'Hiện menu điều hướng' : 'Ẩn menu điều hướng'}
           style={{ top: `${HEADER_H - 80 + (80 - 36) / 2}px` }}
-          className={`fixed left-3 z-50 w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-[#E7E2DA] shadow-sm hover:bg-[#F4F0EA] transition-colors cursor-pointer ${
-            isDashboard ? 'lg:hidden' : ''
-          } ${className}`}
-          title={isOpen ? 'Đóng menu' : 'Menu khách hàng ReUse Hub'}
+          className="fixed left-3 z-40 w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-[#E7E2DA] shadow-sm hover:bg-[#F4F0EA] hover:border-[#1C1A18]/40 transition-all cursor-pointer group"
+          title={
+            effectiveCollapsed
+              ? 'Hiện menu điều hướng (Dấu 3 gạch)'
+              : 'Ẩn menu điều hướng (Dấu 3 gạch)'
+          }
         >
-          <span className="material-symbols-outlined text-[20px] text-[#1C1A18] block leading-none">
-            {isOpen ? 'close' : 'menu'}
+          <span className="material-symbols-outlined text-[20px] text-[#1C1A18] block leading-none transition-transform group-hover:scale-110">
+            menu
           </span>
           {/* Green dot indicating active customer session */}
           <span
             className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-600 border-2 border-white"
-            title="Đang đăng nhập"
+            title="Tài khoản ReUse Hub"
           />
         </button>
+      )}
 
-        {/* Slide-out Drawer Panel */}
-        <aside
-          style={{ top: `${HEADER_H}px`, height: `calc(100vh - ${HEADER_H}px)` }}
-          className={`fixed left-0 z-50 w-72 sm:w-80 bg-[#FBF9F5] border-r border-[#E7E2DA] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${
-            isOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-        >
-          {/* Header bar within drawer */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#E8E4DC]/80 bg-white/80 shrink-0">
+      {/* ── 2. Desktop Fixed/Static Sidebar (Shown by default on left side) ── */}
+      <aside
+        className={`hidden lg:block self-stretch transition-all duration-300 ease-in-out shrink-0 select-none ${effectiveCollapsed
+            ? 'w-0 -mr-8 opacity-0 pointer-events-none overflow-hidden'
+            : 'w-64 mr-0 opacity-100'
+          } ${className}`}
+      >
+        <div className="w-64 sticky top-28 space-y-3 max-h-[calc(100vh-7.5rem)] overflow-y-auto thin-scrollbar pr-1 pb-4">
+          {/* Header row with inline collapse button */}
+          <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-600" />
-              <span className="text-[11px] font-bold text-[#1C1A18] uppercase tracking-wider">
-                Tài khoản khách hàng
-              </span>
+              <span className="w-2 h-2 rounded-full bg-[#5E6D5B]" />
+
             </div>
             <button
               type="button"
-              onClick={() => setIsOpen(false)}
-              className="p-1 text-[#76726B] hover:text-[#1C1A18] hover:bg-[#F4F0EA] rounded-md transition-colors cursor-pointer"
-              title="Đóng menu"
+              onClick={handleDesktopCollapse}
+              title="Ẩn menu điều hướng (Dấu 3 gạch)"
+              className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-[#76726B] hover:text-[#1C1A18] hover:bg-[#EFECE6] rounded-lg transition-colors cursor-pointer group"
             >
-              <span className="material-symbols-outlined text-[18px]">close</span>
+              <span className="material-symbols-outlined text-[15px] group-hover:scale-110 transition-transform">menu</span>
+
             </button>
           </div>
 
-          {/* Scrollable Body */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-6 thin-scrollbar">
-            {sidebarContent}
-          </div>
-        </aside>
-      </>
-    );
-  }
+          {sidebarContent}
+        </div>
+      </aside>
 
-  // ── Mode: Static (embedded in-page for UserDashboard) ────────
-  return (
-    <aside className={`w-64 shrink-0 ${className}`}>
-      <div className="sticky top-28">{sidebarContent}</div>
-    </aside>
+      {/* ── 3. Mobile Slide-out Drawer (only on screens < lg) ── */}
+      {mobileDrawerOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-xs transition-opacity animate-fade-in"
+          onClick={() => setMobileDrawerOpen(false)}
+        />
+      )}
+      <aside
+        style={{ top: `${HEADER_H}px`, height: `calc(100vh - ${HEADER_H}px)` }}
+        className={`lg:hidden fixed left-0 z-50 w-72 sm:w-80 bg-[#FBF9F5] border-r border-[#E7E2DA] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${mobileDrawerOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#E8E4DC]/80 bg-white/80 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-600" />
+            <span className="text-[11px] font-bold text-[#1C1A18] uppercase tracking-wider">
+              Tài khoản khách hàng
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileDrawerOpen(false)}
+            className="p-1 text-[#76726B] hover:text-[#1C1A18] hover:bg-[#F4F0EA] rounded-md transition-colors cursor-pointer"
+            title="Đóng menu"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 thin-scrollbar">
+          {sidebarContent}
+        </div>
+      </aside>
+    </>
   );
 };
 

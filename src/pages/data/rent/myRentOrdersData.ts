@@ -31,6 +31,10 @@ export interface RentalOrderRecord {
   grandTotal: string;
   canReturn: boolean;
   canPay: boolean;
+  needsClaSign?: boolean;
+  claSigned?: boolean;
+  isReturningOrReturned?: boolean;
+  isCompleted?: boolean;
   recipientName?: string;
   recipientPhone?: string;
   shippingAddressText?: string;

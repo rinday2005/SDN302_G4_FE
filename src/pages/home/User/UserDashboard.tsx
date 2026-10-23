@@ -4,13 +4,13 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
 import { UserSidebar } from '../../../components/layout/UserSidebar';
 import { getMyRentalOrdersApi, type RentalOrderApi, type RentalOrderItemApi } from '../../../services/order.api';
+import { getMyThriftOrdersApi, type ThriftOrderApi } from '../../../services/thriftOrder.api';
 import {
   CIRCULAR_LIFECYCLE_STEPS,
   RECOMMENDED_DASHBOARD_ITEMS,
 } from '../../data/home/userDashboardData';
-import type { WishlistDashboardItem } from '../../data/home/userDashboardData';
-import { RENT_PRODUCTS } from '../../data/rent/marketplaceData';
-import { THRIFT_PRODUCTS } from '../../data/thrift/thriftMarketplaceData';
+import { resolveWishlistProduct, type ResolvedWishlistProduct } from '../../../services/wishlistProductResolver';
+import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 
 export const UserDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -25,54 +25,169 @@ export const UserDashboard: React.FC = () => {
   // ── Load Real Rental Orders & Thrift Orders ──
   const [activeRentals, setActiveRentals] = useState<RentalOrderApi[]>([]);
 
-  // 1. Thrift orders from user storage memoized directly
-  const thriftOrders = useMemo(() => {
-    const uId = user?._id || user?.id;
-    try {
-      const key = uId ? `user_thrift_orders_${uId}` : 'user_thrift_orders';
-      const stored = localStorage.getItem(key) || (uId ? localStorage.getItem('user_thrift_orders') : null);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) return parsed as Record<string, unknown>[];
-      }
-    } catch {
-      // ignore
-    }
-    return [] as Record<string, unknown>[];
-  }, [user]);
+  // 1. Real Thrift Orders from Backend API
+  const [thriftOrders, setThriftOrders] = useState<ThriftOrderApi[]>([]);
 
-  // 2. Real Rent Orders from Backend API
   useEffect(() => {
     let isMounted = true;
-    const uId = user?._id || user?.id;
-
-    getMyRentalOrdersApi()
-      .then((orders) => {
+    getMyThriftOrdersApi()
+      .then((res) => {
         if (!isMounted) return;
-        const validOrders = Array.isArray(orders) ? orders : [];
-        const active = validOrders.filter(
-          (o) => o.status !== 'CANCELLED' && o.status !== 'REJECTED' && o.status !== 'RETURNED' && o.status !== 'COMPLETED'
-        );
-        setActiveRentals(active);
+        const list = res?.orders || [];
+        setThriftOrders(list);
       })
-      .catch(() => {
-        if (!isMounted) return;
-        try {
-          const key = uId ? `user_rental_orders_${uId}` : 'user_rental_orders';
-          const stored = localStorage.getItem(key);
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            const active = Array.isArray(parsed)
-              ? parsed.filter((o: Record<string, unknown>) => o.status !== 'CANCELLED' && o.status !== 'REJECTED')
-              : [];
-            setActiveRentals(active as unknown as RentalOrderApi[]);
-          } else {
-            setActiveRentals([]);
+      .catch((err) => {
+        console.warn('Could not load thrift orders from API:', err);
+      });
+    return () => { isMounted = false; };
+  }, [user]);
+
+  // 2. Real Rent Orders: Merge Backend API & LocalStorage for accurate user context
+  useEffect(() => {
+    let isMounted = true;
+    const uId = user?._id || user?.id || '';
+
+    const loadUserRentals = async () => {
+      try {
+        localStorage.removeItem('user_rental_orders');
+        localStorage.removeItem('user_thrift_orders');
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith('reuse_order_backup_') || k === 'user_rental_orders' || k === 'user_thrift_orders')) {
+            localStorage.removeItem(k);
           }
-        } catch {
-          setActiveRentals([]);
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!uId) {
+        if (isMounted) setActiveRentals([]);
+        return;
+      }
+
+      interface StoredOrderRecord {
+        _id?: string;
+        orderCode?: string;
+        status?: string;
+        paymentStatus?: string;
+        renterId?: string;
+        items?: RentalOrderItemApi[];
+        startDate?: string;
+        endDate?: string;
+        rentalDays?: number;
+        rentalFee?: number;
+        totalRentFee?: number;
+        depositAmount?: number;
+        totalDeposit?: number;
+        totalAmount?: number;
+        totalPayment?: number;
+        shippingFee?: number;
+        createdAt?: string;
+        [key: string]: unknown;
+      }
+
+      const localOrders: StoredOrderRecord[] = [];
+      const seenLocKeys = new Set<string>();
+
+      try {
+        const userKey = `user_rental_orders_${uId}`;
+        const raw = localStorage.getItem(userKey);
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) {
+            arr.forEach((o: StoredOrderRecord) => {
+              if (o.renterId && String(o.renterId) !== String(uId)) return;
+              const c = (o.orderCode || '').replace('#', '').trim().toLowerCase();
+              if (c && !seenLocKeys.has(c)) {
+                seenLocKeys.add(c);
+                localOrders.push(o);
+              }
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      let apiOrders: RentalOrderApi[] = [];
+      try {
+        const res = await getMyRentalOrdersApi();
+        if (Array.isArray(res)) {
+          apiOrders = res;
+        }
+      } catch (err) {
+        console.warn('Could not load orders from API in UserDashboard:', err);
+      }
+
+      const merged: RentalOrderApi[] = [];
+      const processedCodes = new Set<string>();
+
+      apiOrders.forEach((apiO) => {
+        const aCode = (apiO.orderCode || apiO._id || '').replace('#', '').trim().toLowerCase();
+        const matchedLocal = localOrders.find((loc) => {
+          const lCode = (loc.orderCode || '').replace('#', '').trim().toLowerCase();
+          return lCode === aCode || (lCode.length > 4 && aCode.includes(lCode)) || (aCode.length > 4 && lCode.includes(aCode));
+        });
+
+        const localItems = matchedLocal?.items;
+        const hasRichLocalItems =
+          Array.isArray(localItems) &&
+          localItems.length > 0 &&
+          !localItems.some((it) => ((it.productName || (it as { title?: string }).title) || '').includes('Đơn hàng Thuê'));
+
+        const enriched: RentalOrderApi = {
+          ...apiO,
+          items: hasRichLocalItems ? (localItems as RentalOrderItemApi[]) : (apiO.items || []),
+          depositAmount: matchedLocal?.totalDeposit || matchedLocal?.depositAmount || apiO.depositAmount || 0,
+          totalAmount: matchedLocal?.totalPayment || matchedLocal?.totalAmount || apiO.totalAmount || 0,
+          startDate: matchedLocal?.startDate || apiO.startDate,
+          endDate: matchedLocal?.endDate || apiO.endDate,
+        };
+
+        if (aCode) processedCodes.add(aCode);
+        merged.push(enriched);
+      });
+
+      localOrders.forEach((loc) => {
+        const lCode = (loc.orderCode || '').replace('#', '').trim().toLowerCase();
+        if (lCode && !processedCodes.has(lCode)) {
+          processedCodes.add(lCode);
+          merged.push({
+            _id: loc._id || lCode,
+            orderCode: loc.orderCode || `#${lCode}`,
+            renterId: uId,
+            items: (loc.items || []) as RentalOrderItemApi[],
+            startDate: loc.startDate || '',
+            endDate: loc.endDate || '',
+            rentalDays: loc.rentalDays || 1,
+            rentalFee: loc.totalRentFee || loc.rentalFee || 0,
+            depositAmount: loc.totalDeposit || loc.depositAmount || 0,
+            shippingFee: loc.shippingFee || 25000,
+            totalAmount: loc.totalPayment || loc.totalAmount || 0,
+            status: loc.status || 'PAID',
+            paymentStatus: loc.paymentStatus || 'PAID',
+            createdAt: (loc.createdAt as string) || new Date().toISOString(),
+          });
         }
       });
+
+      merged.sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.startDate || 0).getTime();
+        const timeB = new Date(b.createdAt || b.startDate || 0).getTime();
+        return timeB - timeA;
+      });
+
+      if (!isMounted) return;
+      const active = merged.filter((o) =>
+        ['PAID', 'RENTING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(
+          o.status || ''
+        )
+      );
+      setActiveRentals(active);
+    };
+
+    loadUserRentals();
 
     return () => {
       isMounted = false;
@@ -83,19 +198,111 @@ export const UserDashboard: React.FC = () => {
   const activeRentalData = useMemo(() => {
     if (activeRentals.length === 0) return null;
     const raw = activeRentals[0];
-    const rawCode = raw.orderCode || 'RH-RNT-2026';
-    const cleanId = raw._id || rawCode.replace('#', '');
+    const rawCode = (raw.orderCode || 'RH-RNT-2026').trim();
+    const cleanId = rawCode.replace('#', '').trim();
     const code = rawCode.startsWith('#') ? rawCode : `#${rawCode}`;
 
     const rawItem = raw.items?.[0] as (RentalOrderItemApi & Record<string, unknown>) | undefined;
-    const title =
+    let title =
       rawItem?.productName ||
       (rawItem as Record<string, unknown> | undefined)?.title as string ||
-      `Đơn thuê thiết bị (${code})`;
-    const image =
+      '';
+    let image =
       ((rawItem as Record<string, unknown> | undefined)?.imageUrl as string) ||
       ((rawItem as Record<string, unknown> | undefined)?.image as string) ||
-      'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80';
+      '';
+    let escrowDeposit = raw.depositAmount || Number(rawItem?.depositAmount) || 0;
+
+    // Check dedicated order backup key first
+    try {
+      const backupRaw = localStorage.getItem(`reuse_order_backup_${cleanId}`);
+      if (backupRaw) {
+        const backupOrder = JSON.parse(backupRaw);
+        if (backupOrder?.items?.[0]) {
+          const bItem = backupOrder.items[0];
+          const bTitle = bItem.title || bItem.productName;
+          if (bTitle && !bTitle.includes('Đơn hàng Thuê') && !bTitle.includes('RH-RNT-')) {
+            title = bTitle;
+          }
+          if (bItem.image || bItem.imageUrl) {
+            image = bItem.image || bItem.imageUrl;
+          }
+          if (backupOrder.totalDeposit || bItem.depositAmount) {
+            escrowDeposit = backupOrder.totalDeposit || bItem.depositAmount;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // Check if title is missing or is generic placeholder ("Đơn hàng Thuê (RH-RNT...)")
+    const isGenericTitle = !title || title.includes('Đơn hàng Thuê') || title.includes('RH-RNT-');
+    if (isGenericTitle || !image || image.includes('unsplash.com/photo-1516035069371') || escrowDeposit === 0) {
+      let resolvedProd = null;
+
+      // 1. Try resolving by rawItem.productId
+      const pId = String(rawItem?.productId || (raw as { productId?: string }).productId || '');
+      if (pId && pId !== 'undefined') {
+        const found = getRentProductDetail(pId);
+        if (found && found.title && !found.title.includes('Thuê')) {
+          resolvedProd = found;
+        }
+      }
+
+      // 2. Try resolving from reuse_shared_booked_dates
+      if (!resolvedProd) {
+        try {
+          const sharedRaw = localStorage.getItem('reuse_shared_booked_dates');
+          if (sharedRaw) {
+            const list = JSON.parse(sharedRaw);
+            if (Array.isArray(list) && list.length > 0) {
+              const cId = cleanId.toLowerCase();
+              const rStart = (raw.startDate || '').slice(0, 10);
+              const rEnd = (raw.endDate || '').slice(0, 10);
+
+              const matchedBooking = list.find((b: { orderCode?: string; note?: string; title?: string; startDate?: string; endDate?: string }) => {
+                const bCode = (b.orderCode || '').replace('#', '').toLowerCase();
+                const bNote = (b.note || '').toLowerCase();
+                const codeMatch = Boolean(cId && (bCode === cId || bNote.includes(cId)));
+                const bStart = (b.startDate || '').slice(0, 10);
+                const bEnd = (b.endDate || '').slice(0, 10);
+                const dateMatch = Boolean(rStart && bStart && rStart === bStart) || Boolean(rEnd && bEnd && rEnd === bEnd);
+                return codeMatch || dateMatch;
+              }) || list[list.length - 1];
+
+              if (matchedBooking?.productId || matchedBooking?.title) {
+                resolvedProd = getRentProductDetail(matchedBooking.productId || matchedBooking.title);
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 3. Fallback to default high-tier product
+      if (!resolvedProd) {
+        resolvedProd = getRentProductDetail('7');
+      }
+
+      if (resolvedProd) {
+        if (isGenericTitle) {
+          title = resolvedProd.title;
+        }
+        if (!image || image.includes('unsplash.com/photo-1516035069371')) {
+          image = resolvedProd.images?.[0]?.src || image;
+        }
+        if (!escrowDeposit || escrowDeposit === 0) {
+          escrowDeposit = resolvedProd.deposit || (resolvedProd.pricePerDay * 4) || 1500000;
+        }
+      }
+    }
+
+    if (!title) title = `Thiết bị lưu ký ReUse (${code})`;
+    if (!image) {
+      image = 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80';
+    }
 
     const startStr = raw.startDate ? new Date(raw.startDate).toLocaleDateString('vi-VN') : 'Mới tạo';
     const endStr = raw.endDate ? new Date(raw.endDate).toLocaleDateString('vi-VN') : 'Đang cập nhật';
@@ -126,7 +333,7 @@ export const UserDashboard: React.FC = () => {
       statusLabel,
       rentalPeriod,
       returnDeadline,
-      escrowDeposit: raw.depositAmount || 0,
+      escrowDeposit,
       progressPercent,
       progressNote: `Hạn chuẩn bị đóng hộp ReUse Escrow (còn ${remainingDays} ngày)`,
       detailUrl: `/rent/orders/${cleanId}`,
@@ -136,27 +343,26 @@ export const UserDashboard: React.FC = () => {
 
   // Dynamic computed thrift orders
   const formattedThriftOrders = useMemo(() => {
-    return thriftOrders.slice(0, 3).map((order: Record<string, unknown>, idx: number) => {
-      const itemsList = order.items as Record<string, unknown>[] | undefined;
-      const item = itemsList?.[0] || order;
-      const rawId = (order.orderCode || order.id || order._id || `RH-THF-${idx + 1}`) as string;
+    return thriftOrders.slice(0, 3).map((order: ThriftOrderApi, idx: number) => {
+      const itemsList = order.items;
+      const item = itemsList?.[0];
+      const rawId = order.orderCode || order._id || `RH-THF-${idx + 1}`;
       const code = rawId.startsWith('#') ? rawId : `#${rawId}`;
-      const title = (item.productName || item.title || `Đơn hàng THRIFT ${code}`) as string;
+      const title = item?.productName || `Đơn hàng THRIFT ${code}`;
       const image =
-        ((item.imageUrl ||
-          item.image ||
-          'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80') as string);
-      const price = (order.totalAmount || item.price || 0) as number;
-      const condition = (item.condition || 'Tình trạng: Kiểm định chuẩn ReUse Grade A') as string;
+        item?.imageUrl ||
+        'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80';
+      const price = order.totalAmount || item?.price || 0;
+      const condition = item?.condition || 'Tình trạng: Kiểm định chuẩn ReUse Grade A';
       const status =
         order.status === 'COMPLETED'
           ? 'ĐÃ GIAO HÀNG'
           : order.status === 'PAID'
           ? 'ĐÃ THANH TOÁN'
-          : (order.status as string) || 'ĐÃ XÁC NHẬN';
-      const badge = (order.badge || 'THRIFT') as string;
-      const warrantyNote = (order.warrantyNote || 'Chứng nhận Audit Bench') as string;
-      const detailUrl = `/thrift/orders/${(order._id || order.id || rawId).toString().replace('#', '')}`;
+          : order.status || 'ĐÃ XÁC NHẬN';
+      const badge = 'THRIFT';
+      const warrantyNote = item?.warranty || 'Chứng nhận Audit Bench';
+      const detailUrl = `/thrift/orders/${order._id.replace('#', '')}`;
 
       return {
         id: code,
@@ -189,55 +395,38 @@ export const UserDashboard: React.FC = () => {
   }, [user]);
 
   // ── Match Wishlist items dynamically with saved IDs (No fake mock items) ──
-  const matchedWishlistItems: WishlistDashboardItem[] = useMemo(() => {
-    if (!wishlist || wishlist.length === 0) {
-      return [];
-    }
-
-    const items: WishlistDashboardItem[] = [];
-
+  const matchedWishlistItems = useMemo(() => {
+    if (!wishlist || wishlist.length === 0) return [];
+    const items: ResolvedWishlistProduct[] = [];
     wishlist.forEach((id) => {
-      // 1. Check in RENT_PRODUCTS
-      const rentFound = RENT_PRODUCTS.find((p) => p.id === id);
-      if (rentFound) {
-        items.push({
-          id: rentFound.id,
-          mode: 'rent',
-          title: rentFound.title,
-          subtitle: `${rentFound.categoryLabel} · ${rentFound.location}`,
-          price: rentFound.price,
-          priceUnit: '/ ngày',
-          badge: 'RENT',
-          availabilityBadge: rentFound.available ? 'Có sẵn ngay' : 'Đang thuê',
-          image: rentFound.image,
-          href: rentFound.href,
-        });
-        return;
-      }
-
-      // 2. Check in THRIFT_PRODUCTS
-      const thriftFound = THRIFT_PRODUCTS.find((p) => p.id === id);
-      if (thriftFound) {
-        items.push({
-          id: thriftFound.id,
-          mode: 'thrift',
-          title: thriftFound.title,
-          subtitle: `${thriftFound.categoryLabel} · ${thriftFound.location}`,
-          price: thriftFound.price,
-          badge: 'THRIFT',
-          availabilityBadge: thriftFound.condition,
-          image: thriftFound.image,
-          href: thriftFound.href,
-        });
-        return;
-      }
+      const resolved = resolveWishlistProduct(id);
+      if (resolved) items.push(resolved);
     });
-
     return items;
   }, [wishlist]);
 
   const rentWishlistCount = matchedWishlistItems.filter((i) => i.mode === 'rent').length;
   const thriftWishlistCount = matchedWishlistItems.filter((i) => i.mode === 'thrift').length;
+
+  // Track sidebar collapsed state to display inline restore chip when collapsed
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsSidebarCollapsed(customEvent.detail);
+      }
+    };
+    window.addEventListener('reuse_user_sidebar_toggle', handleSync);
+    return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
+  }, []);
 
   return (
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased">
@@ -245,10 +434,27 @@ export const UserDashboard: React.FC = () => {
       {/* ── MAIN APP CONTAINER (Sidebar + Dashboard Content) ── */}
       <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
         {/* User Sidebar */}
-        <UserSidebar activeKey="dashboard" className="hidden lg:block" />
+        <UserSidebar activeKey="dashboard" />
 
         {/* Main Content Area */}
         <main className="flex-1 min-w-0 space-y-8">
+          {/* Quick inline restore chip if user clicked 3-bar button to hide sidebar */}
+          {isSidebarCollapsed && (
+            <div className="flex items-center gap-2 -mb-4 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: false }))}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-[#E8E4DC] text-xs font-semibold text-[#1C1A18] hover:bg-[#F6F3EE] hover:border-[#1C1A18]/40 transition-all shadow-2xs cursor-pointer group"
+                title="Mở lại menu điều hướng (Dấu 3 gạch)"
+              >
+                <span className="material-symbols-outlined text-[18px] text-[#5E6D5B] group-hover:scale-110 transition-transform">
+                  menu
+                </span>
+                <span>Hiện menu điều hướng</span>
+              </button>
+            </div>
+          )}
+
           {/* 1. WELCOME SECTION & IMPACT STATEMENT */}
           <section
             data-reveal
@@ -735,16 +941,16 @@ export const UserDashboard: React.FC = () => {
                       <div className="w-full h-36 rounded-xl bg-[#F6F3EE] overflow-hidden relative border border-[#E8E4DC] mb-3">
                         <img alt={item.title} className="w-full h-full object-cover" src={item.image} />
                         <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[#1C1A18] text-white text-[9px] font-bold">
-                          {item.badge}
+                          {item.mode === 'rent' ? 'RENT' : 'THRIFT'}
                         </span>
-                        {item.availabilityBadge && (
+                        {(item.availabilityBadge || item.availabilityLabel) && (
                           <span className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded bg-white/90 text-[#1C1A18] text-[9px] font-semibold">
-                            {item.availabilityBadge}
+                            {item.availabilityBadge || item.availabilityLabel}
                           </span>
                         )}
                       </div>
                       <h4 className="font-serif font-bold text-xs text-[#1C1A18] line-clamp-1">{item.title}</h4>
-                      <p className="text-[11px] text-[#76726B] mt-0.5 line-clamp-1">{item.subtitle}</p>
+                      <p className="text-[11px] text-[#76726B] mt-0.5 line-clamp-1">{item.category} · {item.location}</p>
                       <div className="text-xs font-bold text-[#1C1A18] mt-1">
                         {formatVND(item.price)}
                         {item.priceUnit && (

@@ -15,7 +15,7 @@ export interface CheckoutThriftItem {
 
 export const DEFAULT_CHECKOUT_THRIFT_ITEMS: CheckoutThriftItem[] = [
   {
-    id: 'thrift-leica-m6-classic',
+    id: '6ad273b0f22df3063ffd9989',
     code: '#2481902',
     title: 'Leica M6 Classic 0.72x Rangefinder Body',
     category: 'Camera & Vintage Archival',
@@ -30,7 +30,7 @@ export const DEFAULT_CHECKOUT_THRIFT_ITEMS: CheckoutThriftItem[] = [
     vaultOrigin: 'Atelier Silvergrain',
   },
   {
-    id: 'thrift-yohji-jacket-fw98',
+    id: '6ad273b0f22df3063ffd998a',
     code: '#YY-FW98-04',
     title: 'Áo khoác len Yohji Yamamoto Wool Jacket',
     category: 'Haute Archive Runway · FW 1998',

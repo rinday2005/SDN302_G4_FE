@@ -8,6 +8,11 @@ export interface CreateVnPayUrlRequest {
   productId?: string;
   startDate?: string;
   endDate?: string;
+  items?: unknown[];
+  shippingAddress?: unknown;
+  rentalFee?: number;
+  depositAmount?: number;
+  shippingFee?: number;
 }
 
 /**
@@ -46,6 +51,11 @@ export const handleVNPayPayment = async (
       productId: reqObj.productId,
       startDate: reqObj.startDate,
       endDate: reqObj.endDate,
+      items: reqObj.items,
+      shippingAddress: reqObj.shippingAddress,
+      rentalFee: reqObj.rentalFee,
+      depositAmount: reqObj.depositAmount,
+      shippingFee: reqObj.shippingFee,
     });
 
     // Lấy URL thanh toán và chuyển hướng sang VNPay Sandbox
