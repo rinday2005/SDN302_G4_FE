@@ -41,6 +41,8 @@ export interface ShopProductItem extends RentProductItem {
   ownerId: string;
   isVisible: boolean; // Dùng cho tính năng Ẩn / Hiện
   maintenanceUnits: number; // Nghiệp vụ bảo trì
+  convertedToThrift?: boolean;
+  thriftListingId?: string;
 }
 
 interface ShopContextType {

@@ -201,18 +201,23 @@ export const RentInventoryDetail: React.FC = () => {
 
             {/* Header Interactive Actions */}
             <div className="flex flex-wrap items-center gap-3 pt-6 mt-6 border-t border-[#dddad3]">
-              <button
-                type="button"
-                disabled={specimenState !== 'ELIGIBLE'}
-                onClick={() => alert(`Bắt đầu quy trình chuyển giao ${unit.id} sang sàn bán đứt THRIFT!`)}
-                className={`inline-flex items-center gap-2 px-5 py-3 text-white font-semibold text-xs tracking-wider uppercase rounded shadow-md transition-all ${
-                  specimenState === 'ELIGIBLE'
-                    ? 'bg-[#141310] hover:bg-[#292724] cursor-pointer'
-                    : 'bg-gray-400 opacity-50 cursor-not-allowed'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">autorenew</span> Chuyển giao sang THRIFT →
-              </button>
+              {specimenState === 'ELIGIBLE' ? (
+                <Link
+                  to={`/shop/rent/convert-thrift/${unit.id}`}
+                  className="inline-flex items-center gap-2 px-5 py-3 text-white font-semibold text-xs tracking-wider uppercase rounded shadow-md transition-all bg-[#141310] hover:bg-[#292724] cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">autorenew</span> Chuyển giao sang THRIFT →
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  title="Không đủ điều kiện (Đang cho thuê / Có lịch đặt trước - AC 1)"
+                  className="inline-flex items-center gap-2 px-5 py-3 text-white font-semibold text-xs tracking-wider uppercase rounded shadow-md transition-all bg-gray-400 opacity-50 cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined text-[18px]">lock</span> Khóa: Đang cho thuê
+                </button>
+              )}
               <Link
                 to={`/shop/rent/products/${unit.sku}`}
                 className="inline-flex items-center gap-2 px-4 py-3 bg-white hover:bg-[#ebe8e1] text-[#141310] font-medium text-xs tracking-wider uppercase rounded shadow-sm transition-all border border-[#ebe8e1]"
@@ -249,22 +254,24 @@ export const RentInventoryDetail: React.FC = () => {
               </p>
             </div>
             <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
-              <button
-                type="button"
-                disabled={specimenState !== 'ELIGIBLE'}
-                onClick={() => alert(`Bắt đầu quy trình chuyển giao ${unit.id} sang sàn bán đứt THRIFT!`)}
-                className={`w-full lg:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 font-bold text-xs uppercase tracking-widest rounded shadow-lg transition-all text-center ${
-                  specimenState === 'ELIGIBLE'
-                    ? 'bg-[#141310] text-white hover:bg-[#292724] cursor-pointer'
-                    : 'bg-gray-400 text-white opacity-40 cursor-not-allowed'
-                }`}
-              >
-                {specimenState === 'ELIGIBLE'
-                  ? 'Chuyển sang THRIFT (Convert to THRIFT) →'
-                  : specimenState === 'RENTING'
-                  ? 'Không đủ điều kiện (Đang cho thuê)'
-                  : 'Không đủ điều kiện (Đang kiểm định)'}
-              </button>
+              {specimenState === 'ELIGIBLE' ? (
+                <Link
+                  to={`/shop/rent/convert-thrift/${unit.id}`}
+                  className="w-full lg:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 font-bold text-xs uppercase tracking-widest rounded shadow-lg transition-all text-center bg-[#141310] text-white hover:bg-[#292724] cursor-pointer"
+                >
+                  Chuyển sang THRIFT (Convert to THRIFT) →
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full lg:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 font-bold text-xs uppercase tracking-widest rounded shadow-lg transition-all text-center bg-gray-400 text-white opacity-40 cursor-not-allowed"
+                >
+                  {specimenState === 'RENTING'
+                    ? 'Không đủ điều kiện (Đang cho thuê)'
+                    : 'Không đủ điều kiện (Đang kiểm định)'}
+                </button>
+              )}
               <span className="text-[11px] text-[#7b766f] font-mono">
                 Định giá đề xuất THRIFT: {unit.proposedThriftPrice || '122.000.000 ₫'} (Biên độ khấu hao -18.5%)
               </span>
