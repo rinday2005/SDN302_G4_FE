@@ -41,6 +41,9 @@ import NotificationCenter from "./pages/notification/NotificationCenter";
 import PaymentReturn from "./pages/payment/PaymentReturn";
 import PaymentSuccess from "./pages/payment/PaymentSuccess";
 import PaymentFailed from "./pages/payment/PaymentFailed";
+import CustomerKyc from "./pages/kyc/CustomerKyc";
+import ChatPage from "./pages/chat/ChatPage";
+
 
 // Các trang chức năng của Shop Owner
 import { CreateRentProduct } from "./pages/rent/shop/CreateRentProduct";
@@ -91,30 +94,6 @@ const AppLayout = ({
   );
 };
 
-const SavedItemsPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Danh Sách Yêu Thích (Wishlist)
-    </h1>
-  </div>
-);
-
-const NotificationsPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Thông Báo Của Tôi
-    </h1>
-  </div>
-);
-
-const MyOrdersPage = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Đơn Hàng Của Tôi
-    </h1>
-  </div>
-);
-
 const ShopDashboard = () => (
   <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <h1 className="text-2xl font-bold text-gray-800">
@@ -156,10 +135,13 @@ const App = () => {
           {/* 2. PUBLIC BROWSING (Layout GUEST cho khách) */}
           <Route element={<AppLayout role="GUEST" />}>
             <Route path="/" element={<Home />} />
+            <Route path="/dashboard" element={<DashboardRouter />} />
             <Route path="/rent" element={<RentMarketplace />} />
             <Route path="/rent/marketplace" element={<RentMarketplace />} />
             <Route path="/rent/products/:id" element={<RentProductDetail />} />
             <Route path="/rent/orders/:id" element={<RentOrderDetail />} />
+            <Route path="/rent/orders/:id/return" element={<ReturnRequest />} />
+            <Route path="/rent/return-inspection/:id" element={<ReturnRequest />} />
             <Route path="/rent/orders" element={<MyRentOrders />} />
             <Route path="/my-rent-orders" element={<MyRentOrders />} />
             <Route path="/rent/detail/:id" element={<RentProductDetail />} />
@@ -171,6 +153,9 @@ const App = () => {
             <Route path="/thrift/products/:id" element={<ThriftDetail />} />
             <Route path="/thrift/checkout" element={<ThriftCheckout />} />
             <Route path="/thrift/checkout/:id" element={<ThriftCheckout />} />
+            <Route path="/thrift/orders" element={<MyThriftOrders />} />
+            <Route path="/thrift/orders/:id" element={<ThriftOrderDetail />} />
+            <Route path="/my-thrift-orders" element={<MyThriftOrders />} />
             <Route path="/categories" element={<CategoriesMarketplace />} />
             <Route path="/categories/marketplace" element={<CategoriesMarketplace />} />
             <Route path="/categories/:slug" element={<CategoryDetail />} />
@@ -181,6 +166,8 @@ const App = () => {
             <Route path="/payment-success" element={<PaymentSuccess />} />
             <Route path="/payment-failed" element={<PaymentFailed />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
+            <Route path="/kyc" element={<CustomerKyc />} />
+            <Route path="/chat" element={<ChatPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/contact" element={<ContactPage />} />
@@ -191,12 +178,17 @@ const App = () => {
             <Route element={<AppLayout role="USER" />}>
               <Route path="/profile" element={<Profile />} />
               <Route path="/user/dashboard" element={<UserDashboard />} />
-              <Route path="/dashboard" element={<UserDashboard />} />
-              <Route path="/saved-items" element={<SavedItemsPage />} />
-              <Route path="/wishlist" element={<SavedItemsPage />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/saved-items" element={<Wishlist />} />
+              <Route path="/wishlist" element={<Wishlist />} />
+              <Route path="/notifications" element={<NotificationCenter />} />
               <Route path="/account-settings" element={<Profile />} />
-              <Route path="/my-orders" element={<MyOrdersPage />} />
+              <Route path="/my-orders" element={<Navigate to="/rent/orders" replace />} />
+              <Route path="/wallet" element={<UserWallet />} />
+              <Route path="/user/wallet" element={<UserWallet />} />
+              <Route path="/kyc" element={<CustomerKyc />} />
+              <Route path="/user/kyc" element={<CustomerKyc />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/user/chat" element={<ChatPage />} />
             </Route>
           </Route>
 

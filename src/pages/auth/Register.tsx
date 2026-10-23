@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/incompatible-library */
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import axios from "axios";
