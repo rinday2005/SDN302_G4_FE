@@ -37,12 +37,31 @@ export const Header: React.FC<HeaderProps> = ({
     const effectiveWishlistCount = wishlistCount !== undefined ? wishlistCount : ctxWishlistCount;
     const effectiveCartCount = cartCount !== undefined ? cartCount : ctxCartCount;
 
+    // Tự động nhận diện role người dùng đã đăng nhập nếu prop userRole chưa truyền
+    const effectiveRole = useMemo<UserRole>(() => {
+        if (userRole && userRole !== 'GUEST') return userRole;
+        try {
+            const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+            const u = localStorage.getItem('user');
+            if (token && u) {
+                const parsed = JSON.parse(u);
+                const r = String(parsed.role || 'USER').toUpperCase();
+                if (r === 'SHOP_OWNER' || r === 'SHOP') return 'SHOP';
+                if (r === 'ADMIN') return 'ADMIN';
+                return 'USER';
+            }
+        } catch {
+            // ignore
+        }
+        return userRole || 'GUEST';
+    }, [userRole]);
+
     const [notifSync, setNotifSync] = useState(0);
 
     // Dynamically calculate notifications scoped to currently logged-in user
     const effectiveNotificationCount = useMemo(() => {
         if (notificationCount !== undefined) return notificationCount;
-        if (userRole === 'GUEST') return 0;
+        if (effectiveRole === 'GUEST') return 0;
         void notifSync;
         try {
             const u = localStorage.getItem('user');
@@ -58,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
             // ignore
         }
         return 0;
-    }, [notificationCount, userRole, notifSync]);
+    }, [notificationCount, effectiveRole, notifSync]);
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
@@ -240,7 +259,7 @@ export const Header: React.FC<HeaderProps> = ({
                             <Link
                                 aria-label="Wishlist"
                                 className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors"
-                                to="/saved-items"
+                                to="/wishlist"
                                 title="Danh sách yêu thích"
                             >
                                 <Heart className="w-5 h-5" />
@@ -252,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
                             </Link>
 
                             {/* Notifications Icon (hiện khi đã login) */}
-                            {userRole !== 'GUEST' && (
+                            {effectiveRole !== 'GUEST' && (
                                 <Link
                                     aria-label="Notifications"
                                     className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors"
@@ -287,7 +306,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <div className="h-4 w-[1px] bg-stone-300 hidden sm:block" />
 
                         {/* Member Profile Avatar Dropdown HOẶC Nút Login cho GUEST */}
-                        {userRole === 'GUEST' ? (
+                        {effectiveRole === 'GUEST' ? (
                             <div className="flex items-center gap-2">
                                 <Link
                                     to="/login"
@@ -376,7 +395,7 @@ export const Header: React.FC<HeaderProps> = ({
                                             </Link>
 
                                             {/* Quick Link dành riêng cho Shop Owner / Admin trong Dropdown */}
-                                            {userRole === 'SHOP' && (
+                                            {effectiveRole === 'SHOP' && (
                                                 <Link
                                                     to="/shop/inventory"
                                                     onClick={() => setIsProfileDropdownOpen(false)}
@@ -387,7 +406,7 @@ export const Header: React.FC<HeaderProps> = ({
                                                 </Link>
                                             )}
 
-                                            {userRole === 'ADMIN' && (
+                                            {effectiveRole === 'ADMIN' && (
                                                 <Link
                                                     to="/admin/dashboard"
                                                     onClick={() => setIsProfileDropdownOpen(false)}
@@ -438,7 +457,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <Link to="/categories" onClick={() => setIsMobileMenuOpen(false)} className="text-xs uppercase font-bold text-gray-700 hover:text-black py-1">CATEGORIES</Link>
 
                         <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-700 py-1">
-                            <Link to="/saved-items" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 hover:text-black font-medium">
+                            <Link to="/wishlist" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 hover:text-black font-medium">
                                 <Heart className="w-4 h-4" />
                                 <span>Yêu thích ({effectiveWishlistCount})</span>
                             </Link>
@@ -448,7 +467,7 @@ export const Header: React.FC<HeaderProps> = ({
                             </Link>
                         </div>
 
-                        {userRole !== 'GUEST' ? (
+                        {effectiveRole !== 'GUEST' ? (
                             <div className="pt-2 border-t border-gray-100 flex flex-col space-y-2">
                                 <Link to="/account-settings" onClick={() => setIsMobileMenuOpen(false)} className="text-xs font-medium text-gray-700 hover:text-black py-1">
                                     Hồ sơ cá nhân

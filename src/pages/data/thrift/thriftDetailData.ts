@@ -63,6 +63,12 @@ export interface ThriftProductDetail {
   circularOriginNote: string;
   rentalCycles: number;
   shippingPoints: string[];
+  quantity?: number;
+  status?: string;
+  sourceType?: string;
+  category?: string;
+  sizes?: string[];
+  size?: string;
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────

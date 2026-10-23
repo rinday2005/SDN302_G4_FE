@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { BookedDateRange } from '../../pages/data/rent/rentOrderDetailData';
+import { findEarliestAvailableRentalRange } from '../../pages/data/rent/rentOrderDetailData';
 
 interface RentalCalendarPickerProps {
   startDate: string; // YYYY-MM-DD
@@ -59,30 +60,6 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Sync internal state when external props change (React recommended pattern)
-  const [prevDates, setPrevDates] = useState({ startDate, endDate });
-  if (prevDates.startDate !== startDate || prevDates.endDate !== endDate) {
-    setPrevDates({ startDate, endDate });
-    setTempStart(startDate);
-    setTempEnd(endDate);
-  }
-
-  // Close popover when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setErrorMessage(null);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen]);
-
   const todayStr = useMemo(() => formatYMD(new Date()), []);
 
   // Map booked ranges into a quick lookup set & note map
@@ -104,8 +81,8 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
   // Check if a range has any booked date conflict
   const hasBookedConflict = (start: string, end: string): boolean => {
     if (!start || !end) return false;
-    const cur = parseYMD(start);
-    const stop = parseYMD(end);
+    const cur = parseYMD(start <= end ? start : end);
+    const stop = parseYMD(start <= end ? end : start);
     while (cur <= stop) {
       if (bookedDatesMap.has(formatYMD(cur))) {
         return true;
@@ -123,6 +100,37 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
     const diff = Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
     return Math.max(1, diff);
   };
+
+  // Sync internal state when external props change (adjust state during render)
+  const [prevDates, setPrevDates] = useState({
+    startDate,
+    endDate,
+    rangesCount: bookedRanges.length,
+  });
+  if (
+    prevDates.startDate !== startDate ||
+    prevDates.endDate !== endDate ||
+    prevDates.rangesCount !== bookedRanges.length
+  ) {
+    setPrevDates({ startDate, endDate, rangesCount: bookedRanges.length });
+    let nextStart = startDate;
+    let nextEnd = endDate;
+    if (
+      !nextStart ||
+      nextStart < todayStr ||
+      bookedDatesMap.has(nextStart) ||
+      (nextEnd && hasBookedConflict(nextStart, nextEnd))
+    ) {
+      const earliest = findEarliestAvailableRentalRange(
+        bookedRanges,
+        calculateDays(nextStart, nextEnd) || 3
+      );
+      nextStart = earliest.startDate;
+      nextEnd = earliest.endDate;
+    }
+    setTempStart(nextStart);
+    setTempEnd(nextEnd);
+  }
 
   // Month navigation
   const prevMonth = () => {
@@ -208,20 +216,37 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
     return days;
   }, [viewYear, viewMonth, todayStr, bookedDatesMap]);
 
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setErrorMessage(null);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
   // Handle clicking a day cell
   const handleDayClick = (dateStr: string, isPast: boolean, isBooked: boolean) => {
     if (isPast || dateStr < todayStr) {
       setErrorMessage('Không được chọn thời gian trong quá khứ. Vui lòng chọn từ hôm nay trở đi!');
       return;
     }
-    if (isBooked) {
+    if (isBooked || bookedDatesMap.has(dateStr)) {
       setErrorMessage(`Thiết bị đã được thuê vào ngày ${formatDisplayDateVN(dateStr).dayMonth}. Vui lòng chọn ngày còn trống!`);
       return;
     }
 
     setErrorMessage(null);
 
-    if (selectionStep === 'start' || !tempStart || (tempStart && tempEnd)) {
+    // If current tempStart is already invalid or booked, force new start
+    if (selectionStep === 'start' || !tempStart || (tempStart && tempEnd) || bookedDatesMap.has(tempStart)) {
       // Start a new selection
       setTempStart(dateStr);
       setTempEnd('');
@@ -235,7 +260,7 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
       } else {
         // Check if there is any booked conflict between tempStart and dateStr
         if (hasBookedConflict(tempStart, dateStr)) {
-          setErrorMessage('Khoảng thời gian bạn chọn có ngày thiết bị đã được khách khác đặt thuê. Vui lòng chọn lại!');
+          setErrorMessage('Khoảng thời gian bạn chọn có ngày thiết bị đã được khách khác đặt thuê. Vui lòng chọn lại khoảng ngày trống liên tục!');
           return;
         }
 
@@ -248,10 +273,27 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
     }
   };
 
+  const isStartBooked = Boolean(tempStart && bookedDatesMap.has(tempStart));
+  const isEndBooked = Boolean(tempEnd && bookedDatesMap.has(tempEnd));
+  const isPastStart = Boolean(tempStart && tempStart < todayStr);
+  const isPastEnd = Boolean(tempEnd && tempEnd < todayStr);
+  const isConflict = Boolean(
+    !tempStart ||
+    isStartBooked ||
+    isEndBooked ||
+    isPastStart ||
+    isPastEnd ||
+    (tempStart && (tempEnd ? hasBookedConflict(tempStart, tempEnd) : false))
+  );
+
   const handleApply = () => {
     if (!tempStart) return;
     if (tempStart < todayStr) {
       setErrorMessage('Không được chọn thời gian trong quá khứ. Vui lòng chọn từ hôm nay trở đi!');
+      return;
+    }
+    if (bookedDatesMap.has(tempStart)) {
+      setErrorMessage(`Ngày nhận máy ${formatDisplayDateVN(tempStart).dayMonth} đã có người thuê! Vui lòng chọn ngày còn trống trên lịch.`);
       return;
     }
     const finalEnd = tempEnd || tempStart;
@@ -259,8 +301,12 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
       setErrorMessage('Ngày hoàn trả không thể ở trong quá khứ!');
       return;
     }
+    if (bookedDatesMap.has(finalEnd)) {
+      setErrorMessage(`Ngày hoàn trả ${formatDisplayDateVN(finalEnd).dayMonth} đã có người thuê! Vui lòng chọn ngày khác.`);
+      return;
+    }
     if (hasBookedConflict(tempStart, finalEnd)) {
-      setErrorMessage('Khoảng thời gian chọn bị trùng với lịch đã có người thuê.');
+      setErrorMessage('Khoảng thời gian chọn bị trùng với lịch đã có người thuê. Vui lòng chọn khoảng ngày trống liên tục!');
       return;
     }
     const days = calculateDays(tempStart, finalEnd);
@@ -271,6 +317,7 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
   const startInfo = formatDisplayDateVN(tempStart || startDate);
   const endInfo = formatDisplayDateVN(tempEnd || endDate);
   const totalDays = calculateDays(tempStart || startDate, tempEnd || endDate);
+  const isTriggerStartBooked = Boolean((tempStart || startDate) && bookedDatesMap.has(tempStart || startDate));
 
   // Month title format: "Tháng 11, 2026"
   const monthTitle = `Tháng ${viewMonth + 1}, ${viewYear}`;
@@ -290,6 +337,8 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
           className={`p-3 rounded-xl border transition-all text-left cursor-pointer group select-none ${
             isOpen && selectionStep === 'start'
               ? 'bg-white border-[#1C1A18] shadow-md ring-2 ring-[#1C1A18]/10'
+              : isTriggerStartBooked
+              ? 'bg-rose-50/80 border-rose-200'
               : 'bg-[#F4F0EA]/70 hover:bg-[#F4F0EA] border-transparent hover:border-[#E7E2DA]'
           }`}
         >
@@ -299,7 +348,16 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
               calendar_month
             </span>
           </div>
-          <div className="text-sm font-bold text-[#1C1A18] font-mono">{startInfo.dayMonth}</div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`text-sm font-bold font-mono ${isTriggerStartBooked ? 'text-rose-600 line-through' : 'text-[#1C1A18]'}`}>
+              {startInfo.dayMonth}
+            </span>
+            {isTriggerStartBooked && (
+              <span className="text-[10px] text-rose-600 font-bold bg-rose-100 px-1.5 py-0.2 rounded">
+                Đã đặt
+              </span>
+            )}
+          </div>
           <div className="text-[11px] text-[#78736A] mt-0.5">{startInfo.weekday}</div>
         </div>
 
@@ -360,15 +418,23 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
           </div>
 
           {/* Prompt banner for user */}
-          <div className="bg-[#FBF9F5] rounded-xl px-3 py-2 text-xs flex items-center justify-between text-[#5E5A53]">
-            <span className="flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[16px] text-amber-600">info</span>
-              {selectionStep === 'start' || !tempStart
+          <div className={`rounded-xl px-3 py-2 text-xs flex items-center justify-between transition-colors ${
+            isStartBooked
+              ? 'bg-rose-50 text-rose-800 border border-rose-200'
+              : 'bg-[#FBF9F5] text-[#5E5A53]'
+          }`}>
+            <span className="flex items-center gap-1.5 font-medium">
+              <span className={`material-symbols-outlined text-[16px] ${isStartBooked ? 'text-rose-600' : 'text-amber-600'}`}>
+                {isStartBooked ? 'event_busy' : 'info'}
+              </span>
+              {isStartBooked
+                ? 'Ngày nhận máy đã có khách thuê, vui lòng chọn ngày khác còn trống!'
+                : selectionStep === 'start' || !tempStart
                 ? 'Chọn ngày nhận máy'
                 : 'Chọn ngày hoàn trả thiết bị'}
             </span>
             {tempStart && (
-              <span className="text-[11px] font-mono font-medium text-[#1C1A18]">
+              <span className={`text-[11px] font-mono font-medium ${isStartBooked ? 'text-rose-700 line-through font-bold' : 'text-[#1C1A18]'}`}>
                 Bắt đầu: {formatDisplayDateVN(tempStart).dayMonth}
               </span>
             )}
@@ -503,8 +569,17 @@ export const RentalCalendarPicker: React.FC<RentalCalendarPickerProps> = ({
               <button
                 type="button"
                 onClick={handleApply}
-                disabled={!tempStart}
-                className="px-3 py-1.5 rounded-lg bg-[#1C1A18] text-white text-xs font-semibold hover:bg-[#292724] disabled:opacity-50 transition-colors shadow-xs cursor-pointer"
+                disabled={!tempStart || isConflict}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-xs ${
+                  !tempStart || isConflict
+                    ? 'bg-stone-200 text-stone-400 cursor-not-allowed opacity-60'
+                    : 'bg-[#1C1A18] text-white hover:bg-[#292724] cursor-pointer'
+                }`}
+                title={
+                  isConflict
+                    ? 'Khoảng ngày bạn chọn có ngày bị trùng với lịch đã có người thuê'
+                    : 'Xác nhận khoảng thời gian thuê'
+                }
               >
                 Xác nhận
               </button>

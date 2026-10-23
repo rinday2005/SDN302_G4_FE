@@ -54,6 +54,8 @@ export interface RentProductDetailData {
   allowedConditions: string;
   prohibitedActions: string;
   bookedDates?: BookedDateRange[];
+  size?: string;
+  sizes?: string[];
 }
 
 export interface RentLifecycleStep {
@@ -498,45 +500,44 @@ export const RENT_PRODUCT_DETAILS_MAP: Record<string, RentProductDetailData> = {
   '7': {
     id: '7',
     slug: 'op1-synth',
-    title: 'Teenage Engineering OP-1 Field Synthesizer',
-    subtitle: 'Bàn phím tổng hợp âm thanh & ghi âm 4-track tape di động đỉnh cao · Vỏ nhôm nguyên khối',
-    category: 'ĐIỆN TỬ',
+    title: 'Dây Chuyền Ngọc Trai Nước Ngọt Khóa Vàng 18K Luxury',
+    subtitle: 'Ngọc trai nước ngọt tự nhiên thượng hạng tuyển chọn · Khóa cài mạ vàng 18K tinh xảo',
+    category: 'phu-kien',
     location: 'Đà Nẵng',
     rating: 5.0,
     reviewCount: 18,
-    condition: 'Rất tốt (Grade A 95%)',
-    grade: 'Grade A',
-    shutterOrUsage: 'Số giờ tác nghiệp: 32 giờ',
+    condition: 'Rất tốt (Grade A 98%)',
+    grade: 'Grade A+',
+    shutterOrUsage: 'Độ sáng bóng: Chuẩn AAA',
     pricePerDay: 320000,
     deposit: 1500000,
     depositFormatted: '1.500.000₫',
     maxQuantity: 1,
-    auditCode: '#DA-OP1-4402',
+    auditCode: '#DA-JW-9235',
     images: [
       {
-        src: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD9te3aJVYpGneDteUKFIdq6xEbIuYlTZXQ6bppTxwXer5UXL315L_slY8JybSWI0sElJdsxst5JeOU8COAV8d_9Id7BShJa1ubVjLBUxiuArZt_Us8GrKWyoDdUBpTh8Vu7ZJjF_FE_lY1wpNp-QphW1iJOowGOrHjdZJ0AhC0rxCOupCG6SMWnR7Fsnn3F6GWjyzYTa1UdOhqfDBBUNRlYARbhpYkepNnwYwEO5jd',
-        alt: 'OP-1 Field Synthesizer',
-        caption: 'Teenage Engineering OP-1 Field',
+        src: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800&auto=format&fit=crop&q=60',
+        alt: 'Dây Chuyền Ngọc Trai Nước Ngọt',
+        caption: 'Dây Chuyền Ngọc Trai Nước Ngọt Khóa Vàng 18K Luxury',
       },
     ],
     overview: [
-      'OP-1 Field từ Teenage Engineering là cỗ máy sáng tạo âm nhạc bỏ túi huyền thoại với hơn 100 tính năng nâng cấp, màn hình màu độ phân giải cao và âm thanh stereo 32-bit.',
-      'Toàn bộ phím bấm, núm xoay vô cực encoder và cổng I/O đều được kiểm tra độ nảy và độ nhạy tín hiệu 100%.',
+      'Dây chuyền ngọc trai nước ngọt tự nhiên cao cấp kết hợp khóa vàng 18K tinh tế, phù hợp cho sự kiện sang trọng, chụp ảnh lookbook và tiệc cưới.',
+      'Từng viên ngọc trai được kiểm định độ bóng xà cừ AAA và khóa cài được đối kiểm cơ học đạt chuẩn 100%.',
     ],
     accessories: [
-      '01 Thiết bị OP-1 Field Synthesizer',
-      '01 Cáp USB-C bọc dù bện cao cấp',
-      '01 Ăng-ten thu sóng FM rời',
-      '01 Case bảo vệ chống sốc chính hãng',
+      '01 Hộp nhung bảo quản trang sức cao cấp',
+      '01 Khăn lau chuyên dụng cho ngọc trai',
+      '01 Thẻ kiểm định chất lượng ReUse Lab',
     ],
     auditItems: [
-      { label: 'Encoder & Phím', value: 'Độ nảy 100% · Không kẹt' },
-      { label: 'Màn hình OLED', value: 'Sáng đều · Không điểm chết' },
-      { label: 'Pin Li-ion', value: 'Dung lượng thực tế > 98%' },
-      { label: 'Cổng âm thanh', value: 'Stereo sạch · Không nhiễu' },
+      { label: 'Độ bóng ngọc trai', value: 'Bóng gương chuẩn AAA' },
+      { label: 'Khóa cài 18K', value: 'Chắc chắn · Không trầy' },
+      { label: 'Dây xâu ngọc', value: 'Chỉ lụa chuyên dụng không xơ' },
+      { label: 'Chứng nhận', value: 'Kiểm định ReUse Lab đạt chuẩn' },
     ],
-    allowedConditions: 'Thích hợp sáng tác âm nhạc studio, biểu diễn live di động hoặc thu âm thực địa.',
-    prohibitedActions: 'Không để gần nguồn nước hoặc môi trường ẩm ướt cao, tránh va đập màn hình OLED.',
+    allowedConditions: 'Thích hợp diện tiệc dạ hội, sự kiện sang trọng, chụp ảnh studio hoặc tiệc cưới.',
+    prohibitedActions: 'Tránh tiếp xúc trực tiếp với nước hoa, hóa chất tẩy rửa mạnh hoặc va chạm cơ học mạnh.',
   },
   '8': {
     id: '8',
@@ -737,6 +738,88 @@ export function recordBookedDates(productId: string, startDate: string, endDate:
   }
 }
 
+// Helper kiểm tra một ngày cụ thể có bị trùng lịch đã đặt hay không
+export function isDateBooked(dateStr: string, bookedRanges: BookedDateRange[] = []): boolean {
+  if (!dateStr || !Array.isArray(bookedRanges) || bookedRanges.length === 0) return false;
+  return bookedRanges.some((range) => {
+    if (!range.startDate || !range.endDate) return false;
+    return dateStr >= range.startDate && dateStr <= range.endDate;
+  });
+}
+
+// Helper kiểm tra khoảng ngày [startDate, endDate] có bị trùng bất kỳ ngày nào đã đặt hay không
+export function hasDateRangeConflict(
+  startDate: string,
+  endDate: string,
+  bookedRanges: BookedDateRange[] = []
+): boolean {
+  if (!startDate || !endDate || !Array.isArray(bookedRanges) || bookedRanges.length === 0) return false;
+  const start = startDate <= endDate ? startDate : endDate;
+  const end = startDate <= endDate ? endDate : startDate;
+
+  return bookedRanges.some((range) => {
+    if (!range.startDate || !range.endDate) return false;
+    // Overlap condition: start <= range.endDate && end >= range.startDate
+    return !(end < range.startDate || start > range.endDate);
+  });
+}
+
+// Helper tìm khoảng ngày trống hợp lệ đầu tiên (không trùng quá khứ và không trùng bất kỳ lịch đã đặt nào)
+export function findEarliestAvailableRentalRange(
+  bookedRanges: BookedDateRange[] = [],
+  durationDays: number = 3,
+  minStartDate?: string
+): { startDate: string; endDate: string; days: number } {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const formatYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  let candidateDate = new Date(tomorrow);
+  if (minStartDate) {
+    const [y, m, d] = minStartDate.split('-').map(Number);
+    if (y && m && d) {
+      const minD = new Date(y, m - 1, d);
+      if (minD > candidateDate) {
+        candidateDate = minD;
+      }
+    }
+  }
+
+  const daysToRent = Math.max(1, durationDays);
+
+  // Duyệt tối đa 120 ngày để tìm khoảng ngày trống liên tục
+  for (let i = 0; i < 120; i++) {
+    const curStartStr = formatYMD(candidateDate);
+    const candidateEndDate = new Date(candidateDate);
+    candidateEndDate.setDate(candidateEndDate.getDate() + daysToRent);
+    const curEndStr = formatYMD(candidateEndDate);
+
+    if (!hasDateRangeConflict(curStartStr, curEndStr, bookedRanges)) {
+      return {
+        startDate: curStartStr,
+        endDate: curEndStr,
+        days: daysToRent,
+      };
+    }
+
+    // Tịnh tiến sang ngày tiếp theo
+    candidateDate.setDate(candidateDate.getDate() + 1);
+  }
+
+  // Fallback an toàn nếu không tìm thấy
+  const defaultStart = formatYMD(tomorrow);
+  const defaultEndDate = new Date(tomorrow);
+  defaultEndDate.setDate(defaultEndDate.getDate() + daysToRent);
+  return {
+    startDate: defaultStart,
+    endDate: formatYMD(defaultEndDate),
+    days: daysToRent,
+  };
+}
+
 // Helper tạo chi tiết chuẩn cho bất kỳ sản phẩm nào từ dữ liệu tóm tắt
 export function createRentProductDetail(source: Partial<RentProductDetailData> & { id: string; title: string }): RentProductDetailData {
   const price = source.pricePerDay || 450000;
@@ -760,6 +843,8 @@ export function createRentProductDetail(source: Partial<RentProductDetailData> &
     deposit: deposit,
     depositFormatted: source.depositFormatted || `${deposit.toLocaleString('vi-VN')}₫`,
     maxQuantity: source.maxQuantity || 2,
+    size: source.size || 'L',
+    sizes: source.sizes && source.sizes.length > 0 ? source.sizes : ['S', 'M', 'L', 'XL'],
     auditCode: source.auditCode || `#RH-${idStr.slice(-6).toUpperCase()}`,
     images: source.images && source.images.length > 0 ? source.images : [
       { src: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80', alt: source.title, caption: source.title }
