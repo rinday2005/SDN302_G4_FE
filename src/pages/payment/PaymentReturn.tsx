@@ -45,6 +45,10 @@ export const PaymentReturn: React.FC = () => {
     return txnRef.split('_')[0];
   }, [txnRef]);
 
+  const isThriftOrder = useMemo(() => {
+    return orderCode.toUpperCase().includes('TRF') || location.search.toUpperCase().includes('THRIFT');
+  }, [orderCode, location.search]);
+
 interface StoredOrder {
   orderCode?: string;
   status?: string;
@@ -59,10 +63,22 @@ interface StoredOrder {
     if (isSuccess && orderCode) {
       try {
         const cleanTarget = orderCode.replace('#', '').trim().toLowerCase();
+        let uId: string | null = null;
+        try {
+          const userRaw = localStorage.getItem('user');
+          if (userRaw) {
+            const u = JSON.parse(userRaw);
+            uId = u._id || u.id || null;
+          }
+        } catch {
+          // ignore
+        }
 
         // Update all rental and thrift orders storage keys
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
+          const isCurrentUserKey = uId && key && (key === `user_rental_orders_${uId}` || key === `user_thrift_orders_${uId}`);
+
           if (key && key.startsWith('user_rental_orders')) {
             const raw = localStorage.getItem(key);
             if (raw) {
@@ -72,14 +88,20 @@ interface StoredOrder {
                 const newOrders = orders.map((o: StoredOrder, idx: number) => {
                   const oCode = (o.orderCode || '').replace('#', '').trim().toLowerCase();
                   const isMatch =
-                    oCode === cleanTarget ||
-                    oCode.includes(cleanTarget) ||
-                    cleanTarget.includes(oCode) ||
-                    (idx === 0 && o.status === 'PENDING_PAYMENT');
+                    (cleanTarget && (oCode === cleanTarget || oCode.includes(cleanTarget) || cleanTarget.includes(oCode))) ||
+                    (isCurrentUserKey && idx === 0 && o.status === 'PENDING_PAYMENT');
 
                   if (isMatch) {
                     updated = true;
-                    return { ...o, status: 'PAID', paymentStatus: 'PAID', transactionNo, bankCode };
+                    // Bỏ qua shop owner & shipper trong môi trường test -> Chuyển thẳng Bước 5: DELIVERED (Chờ ký nhận CLA)
+                    return {
+                      ...o,
+                      status: 'DELIVERED',
+                      paymentStatus: 'PAID',
+                      transactionNo,
+                      bankCode,
+                      deliveredAt: new Date().toISOString(),
+                    };
                   }
                   return o;
                 });
@@ -99,14 +121,12 @@ interface StoredOrder {
                 const newOrders = orders.map((o: StoredOrder, idx: number) => {
                   const oCode = (o.orderCode || '').replace('#', '').trim().toLowerCase();
                   const isMatch =
-                    oCode === cleanTarget ||
-                    oCode.includes(cleanTarget) ||
-                    cleanTarget.includes(oCode) ||
-                    (idx === 0 && o.status === 'PENDING_PAYMENT');
+                    (cleanTarget && (oCode === cleanTarget || oCode.includes(cleanTarget) || cleanTarget.includes(oCode))) ||
+                    (isCurrentUserKey && idx === 0 && o.status === 'PENDING_PAYMENT');
 
                   if (isMatch) {
                     updated = true;
-                    return { ...o, status: 'PAID', paymentStatus: 'PAID', transactionNo, bankCode };
+                    return { ...o, status: isThriftOrder ? 'DELIVERED' : 'PAID', paymentStatus: 'PAID', escrowStatus: 'HELD_72H', transactionNo, bankCode };
                   }
                   return o;
                 });
@@ -126,7 +146,7 @@ interface StoredOrder {
       setIsProcessing(false);
     }, 600);
     return () => clearTimeout(timer);
-  }, [isSuccess, orderCode, transactionNo, bankCode]);
+  }, [isSuccess, orderCode, transactionNo, bankCode, isThriftOrder]);
 
   return (
     <div className="min-h-screen bg-[#FBF9F5] text-[#1E1E1E] font-sans antialiased flex flex-col justify-between">
@@ -203,10 +223,10 @@ interface StoredOrder {
                 Về User Dashboard
               </button>
               <Link
-                to="/rent/orders"
+                to={isThriftOrder ? `/thrift/orders?orderCode=${encodeURIComponent(orderCode)}` : '/rent/orders'}
                 className="flex-1 py-3.5 px-4 rounded-xl bg-[#F5F2EB] text-[#1E1E1E] hover:bg-[#EAE5DB] text-xs font-bold uppercase tracking-wider transition-all text-center border border-[#E5E0D8]"
               >
-                Xem Hồ sơ &amp; Đơn hàng
+                {isThriftOrder ? 'Xem Sổ Lệnh THRIFT' : 'Xem Hồ sơ & Đơn hàng'}
               </Link>
             </div>
           </div>

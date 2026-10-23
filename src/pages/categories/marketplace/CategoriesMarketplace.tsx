@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { AppSidebar } from '../../../components/layout/AppSidebar';
 import {
   CATEGORIES_DATA,
   CATEGORY_FILTER_OPTIONS,
@@ -11,6 +12,26 @@ export const CategoriesMarketplace: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<CategoryFilterKey>('all');
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Track sidebar collapsed state to display inline restore chip when collapsed
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsSidebarCollapsed(customEvent.detail);
+      }
+    };
+    window.addEventListener('reuse_user_sidebar_toggle', handleSync);
+    return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
+  }, []);
 
   // Scroll to top on initial mount
   useEffect(() => {
@@ -57,7 +78,29 @@ export const CategoriesMarketplace: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased">
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+      {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
+      <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
+        {/* Navigation Sidebar (Fixed on left: GuestSidebar when guest, UserSidebar when logged in) */}
+        <AppSidebar activeKey="categories" />
+
+        {/* ── MAIN CONTENT AREA ── */}
+        <main className="flex-1 min-w-0 space-y-12">
+          {/* Quick inline restore chip if user clicked 3-bar button to hide sidebar */}
+          {isSidebarCollapsed && (
+            <div className="flex items-center gap-2 -mb-6 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: false }))}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-[#E8E4DC] text-xs font-semibold text-[#1C1A18] hover:bg-[#F6F3EE] hover:border-[#1C1A18]/40 transition-all shadow-2xs cursor-pointer group"
+                title="Mở lại menu điều hướng (Dấu 3 gạch)"
+              >
+                <span className="material-symbols-outlined text-[18px] text-[#5E6D5B] group-hover:scale-110 transition-transform">
+                  menu
+                </span>
+                <span>Hiện menu điều hướng</span>
+              </button>
+            </div>
+          )}
         {/* ── 1. EDITORIAL TOP DISCOVERY HEADER ── */}
         <section data-reveal className="space-y-4 max-w-4xl pt-2">
           <div className="flex items-center gap-2.5">
@@ -378,6 +421,7 @@ export const CategoriesMarketplace: React.FC = () => {
             </div>
           </div>
         </section>
+        </main>
       </div>
     </div>
   );

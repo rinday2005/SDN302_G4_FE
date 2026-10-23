@@ -3,8 +3,6 @@ import Header from './Header';
 import type { UserRole } from './Header';
 import Footer from './Footer';
 import { Sidebar } from './Sidebar';
-import { GuestSidebar } from './GuestSidebar';
-import { UserSidebar } from './UserSidebar';
 
 interface MasterLayoutProps {
   children: React.ReactNode;

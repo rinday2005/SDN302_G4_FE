@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
+import { getPublicThriftListingByIdApi } from '../../../services/thrift.api';
 import {
   getThriftProductDetail,
   THRIFT_RELATED_PRODUCTS,
@@ -16,7 +17,54 @@ export const ThriftDetail: React.FC = () => {
   const { user } = useAuth();
   const { isWishlisted, toggleWishlist, addToCart } = useCartWishlist();
 
-  const product: ThriftProductDetail = useMemo(() => getThriftProductDetail(id), [id]);
+  const baseProduct: ThriftProductDetail = useMemo(() => getThriftProductDetail(id), [id]);
+  const [dbProduct, setDbProduct] = useState<Partial<ThriftProductDetail> | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string>('L');
+
+  useEffect(() => {
+    if (!id) return;
+    getPublicThriftListingByIdApi(id)
+      .then((data) => {
+        if (data) {
+          setDbProduct({
+            id: data._id,
+            title: data.name,
+            price: data.price,
+            quantity: data.quantity,
+            sizes: (data.category === 'camera' || (data.name && /canon|sony|nikon|fujifilm|dji|leica/i.test(data.name))) ? [] : (data.sizes || ['S', 'M', 'L', 'XL']),
+            size: (data.category === 'camera' || (data.name && /canon|sony|nikon|fujifilm|dji|leica/i.test(data.name))) ? undefined : (data.size || 'L'),
+            status: data.status,
+            sourceType: data.sourceType,
+            conditionLabel: data.condition || 'Rất tốt (95%)',
+            location: data.location || 'Đà Nẵng',
+            mainImage: data.images && data.images.length > 0 ? data.images[0] : undefined,
+          });
+          if (data.size) {
+            setSelectedSize(data.size);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load live thrift listing:', err);
+      });
+  }, [id]);
+
+  const product: ThriftProductDetail = useMemo(() => {
+    if (!dbProduct) return baseProduct;
+    return {
+      ...baseProduct,
+      ...dbProduct,
+      id: dbProduct.id || baseProduct.id,
+      title: dbProduct.title || baseProduct.title,
+      price: dbProduct.price ?? baseProduct.price,
+      mainImage: dbProduct.mainImage || baseProduct.mainImage,
+    };
+  }, [baseProduct, dbProduct]);
+
+  const isSoldOut = product.status === 'SOLD' || (product.quantity !== undefined && product.quantity <= 0);
+  const isRentalSource = product.sourceType === 'RENTAL_PRODUCT' || product.source === 'rent';
+  const isCameraCategory = product.category === 'camera' || (product.categoryLabel || '').toLowerCase().includes('camera') || (product.categoryLabel || '').toLowerCase().includes('máy ảnh') || /canon|sony|nikon|fujifilm|dji|leica|lumix/i.test(product.title);
+  const showSizeSelector = !isCameraCategory && Array.isArray(product.sizes) && product.sizes.length > 0;
 
   const [thumbState, setThumbState] = useState<{ id?: string; index: number }>({ id, index: 0 });
   const activeThumb = thumbState.id === id ? thumbState.index : 0;
@@ -37,39 +85,44 @@ export const ThriftDetail: React.FC = () => {
     onSuccess();
   };
 
-  const handleBuyNow = () =>
+  const handleBuyNow = () => {
+    if (isSoldOut) return;
     handleProtected(`mua ngay "${product.title}"`, '/cart',
       () => {
         addToCart({
           id: product.id,
           title: product.title,
           price: product.price,
-          image: product.mainImage,
+          image: activeImage,
           mode: 'thrift',
           location: product.location,
           categoryLabel: product.categoryLabel,
           gradeBadge: product.conditionLabel,
           quantity: 1,
+          size: showSizeSelector ? selectedSize : undefined,
         });
         navigate('/cart');
       });
+  };
 
   const handleAddToCart = () => {
+    if (isSoldOut) return;
     addToCart({
       id: product.id,
       title: product.title,
       price: product.price,
-      image: product.mainImage,
+      image: activeImage,
       mode: 'thrift',
       location: product.location,
       categoryLabel: product.categoryLabel,
       gradeBadge: product.conditionLabel,
       quantity: 1,
+      size: showSizeSelector ? selectedSize : undefined,
     });
   };
 
   const handleWishlist = () => {
-    toggleWishlist(product.id);
+    toggleWishlist(product.id, 'THRIFT');
   };
 
   const handleChat = () =>
@@ -277,16 +330,83 @@ export const ThriftDetail: React.FC = () => {
                 ))}
               </div>
 
+              {/* Size Selector (Ẩn đối với chuyên mục Camera / Máy ảnh) */}
+              {showSizeSelector && (
+                <div className="space-y-2 pt-2 pb-1 border-t border-[#E7E2DA]/70">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#78736A]">
+                      Chọn Kích cỡ / Size: <strong className="text-[#1C1A18] font-mono text-xs">{selectedSize}</strong>
+                    </span>
+                    <span className="text-[10px] text-[#78736A]">Form chuẩn Atelier</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {(product.sizes || []).map((s: string) => (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={isSoldOut}
+                        onClick={() => setSelectedSize(s)}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                          selectedSize === s
+                            ? 'bg-[#1C1A18] text-white border-[#1C1A18] shadow-xs'
+                            : 'bg-white text-[#5E5A53] border-[#E7E2DA] hover:bg-[#F4F0EA]'
+                        } ${isSoldOut ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tình trạng tồn kho */}
+              <div className="bg-[#F4F0EA]/60 rounded-xl p-3 border border-[#E7E2DA] text-xs">
+                {isSoldOut ? (
+                  <div className="flex items-center gap-2 text-rose-700 font-bold">
+                    <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
+                    <span>Mặt hàng đã HẾT HÀNG / ĐÃ BÁN (Ngừng nhận đơn giao dịch)</span>
+                  </div>
+                ) : isRentalSource ? (
+                  <div className="flex items-center gap-2 text-amber-900 font-bold">
+                    <span className="w-2 h-2 rounded-full bg-amber-600"></span>
+                    <span>Hiện vật độc bản duy nhất 1 chiếc (Chuyển đổi từ Rent · 1-of-1)</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#5E5A53]">Số lượng tồn kho trong kho:</span>
+                    <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Còn {product.quantity ?? 10} sản phẩm
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* CTA Buttons */}
-              <div className="pt-2 space-y-2.5">
+              <div className="pt-1 space-y-2.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <button type="button" onClick={handleBuyNow}
-                    className="w-full py-3.5 px-4 bg-[#1C1A18] hover:bg-black text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  <button
+                    type="button"
+                    disabled={isSoldOut}
+                    onClick={handleBuyNow}
+                    className={`w-full py-3.5 px-4 text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      isSoldOut
+                        ? 'bg-stone-300 text-stone-500 cursor-not-allowed shadow-none'
+                        : 'bg-[#1C1A18] hover:bg-black text-white hover:shadow-lg'
+                    }`}
+                  >
                     <span className="material-symbols-outlined text-[16px]">bolt</span>
-                    Mua ngay
+                    {isSoldOut ? 'Hết hàng / Đã bán' : 'Mua ngay'}
                   </button>
-                  <button type="button" onClick={handleAddToCart}
-                    className="w-full py-3.5 px-4 bg-[#F4F0EA] hover:bg-[#EBE5DE] text-[#1C1A18] text-xs font-bold uppercase tracking-wider rounded-xl border border-[#E7E2DA] transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  <button
+                    type="button"
+                    disabled={isSoldOut}
+                    onClick={handleAddToCart}
+                    className={`w-full py-3.5 px-4 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      isSoldOut
+                        ? 'bg-stone-100 text-stone-400 border-stone-200 cursor-not-allowed'
+                        : 'bg-[#F4F0EA] hover:bg-[#EBE5DE] text-[#1C1A18] border-[#E7E2DA]'
+                    }`}
+                  >
                     <span className="material-symbols-outlined text-[16px]">shopping_bag</span>
                     Thêm vào giỏ
                   </button>
