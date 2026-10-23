@@ -155,46 +155,127 @@ export const RentOrderDetail: React.FC = () => {
   const [claAgreed, setClaAgreed] = useState(false);
   const [isEditingCla, setIsEditingCla] = useState(false);
   const [previewImageModal, setPreviewImageModal] = useState<string | null>(null);
+  const [uploadingSlot, setUploadingSlot] = useState<'slot1' | 'slot2' | 'slot3' | null>(null);
 
-  const handlePhotoUpload = (slot: 'slot1' | 'slot2' | 'slot3', e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageFile = (file: File, maxWidth = 1200, quality = 0.75): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } else {
+            resolve((e.target?.result as string) || '');
+          }
+        };
+        img.onerror = () => {
+          resolve((e.target?.result as string) || '');
+        };
+        img.src = (e.target?.result as string) || '';
+      };
+      reader.onerror = () => {
+        resolve('');
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePhotoUpload = async (slot: 'slot1' | 'slot2' | 'slot3', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      setClaProof((prev) => {
-        const updated = {
-          ...prev,
-          photos: {
-            ...prev.photos,
-            [slot]: base64,
-          },
-        };
-        if (orderData) {
-          const key = `cla_proof_${orderData.code.replace('#', '').trim()}`;
-          localStorage.setItem(key, JSON.stringify(updated));
+    setUploadingSlot(slot);
+    try {
+      const base64 = await compressImageFile(file, 1200, 0.75);
+      if (!base64) return;
+
+      const updatedPhotos = {
+        ...claProof.photos,
+        [slot]: base64,
+      };
+
+      const updatedProof: ClaProofData = {
+        ...claProof,
+        photos: updatedPhotos,
+      };
+
+      setClaProof(updatedProof);
+
+      if (orderData) {
+        const proofStr = JSON.stringify(updatedProof);
+        const rawCodeKey = orderData.code.replace('#', '').trim();
+        const rawIdKey = String(orderData.id || '').replace('#', '').trim();
+        try {
+          if (rawCodeKey) localStorage.setItem(`cla_proof_${rawCodeKey}`, proofStr);
+          if (rawIdKey) localStorage.setItem(`cla_proof_${rawIdKey}`, proofStr);
+          if (id) localStorage.setItem(`cla_proof_${id.replace('#', '').trim()}`, proofStr);
+          if (targetProductId) localStorage.setItem(`cla_proof_${targetProductId}`, proofStr);
+        } catch (storageErr) {
+          console.warn('LocalStorage quota handled safely:', storageErr);
         }
-        return updated;
-      });
-    };
-    reader.readAsDataURL(file);
+
+        // Auto sync updated photos to backend if CLA was signed
+        if (claProof.isSigned) {
+          try {
+            await confirmReceivedOrderApi(orderData.id, {
+              photos: updatedPhotos,
+              note: claProof.note || orderData.claNote || 'Cập nhật ảnh minh chứng đối kiểm 3 góc',
+              signerName: claProof.signerName || orderData.recipientName || 'Khách hàng',
+              signerPhone: claProof.signerPhone || orderData.recipientPhone || '',
+            });
+          } catch (syncErr) {
+            console.warn('Backend CLA photo auto-sync note:', syncErr);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi khi nén và tải ảnh CLA:', err);
+    } finally {
+      setUploadingSlot(null);
+      e.target.value = '';
+    }
   };
 
   const handleRemovePhoto = (slot: 'slot1' | 'slot2' | 'slot3') => {
-    setClaProof((prev) => {
-      const updated = {
-        ...prev,
-        photos: {
-          ...prev.photos,
-          [slot]: '',
-        },
-      };
-      if (orderData) {
-        const key = `cla_proof_${orderData.code.replace('#', '').trim()}`;
-        localStorage.setItem(key, JSON.stringify(updated));
+    const updatedPhotos = {
+      ...claProof.photos,
+      [slot]: '',
+    };
+    const updatedProof: ClaProofData = {
+      ...claProof,
+      photos: updatedPhotos,
+    };
+    setClaProof(updatedProof);
+    if (orderData) {
+      try {
+        const proofStr = JSON.stringify(updatedProof);
+        const rawCodeKey = orderData.code.replace('#', '').trim();
+        const rawIdKey = String(orderData.id || '').replace('#', '').trim();
+        if (rawCodeKey) localStorage.setItem(`cla_proof_${rawCodeKey}`, proofStr);
+        if (rawIdKey) localStorage.setItem(`cla_proof_${rawIdKey}`, proofStr);
+      } catch {
+        // ignore
       }
-      return updated;
-    });
+      if (claProof.isSigned) {
+        confirmReceivedOrderApi(orderData.id, {
+          photos: updatedPhotos,
+          note: claProof.note,
+          signerName: claProof.signerName,
+          signerPhone: claProof.signerPhone,
+        }).catch(() => {});
+      }
+    }
   };
 
   const [, setIsSigningCla] = useState(false);
@@ -243,32 +324,17 @@ export const RentOrderDetail: React.FC = () => {
           : null
       );
 
-      // 3. Đồng bộ localStorage đa mã định danh (tránh lệch key giữa order.id, code và productId)
+      // 3. Đồng bộ localStorage an toàn (bọc try-catch chống QuotaExceededError khi lưu ảnh Base64)
       const proofStr = JSON.stringify(updatedProof);
       const rawCodeKey = orderData.code.replace('#', '').trim();
       const rawIdKey = String(orderData.id || '').replace('#', '').trim();
 
-      if (rawCodeKey) localStorage.setItem(`cla_proof_${rawCodeKey}`, proofStr);
-      if (rawIdKey) localStorage.setItem(`cla_proof_${rawIdKey}`, proofStr);
-      if (id) localStorage.setItem(`cla_proof_${id.replace('#', '').trim()}`, proofStr);
-      if (targetProductId) localStorage.setItem(`cla_proof_${targetProductId}`, proofStr);
-
-      orderData.items.forEach((it) => {
-        if (it.productId) {
-          localStorage.setItem(`cla_proof_${it.productId}`, proofStr);
-          localStorage.setItem(`cla_proof_prod_${it.productId}`, proofStr);
-        }
-        if (it.id) {
-          localStorage.setItem(`cla_proof_${it.id}`, proofStr);
-          localStorage.setItem(`cla_proof_prod_${it.id}`, proofStr);
-        }
-        const tLower = (it.title || '').toLowerCase();
-        if (tLower.includes('áo khoác') || tLower.includes('wool') || tLower.includes('dạ')) {
-          localStorage.setItem('cla_proof_6', proofStr);
-          localStorage.setItem('cla_proof_wool_coat', proofStr);
-          localStorage.setItem('cla_proof_wool-coat', proofStr);
-        }
-      });
+      try {
+        if (rawCodeKey) localStorage.setItem(`cla_proof_${rawCodeKey}`, proofStr);
+        if (rawIdKey && rawIdKey !== rawCodeKey) localStorage.setItem(`cla_proof_${rawIdKey}`, proofStr);
+      } catch (storageErr) {
+        console.warn('LocalStorage quota handled safely on CLA keys:', storageErr);
+      }
 
       const uId = user?._id || user?.id;
       if (uId) {
@@ -507,45 +573,48 @@ export const RentOrderDetail: React.FC = () => {
       const cleanCode = (orderCode || '').replace('#', '').trim();
 
       let loadedProof: ClaProofData | null = null;
+      const candidateKeys = [
+        cleanCode,
+        cleanParamId,
+        targetProductId,
+        '6',
+        'wool-coat',
+        'wool_coat',
+      ].filter(Boolean) as string[];
+
+      let localProofObj: ClaProofData | null = null;
+      for (const ck of candidateKeys) {
+        try {
+          const savedClaRaw = localStorage.getItem(`cla_proof_${ck}`);
+          if (savedClaRaw) {
+            const p = JSON.parse(savedClaRaw);
+            if (p && (p.isSigned || p.signedAt || p.signDate || p.photos)) {
+              localProofObj = p;
+              break;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
       if (backendOrder?.claProof && backendOrder.claProof.isSigned) {
         loadedProof = {
           isSigned: true,
           signDate: backendOrder.claProof.signedAt
             ? new Date(backendOrder.claProof.signedAt).toLocaleString('vi-VN')
-            : '',
-          signerName: backendOrder.claProof.signerName || displayName,
-          signerPhone: backendOrder.claProof.signerPhone || user?.phoneNumber || user?.phone || '',
-          note: backendOrder.claProof.note || '',
+            : localProofObj?.signDate || '',
+          signerName: backendOrder.claProof.signerName || localProofObj?.signerName || displayName,
+          signerPhone: backendOrder.claProof.signerPhone || localProofObj?.signerPhone || user?.phoneNumber || user?.phone || '',
+          note: backendOrder.claProof.note || localProofObj?.note || '',
           photos: {
-            slot1: backendOrder.claProof.photos?.slot1 || '',
-            slot2: backendOrder.claProof.photos?.slot2 || '',
-            slot3: backendOrder.claProof.photos?.slot3 || '',
+            slot1: backendOrder.claProof.photos?.slot1 || localProofObj?.photos?.slot1 || '',
+            slot2: backendOrder.claProof.photos?.slot2 || localProofObj?.photos?.slot2 || '',
+            slot3: backendOrder.claProof.photos?.slot3 || localProofObj?.photos?.slot3 || '',
           },
         };
-      } else {
-        const candidateKeys = [
-          cleanCode,
-          cleanParamId,
-          targetProductId,
-          '6',
-          'wool-coat',
-          'wool_coat',
-        ].filter(Boolean) as string[];
-
-        for (const ck of candidateKeys) {
-          try {
-            const savedClaRaw = localStorage.getItem(`cla_proof_${ck}`);
-            if (savedClaRaw) {
-              const p = JSON.parse(savedClaRaw);
-              if (p && (p.isSigned || p.signedAt || p.signDate)) {
-                loadedProof = p;
-                break;
-              }
-            }
-          } catch {
-            // ignore
-          }
-        }
+      } else if (localProofObj) {
+        loadedProof = localProofObj;
       }
 
       const isClaSigned = Boolean(
@@ -558,11 +627,17 @@ export const RentOrderDetail: React.FC = () => {
       const urlStatus = (urlParams.get('status') || '').toUpperCase();
       const hasPickupScheduled = urlParams.get('pickupScheduled') === 'true' || Boolean((source as Record<string, unknown>)?.pickupScheduled);
 
-      // In test mode: Paid orders bypass shop approval & shipping
-      // If not signed CLA -> DELIVERED (Bước 5: Đã nhận - Khớp CLA 3 góc)
-      // If signed CLA -> RENTING (Bước 6: Đang thuê)
+      // Check if return was requested locally or on backend
       let effectiveStatus = rawStatus;
-      if (urlStatus === 'RETURN_REQUESTED' || rawStatus === 'RETURN_REQUESTED' || hasPickupScheduled) {
+      const isReturnRequested = Boolean(
+        urlStatus === 'RETURN_REQUESTED' ||
+        rawStatus === 'RETURN_REQUESTED' ||
+        hasPickupScheduled ||
+        localStorage.getItem(`return_request_${cleanCode.toLowerCase()}`) ||
+        localStorage.getItem(`return_request_${cleanParamId.toLowerCase()}`)
+      );
+
+      if (isReturnRequested) {
         effectiveStatus = 'RETURN_REQUESTED';
       } else if (urlStatus === 'RETURNED' || rawStatus === 'RETURNED') {
         effectiveStatus = 'RETURNED';
@@ -1718,7 +1793,12 @@ export const RentOrderDetail: React.FC = () => {
                     {/* Slot 1: Ngoại quan mặt trước */}
                     <div className="space-y-2">
                       <div className="h-40 rounded-2xl overflow-hidden bg-stone-50 relative group border border-stone-200/80">
-                        {claProof.photos.slot1 ? (
+                        {uploadingSlot === 'slot1' ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-stone-50 text-stone-600">
+                            <span className="material-symbols-outlined text-2xl animate-spin text-stone-800">progress_activity</span>
+                            <span className="text-[11px] font-medium">Đang xử lý ảnh Góc 1...</span>
+                          </div>
+                        ) : claProof.photos.slot1 ? (
                           <>
                             <img
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
@@ -1773,7 +1853,12 @@ export const RentOrderDetail: React.FC = () => {
                     {/* Slot 2: Chi tiết góc cạnh & phụ kiện */}
                     <div className="space-y-2">
                       <div className="h-40 rounded-2xl overflow-hidden bg-stone-50 relative group border border-stone-200/80">
-                        {claProof.photos.slot2 ? (
+                        {uploadingSlot === 'slot2' ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-stone-50 text-stone-600">
+                            <span className="material-symbols-outlined text-2xl animate-spin text-stone-800">progress_activity</span>
+                            <span className="text-[11px] font-medium">Đang xử lý ảnh Góc 2...</span>
+                          </div>
+                        ) : claProof.photos.slot2 ? (
                           <>
                             <img
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
@@ -1828,7 +1913,12 @@ export const RentOrderDetail: React.FC = () => {
                     {/* Slot 3: Tem niêm phong & Khóa Nanuk */}
                     <div className="space-y-2">
                       <div className="h-40 rounded-2xl overflow-hidden bg-stone-50 relative group border border-stone-200/80">
-                        {claProof.photos.slot3 ? (
+                        {uploadingSlot === 'slot3' ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-stone-50 text-stone-600">
+                            <span className="material-symbols-outlined text-2xl animate-spin text-stone-800">progress_activity</span>
+                            <span className="text-[11px] font-medium">Đang xử lý ảnh Góc 3...</span>
+                          </div>
+                        ) : claProof.photos.slot3 ? (
                           <>
                             <img
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
@@ -1964,7 +2054,7 @@ export const RentOrderDetail: React.FC = () => {
                           <button
                             type="button"
                             onClick={handleSignCla}
-                            disabled={!claAgreed}
+                            disabled={!claProof.isSigned && !claAgreed}
                             className="px-5 py-2.5 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shadow-xs cursor-pointer"
                           >
                             <span className="material-symbols-outlined text-[16px]">draw</span>

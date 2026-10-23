@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { AppSidebar } from '../../components/layout/AppSidebar';
 
 interface ContactFormData {
   fullName: string;
@@ -11,6 +12,24 @@ interface ContactFormData {
 }
 
 export const ContactPage: React.FC = () => {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsSidebarCollapsed(customEvent.detail);
+      }
+    };
+    window.addEventListener('reuse_user_sidebar_toggle', handleSync);
+    return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
+  }, []);
   const [activeTab, setActiveTab] = useState<'form' | 'success'>('form');
   const [copied, setCopied] = useState<boolean>(false);
   const [formData, setFormData] = useState<ContactFormData>({
@@ -47,7 +66,31 @@ export const ContactPage: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased py-6 sm:py-10 px-4 sm:px-6 lg:px-8 contact-page-scope">
       {/* Khung căn giữa tương thích MasterLayout */}
-      <div className="max-w-7xl mx-auto flex flex-col w-full">
+            {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
+      <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
+        {/* Navigation Sidebar */}
+        <AppSidebar activeKey="contact" />
+
+        {/* ── MAIN CONTENT AREA ── */}
+        <main className="flex-1 min-w-0 space-y-8">
+          {/* Quick inline restore chip if user clicked collapse button to hide sidebar */}
+          {isSidebarCollapsed && (
+            <div className="flex items-center gap-2 -mb-4 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: false }))}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-[#E8E4DC] text-xs font-semibold text-[#1C1A18] hover:bg-[#F6F3EE] hover:border-[#1C1A18]/40 transition-all shadow-2xs cursor-pointer group"
+                title="Mở lại menu điều hướng"
+              >
+                <span className="material-symbols-outlined text-[18px] text-[#5E6D5B] group-hover:scale-110 transition-transform">
+                  menu
+                </span>
+                <span>Hiện menu điều hướng</span>
+              </button>
+            </div>
+          )}
+
+          <div className="w-full flex flex-col">
         {/* Style injection đồng bộ 100% với FAQ.tsx */}
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
@@ -505,6 +548,8 @@ export const ContactPage: React.FC = () => {
             </div>
           </div>
         </section>
+          </div>
+        </main>
       </div>
     </div>
   );

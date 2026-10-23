@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
 import { getPublicRentProductsApi } from '../../../services/rentProduct.api';
-import { UserSidebar } from '../../../components/layout/UserSidebar';
+import { AppSidebar } from '../../../components/layout/AppSidebar';
 import {
   RENT_PRODUCTS,
   RENT_SORT_OPTIONS,
@@ -502,8 +502,8 @@ const RentMarketplace: React.FC = () => {
       {/* ── EDITORIAL HEADER ── */}
       {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
       <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
-        {/* User Navigation Sidebar (Fixed on left) */}
-        <UserSidebar activeKey="rent" />
+        {/* Navigation Sidebar (Fixed on left: GuestSidebar when guest, UserSidebar when logged in) */}
+        <AppSidebar activeKey="rent" />
 
         {/* ── MAIN CONTENT AREA ── */}
         <main className="flex-1 min-w-0 space-y-8">

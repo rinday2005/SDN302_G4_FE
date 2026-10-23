@@ -448,10 +448,7 @@ export const RentCheckout: React.FC = () => {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1E1E1E] font-sans antialiased selection:bg-[#E8EFE9] selection:text-[#2D5A43] min-h-screen flex flex-col">
-      {/* ── TOP ANNOUNCEMENT BAR ── */}
-      <aside className="bg-[#1E1E1E] text-[#E2DFD8] text-[11px] tracking-widest font-medium uppercase py-2 text-center border-b border-[#292724] px-4">
-        RENT WHAT YOU NEED. REUSE WHAT ALREADY EXISTS. COMPLIMENTARY INSURED SHIPPING ON VERIFIED RENTALS.
-      </aside>
+      
 
       {/* ── PAGE TITLE AREA & TRUST BADGES ── */}
       <section className="bg-[#FDFCF9] border-b border-[#E5E0D8] py-7">

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { AppSidebar } from '../../components/layout/AppSidebar';
 import { Link } from 'react-router-dom';
 import {
   ABOUT_STATS as stats,
@@ -11,6 +12,24 @@ import {
 // ─── Component ─────────────────────────────────────────────────────────────
 
 const About: React.FC = () => {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsSidebarCollapsed(customEvent.detail);
+      }
+    };
+    window.addEventListener('reuse_user_sidebar_toggle', handleSync);
+    return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
+  }, []);
   return (
     <div
       className="w-full bg-[#FAF8F5] text-[#1A1918] antialiased"
@@ -32,7 +51,31 @@ const About: React.FC = () => {
         }
       `}</style>
 
-      <div className="about-container max-w-6xl mx-auto px-4 lg:px-8 py-8">
+            {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
+      <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
+        {/* Navigation Sidebar */}
+        <AppSidebar activeKey="about" />
+
+        {/* ── MAIN CONTENT AREA ── */}
+        <main className="flex-1 min-w-0 space-y-8">
+          {/* Quick inline restore chip if user clicked collapse button to hide sidebar */}
+          {isSidebarCollapsed && (
+            <div className="flex items-center gap-2 -mb-4 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: false }))}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-[#E8E4DC] text-xs font-semibold text-[#1C1A18] hover:bg-[#F6F3EE] hover:border-[#1C1A18]/40 transition-all shadow-2xs cursor-pointer group"
+                title="Mở lại menu điều hướng"
+              >
+                <span className="material-symbols-outlined text-[18px] text-[#5E6D5B] group-hover:scale-110 transition-transform">
+                  menu
+                </span>
+                <span>Hiện menu điều hướng</span>
+              </button>
+            </div>
+          )}
+
+          <div className="about-container w-full">
 
         {/* ── Breadcrumb ───────────────────────────────────────────────── */}
         <nav className="flex items-center gap-2 text-[11px] text-[#7D756D] mb-8 font-medium">
@@ -330,6 +373,8 @@ const About: React.FC = () => {
           </div>
         </section>
 
+          </div>
+        </main>
       </div>
     </div>
   );

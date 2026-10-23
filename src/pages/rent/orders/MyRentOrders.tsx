@@ -63,8 +63,16 @@ export const MyRentOrders: React.FC = () => {
     user?.avatar ||
     'https://lh3.googleusercontent.com/aida-public/AB6AXuCMwbU44ZM0dZePaAOyFv49mOAhbEw3pqfZA1_2FS-7VfcegFWv61TXx3DWJIZc8UB0MsGkPHwOa97niyCrHzEC25U-maDnSnRUqud1GouXT_0YJYIqKRwjN3kZk0T5DIHXCgA8hXoz_-CU_xbOdbngGDygOaOHOBKy0qRmDr3A-8mVbyTAF5sJb5PBdNrjI_ZwYlugupcwk1mJWpjSd3dcT4W7AIaVlBFmmLq1akOA';
 
-  // Filters & State
-  const [activeTab, setActiveTab] = useState<string>('ALL');
+  const tabParam = queryParams.get('tab');
+  const [activeTab, setActiveTab] = useState<string>(() => (tabParam ? tabParam.toUpperCase() : 'ALL'));
+  const [prevTabParam, setPrevTabParam] = useState(tabParam);
+
+  if (tabParam !== prevTabParam) {
+    setPrevTabParam(tabParam);
+    if (tabParam) {
+      setActiveTab(tabParam.toUpperCase());
+    }
+  }
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('Mới nhất trước');
   const [periodOption, setPeriodOption] = useState('Năm 2026');
@@ -216,8 +224,25 @@ export const MyRentOrders: React.FC = () => {
       }
     }
 
+    const cleanRawCode = rawCode.replace('#', '').trim().toLowerCase();
+    const cleanRawId = cleanId.toLowerCase();
+    const isReturnRequested = Boolean(
+      rawStatus === 'RETURN_REQUESTED' ||
+      rawStatus === 'RETURNING' ||
+      Boolean((raw as { pickupScheduled?: boolean }).pickupScheduled) ||
+      Boolean((raw as { returnedAt?: string }).returnedAt) ||
+      localStorage.getItem(`return_request_${cleanRawId}`) ||
+      localStorage.getItem(`return_request_${cleanRawCode}`)
+    );
+
     let statusVal = rawStatus;
-    if (['PAID', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(rawStatus)) {
+    if (rawStatus === 'RETURNED') {
+      statusVal = 'RETURNED';
+    } else if (rawStatus === 'COMPLETED') {
+      statusVal = 'COMPLETED';
+    } else if (isReturnRequested) {
+      statusVal = 'RETURN_REQUESTED';
+    } else if (['PAID', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(rawStatus)) {
       statusVal = hasClaSigned ? 'RENTING' : 'DELIVERED';
     }
 
@@ -486,10 +511,10 @@ export const MyRentOrders: React.FC = () => {
       grandTotalVal: grandFee,
       shippingFee: `${shipFee.toLocaleString('vi-VN')}₫`,
       grandTotal: `${grandFee.toLocaleString('vi-VN')}₫`,
-      canReturn: statusVal === 'RENTING' || hasClaSigned,
+      canReturn: statusVal === 'RENTING' && !isReturnRequested,
       canPay: !isPaid && ['PENDING', 'WAITING_PAYMENT', 'PENDING_PAYMENT'].includes(statusVal),
       needsClaSign: statusVal === 'DELIVERED' && !hasClaSigned,
-      claSigned: Boolean(hasClaSigned || statusVal === 'RENTING'),
+      claSigned: Boolean(hasClaSigned || statusVal === 'RENTING' || isReturnRequested),
       isReturningOrReturned: ['RETURN_REQUESTED', 'RETURNING', 'RETURNED'].includes(statusVal),
       isCompleted: statusVal === 'COMPLETED',
       recipientName: resolvedRecipientName,
@@ -569,9 +594,33 @@ export const MyRentOrders: React.FC = () => {
               combined.push(mapped);
             }
           }
-          // Overwrite local user cache with fresh authoritative data from MongoDB
+          // Overwrite local user cache with fresh authoritative data from MongoDB while preserving local return requests
           if (uId) {
-            localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(apiOrders));
+            try {
+              const existingRaw = localStorage.getItem(`user_rental_orders_${uId}`);
+              const existingList = existingRaw ? JSON.parse(existingRaw) : [];
+              const returnMap = new Map<string, { status: string; pickupScheduled?: boolean; returnedAt?: string }>();
+              if (Array.isArray(existingList)) {
+                existingList.forEach((e: { orderCode?: string; _id?: string; status?: string; pickupScheduled?: boolean; returnedAt?: string }) => {
+                  if (e.status === 'RETURN_REQUESTED' || e.pickupScheduled) {
+                    const c = (e.orderCode || e._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                    if (c) returnMap.set(c, { status: e.status || 'RETURN_REQUESTED', pickupScheduled: e.pickupScheduled, returnedAt: e.returnedAt });
+                  }
+                });
+              }
+
+              const mergedApiOrders = apiOrders.map((o) => {
+                const c = (o.orderCode || o._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const localReq = returnMap.get(c);
+                if (localReq && o.status !== 'COMPLETED' && o.status !== 'RETURNED') {
+                  return { ...o, status: 'RETURN_REQUESTED', pickupScheduled: true, returnedAt: localReq.returnedAt };
+                }
+                return o;
+              });
+              localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(mergedApiOrders));
+            } catch {
+              localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(apiOrders));
+            }
           }
         }
       } catch (err) {
@@ -629,11 +678,15 @@ export const MyRentOrders: React.FC = () => {
     };
     window.addEventListener('user_profile_updated', handleProfileUpdate);
     window.addEventListener('profile_updated', handleProfileUpdate);
+    window.addEventListener('rental_order_updated', handleProfileUpdate);
+    window.addEventListener('storage', handleProfileUpdate);
 
     return () => {
       isMounted = false;
       window.removeEventListener('user_profile_updated', handleProfileUpdate);
       window.removeEventListener('profile_updated', handleProfileUpdate);
+      window.removeEventListener('rental_order_updated', handleProfileUpdate);
+      window.removeEventListener('storage', handleProfileUpdate);
     };
   }, [mapOrderToRecord, paymentSuccessParam, user]);
 

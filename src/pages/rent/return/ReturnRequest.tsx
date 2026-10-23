@@ -530,7 +530,7 @@ export const ReturnRequest: React.FC = () => {
         }
       }
 
-      // Update dedicated order backup
+      // Update dedicated order backup and direct return request indicators
       try {
         const backupKey = `reuse_order_backup_${cleanOrderCode}`;
         const bRaw = localStorage.getItem(backupKey);
@@ -540,11 +540,24 @@ export const ReturnRequest: React.FC = () => {
           bObj.pickupScheduled = true;
           localStorage.setItem(backupKey, JSON.stringify(bObj));
         }
+
+        const returnRecord = {
+          orderCode: cleanOrderCode,
+          orderId: targetOrderId,
+          status: 'RETURN_REQUESTED',
+          pickupScheduled: true,
+          returnedAt: new Date().toISOString(),
+          returnTrackingCode: `VN-${cleanOrderCode.replace(/\D/g, '').slice(-6) || '883910'}-RNT`,
+        };
+        const recordStr = JSON.stringify(returnRecord);
+        localStorage.setItem(`return_request_${cleanOrderCode.toLowerCase()}`, recordStr);
+        localStorage.setItem(`return_request_${cleanId.toLowerCase()}`, recordStr);
+        if (targetOrderId) localStorage.setItem(`return_request_${String(targetOrderId).toLowerCase()}`, recordStr);
       } catch {
         // ignore
       }
 
-      // Dispatch event to refresh Sidebar and Dashboard
+      // Dispatch event to refresh Sidebar, Dashboard and Orders
       window.dispatchEvent(new Event('rental_order_updated'));
       window.dispatchEvent(new Event('storage'));
 

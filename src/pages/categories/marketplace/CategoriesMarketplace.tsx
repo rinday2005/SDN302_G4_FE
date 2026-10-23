@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { UserSidebar } from '../../../components/layout/UserSidebar';
+import { AppSidebar } from '../../../components/layout/AppSidebar';
 import {
   CATEGORIES_DATA,
   CATEGORY_FILTER_OPTIONS,
@@ -80,8 +80,8 @@ export const CategoriesMarketplace: React.FC = () => {
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased">
       {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
       <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
-        {/* User Navigation Sidebar (Fixed on left) */}
-        <UserSidebar activeKey="categories" />
+        {/* Navigation Sidebar (Fixed on left: GuestSidebar when guest, UserSidebar when logged in) */}
+        <AppSidebar activeKey="categories" />
 
         {/* ── MAIN CONTENT AREA ── */}
         <main className="flex-1 min-w-0 space-y-12">

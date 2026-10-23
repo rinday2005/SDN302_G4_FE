@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
 import { getPublicThriftListingsApi } from '../../../services/thrift.api';
-import { UserSidebar } from '../../../components/layout/UserSidebar';
+import { AppSidebar } from '../../../components/layout/AppSidebar';
 import {
     THRIFT_PRODUCTS,
     THRIFT_CATEGORY_OPTIONS,
@@ -340,8 +340,8 @@ export const ThriftMarketplace: React.FC = () => {
 
             {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
             <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
-                {/* User Navigation Sidebar (Fixed on left) */}
-                <UserSidebar activeKey="thrift" />
+                {/* Navigation Sidebar (Fixed on left: GuestSidebar when guest, UserSidebar when logged in) */}
+                <AppSidebar activeKey="thrift" />
 
                 {/* ── MAIN CONTENT AREA ── */}
                 <main className="flex-1 min-w-0 space-y-8">
