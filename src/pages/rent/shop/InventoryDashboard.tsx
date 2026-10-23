@@ -471,7 +471,7 @@ export const InventoryDashboard: React.FC = () => {
                       <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2">
                         {item.status === 'ELIGIBLE_FOR_THRIFT' && (
                           <Link
-                            to={`/shop/rent/inventory/${item.id}`}
+                            to={`/shop/rent/convert-thrift/${item.id}`}
                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#141310] hover:bg-[#292724] text-white text-[11px] uppercase tracking-wider rounded font-semibold shadow-xs transition-all whitespace-nowrap"
                           >
                             <span>Chuyển sang THRIFT</span>

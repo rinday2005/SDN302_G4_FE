@@ -158,6 +158,35 @@ export const ManageRentProducts: React.FC = () => {
                     </button>
                   </td>
                   <td className="py-4 px-4 text-right space-x-2">
+                    {/* Chức năng [FE-S4-04] Nút Chuyển sang thanh lý đồ cũ (Convert RENT to THRIFT) */}
+                    {p.convertedToThrift ? (
+                      <Link
+                        to={`/shop/rent/convert-thrift/${p.sku}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-secondary text-white rounded font-semibold text-[11px] shadow-xs"
+                        title="Đã chuyển sang THRIFT (Đang chờ duyệt)"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">verified</span>
+                        Đã sang THRIFT
+                      </Link>
+                    ) : p.rentingUnits > 0 && p.readyUnits === 0 ? (
+                      <span
+                        title="Không thể chuyển: Tất cả máy đang cho thuê (AC 1)"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-400 rounded font-semibold text-[10px] cursor-not-allowed opacity-60"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">lock</span>
+                        Đang thuê
+                      </span>
+                    ) : (
+                      <Link
+                        to={`/shop/rent/convert-thrift/${p.sku}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#141310] hover:bg-[#292724] text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                        title="Chuyển giao hiện vật sang thanh lý bán đứt THRIFT"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">sync_alt</span>
+                        Chuyển THRIFT
+                      </Link>
+                    )}
+
                     <Link to={`/shop/rent/edit/${p.sku}`} className="px-2.5 py-1 bg-[#f1ede6] hover:bg-[#ebe8e1] rounded font-semibold">
                       Sửa
                     </Link>
