@@ -11,6 +11,7 @@ import {
 } from '../../data/rent/myRentOrdersData';
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { resolveCleanAddress } from '../../../utils/address';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 
 export const MyRentOrders: React.FC = () => {
   const { user } = useAuth();
@@ -312,7 +313,7 @@ export const MyRentOrders: React.FC = () => {
       let image = it.imageUrl || it.image || '';
 
       const isGeneric = !title || title.includes('Đơn hàng Thuê') || title.includes('RH-RNT-');
-      if (isGeneric || !image || image.includes('unsplash.com/photo-1516035069371') || pricePerDay === 0) {
+      if (isGeneric || !image || image.includes('unsplash.com') || pricePerDay === 0) {
         let resolved = null;
         const pId = String(it.productId || it.id || '');
         if (pId && !pId.startsWith('item-')) {
@@ -346,7 +347,7 @@ export const MyRentOrders: React.FC = () => {
         if (resolved) {
           if (isGeneric) title = resolved.title;
           if (!pricePerDay) pricePerDay = resolved.pricePerDay;
-          if (!image || image.includes('unsplash.com/photo-1516035069371')) {
+          if (!image || image.includes('unsplash.com') || resolved.images?.[0]?.src) {
             image = resolved.images?.[0]?.src || image;
           }
         }
@@ -370,7 +371,7 @@ export const MyRentOrders: React.FC = () => {
         notes: 'Kiểm định chất lượng 8 bước ReUse Standard',
         dailyRate: `${pricePerDay.toLocaleString('vi-VN')}₫ / ngày`,
         itemTotal: `${itemTotal.toLocaleString('vi-VN')}₫`,
-        img: image,
+        img: normalizeImageUrl(image),
       };
     });
 

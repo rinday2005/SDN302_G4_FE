@@ -96,6 +96,16 @@ const AppLayout = ({
   );
 };
 
+// SavedItemsPage removed
+
+// NotificationsPage removed
+
+
+// MyOrdersPage removed
+
+import Dashboard from "./pages/admin/Dashboard";
+import { AdminLayout } from "./components/layout/admin/AdminLayout";
+
 const ShopDashboard = () => (
   <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <h1 className="text-2xl font-bold text-gray-800">
@@ -104,13 +114,6 @@ const ShopDashboard = () => (
   </div>
 );
 
-const AdminDashboard = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Admin Dashboard
-    </h1>
-  </div>
-);
 
 const DashboardRouter = () => {
   const auth = useContext(AuthContext);
@@ -169,6 +172,10 @@ const App = () => {
 
           <Route
             path="/rent/orders/:id"
+            element={<RentOrderDetail />}
+          />
+          <Route
+            path="/orders/:id"
             element={<RentOrderDetail />}
           />
           <Route
@@ -449,32 +456,55 @@ const App = () => {
             />
           }
         >
-          <Route
-            element={<AppLayout role="ADMIN" />}
-          >
+          <Route element={<AdminLayout />}>
             <Route
-              path="/admin/dashboard"
-              element={<AdminDashboard />}
+              path="/admin"
+              element={<Dashboard />}
             />
 
             <Route
-              path="/admin/listings"
-              element={<AdminDashboard />}
+              path="/admin/dashboard"
+              element={<Dashboard />}
+            />
+
+            <Route
+              path="/admin/users"
+              element={<Dashboard />}
             />
 
             <Route
               path="/admin/kyc"
-              element={<AdminDashboard />}
+              element={<Dashboard />}
+            />
+
+            <Route
+              path="/admin/rent/listings"
+              element={<Dashboard />}
+            />
+
+            <Route
+              path="/admin/thrift/listings"
+              element={<Dashboard />}
+            />
+
+            <Route
+              path="/admin/listings"
+              element={<Dashboard />}
+            />
+
+            <Route
+              path="/admin/categories"
+              element={<Dashboard />}
             />
 
             <Route
               path="/admin/disputes"
-              element={<AdminDashboard />}
+              element={<Dashboard />}
             />
 
             <Route
               path="/admin/finance"
-              element={<AdminDashboard />}
+              element={<Dashboard />}
             />
           </Route>
         </Route>

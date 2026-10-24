@@ -11,6 +11,7 @@ import {
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { type StoredRentalOrderRecord, type StoredRentalOrderItem } from '../../data/rent/myRentOrdersData';
 import { resolveCleanAddress } from '../../../utils/address';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 
 interface OrderItemDetail {
   id: string;
@@ -726,8 +727,8 @@ export const RentOrderDetail: React.FC = () => {
             itTitle.includes('RH-RNT-') ||
             price === 4400000;
 
-          if (isGenericMock || !image || image.includes('unsplash.com/photo-1516035069371') || deposit === 0) {
-            // 1. Try resolving by it.productId or targetProductId
+          if (isGenericMock || !image || image.includes('unsplash.com') || deposit === 0 || Boolean(targetProductId)) {
+            // 1. Try resolving by targetProductId or it.productId
             const pId = String(targetProductId || it.productId || (it as { id?: string }).id || '');
             if (pId && pId !== 'undefined' && !pId.startsWith('item-')) {
               const found = getRentProductDetail(pId);
@@ -782,7 +783,7 @@ export const RentOrderDetail: React.FC = () => {
               if (!deposit || deposit === 0 || deposit === 22000000) {
                 deposit = resolvedProd.deposit || (resolvedProd.pricePerDay * 4) || 1500000;
               }
-              if (!image || image.includes('unsplash.com/photo-1516035069371')) {
+              if (!image || image.includes('unsplash.com') || Boolean(targetProductId) || resolvedProd.images?.[0]?.src) {
                 image = resolvedProd.images?.[0]?.src || image;
               }
             }
@@ -830,7 +831,7 @@ export const RentOrderDetail: React.FC = () => {
             deposit,
             quantity: qty,
             itemTotal,
-            image,
+            image: normalizeImageUrl(image),
             accessoriesText: finalAccessories,
             benchReportText: finalBenchReport,
           });
