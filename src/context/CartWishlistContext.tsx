@@ -67,17 +67,23 @@ const CartWishlistContext = createContext<CartWishlistContextType | undefined>(u
 export const CartWishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth = useContext(AuthContext);
   const currentUserId = auth?.user?._id || auth?.user?.id || 'guest';
+  const currentUserRole = (auth?.user?.role as string) || '';
 
   return (
-    <CartWishlistProviderInner key={currentUserId} currentUserId={currentUserId}>
+    <CartWishlistProviderInner key={currentUserId} currentUserId={currentUserId} currentUserRole={currentUserRole}>
       {children}
     </CartWishlistProviderInner>
   );
 };
 
-const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUserId: string }> = ({
+const CartWishlistProviderInner: React.FC<{
+  children: React.ReactNode;
+  currentUserId: string;
+  currentUserRole?: string;
+}> = ({
   children,
   currentUserId,
+  currentUserRole,
 }) => {
   try {
     localStorage.removeItem('user_wishlist');
@@ -173,6 +179,12 @@ const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUs
       .catch((err) => {
         console.warn('Could not sync wishlist from MongoDB:', err);
       });
+
+    // Chỉ đồng bộ giỏ hàng với tài khoản khách hàng thông thường (USER / CUSTOMER), tránh 403 Forbidden
+    const roleUpper = (currentUserRole || '').toUpperCase();
+    if (roleUpper === 'ADMIN' || roleUpper === 'SHOP' || roleUpper === 'SHOP_OWNER') {
+      return;
+    }
 
     getCartApi()
       .then((serverCart) => {

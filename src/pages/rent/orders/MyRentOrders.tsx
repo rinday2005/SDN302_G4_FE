@@ -567,7 +567,11 @@ export const MyRentOrders: React.FC = () => {
               });
               localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(mergedApiOrders));
             } catch {
-              localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(apiOrders));
+              try {
+                localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(apiOrders));
+              } catch {
+                // ignore
+              }
             }
           }
         }

@@ -83,7 +83,11 @@ export const NotificationCenter: React.FC = () => {
     const updated = notifications.map((n) => ({ ...n, isRead: true }));
     setNotifications(updated);
     if (uId) {
-      localStorage.setItem(`user_notifications_${uId}`, JSON.stringify(updated));
+      try {
+        localStorage.setItem(`user_notifications_${uId}`, JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Lỗi lưu notifications vào localStorage:', err);
+      }
     }
   };
 
