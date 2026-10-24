@@ -16,24 +16,30 @@ interface MasterLayoutProps {
 export const MasterLayout: React.FC<MasterLayoutProps> = ({
   children,
   userRole = 'GUEST',
-  onLogout
+  onLogout,
 }) => {
-  // Dedicated layout for ADMIN role
-  if (userRole === 'ADMIN') {
-    return <AdminLayout>{children}</AdminLayout>;
-  }
-
-  const showShopSidebar = userRole === 'SHOP';
+  // Chỉ ADMIN mới dùng Sidebar cố định màu đen, SHOP sẽ dùng layout riêng (OwnerLayout)
+  const showAdminSidebar = userRole === 'ADMIN';
   const showGuestSidebar = userRole === 'GUEST';
   const showUserSidebar = userRole === 'USER';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fdf9f2] text-stone-900 antialiased">
-      {/* Header */}
+      {/* Header chung */}
       <Header userRole={userRole} onLogout={onLogout} />
 
       {/* Body Content */}
       <div className="flex flex-1 w-full">
+        {/* Sidebar chỉ ghim cho ADMIN */}
+        {showAdminSidebar && <Sidebar role="ADMIN" />}
+
+        {/* Sidebar Drawer cho GUEST */}
+        {showGuestSidebar && <GuestSidebar />}
+
+        {/* Sidebar Drawer cho USER */}
+        {showUserSidebar && <UserSidebar mode="drawer" />}
+
+        <main className={`flex-1 w-full pt-28 ${showAdminSidebar ? 'px-4 lg:px-8' : ''}`}>
         {/* Sidebar SHOP — luôn hiện bên trái */}
         {showShopSidebar && (
           <Sidebar role="SHOP" />
