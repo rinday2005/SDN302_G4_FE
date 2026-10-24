@@ -358,7 +358,7 @@ const CartWishlistProviderInner: React.FC<{
     return () => {
       isMounted = false;
     };
-  }, [CART_KEY]);
+  }, [CART_KEY, currentUserRole]);
 
   // ── Wishlist Operations ──
   const isWishlisted = useCallback(
