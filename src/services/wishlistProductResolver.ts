@@ -134,7 +134,7 @@ const MONGO_RENTAL_PRODUCTS: Record<string, Partial<ResolvedWishlistProduct>> = 
     "gradeBadge": "Grade Mint 99%",
     "price": 160000,
     "deposit": 700000,
-    "image": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2",
+    "image": "/images/shoesrent.jpg",
     "location": "Đà Nẵng",
     "mode": "rent",
     "href": "/rent/products/6acee0804c6e5d97a2389e56"

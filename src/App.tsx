@@ -93,6 +93,16 @@ const AppLayout = ({
   );
 };
 
+// SavedItemsPage removed
+
+// NotificationsPage removed
+
+
+// MyOrdersPage removed
+
+import Dashboard from "./pages/admin/Dashboard";
+import { AdminLayout } from "./components/layout/admin/AdminLayout";
+
 const ShopDashboard = () => (
   <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
     <h1 className="text-2xl font-bold text-gray-800">
@@ -101,13 +111,6 @@ const ShopDashboard = () => (
   </div>
 );
 
-const AdminDashboard = () => (
-  <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800">
-      Admin Dashboard
-    </h1>
-  </div>
-);
 
 const DashboardRouter = () => {
   const auth = useContext(AuthContext);

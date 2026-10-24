@@ -1,4 +1,5 @@
-import { RENT_PRODUCTS } from './marketplaceData';
+﻿import { RENT_PRODUCTS } from './marketplaceData';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 import {
   CAMERA_CATEGORY_CONFIG,
   FASHION_CATEGORY_CONFIG,
@@ -875,6 +876,53 @@ export function getRentProductDetail(idOrSlug?: string): RentProductDetailData {
 
   const clean = idOrSlug.trim();
   const lower = clean.toLowerCase();
+  // 0. Kiểm tra bộ nhớ đệm sản phẩm thực tế từ MongoDB (nếu đã tải từ API)
+  try {
+    const rawCache = localStorage.getItem('cached_rent_products_db');
+    if (rawCache) {
+      const dbList = JSON.parse(rawCache);
+      if (Array.isArray(dbList) && dbList.length > 0) {
+        const foundDb = dbList.find(
+          (p: { _id?: string; slug?: string; name?: string }) =>
+            (p._id && p._id.toLowerCase() === lower) ||
+            (p.slug && p.slug.toLowerCase() === lower) ||
+            (p.name && p.name.toLowerCase() === lower)
+        );
+        if (foundDb) {
+          const catName = typeof foundDb.categoryId === 'object' && foundDb.categoryId?.name ? foundDb.categoryId.name : 'RENT';
+          const cond = foundDb.condition || 'GOOD';
+          const condLabel = cond === 'NEW' ? 'Mới 100%' : cond === 'LIKE_NEW' ? 'Như mới 99%' : 'Rất tốt 95%';
+          const price = Number(foundDb.pricePerDay) || 100000;
+          const deposit = Number(foundDb.depositAmount) || (price * 5);
+          const images = Array.isArray(foundDb.images) && foundDb.images.length > 0
+            ? foundDb.images.map((src: string, idx: number) => ({ src: normalizeImageUrl(src), alt: `${foundDb.name} - Ảnh ${idx + 1}`, caption: foundDb.name }))
+            : [{ src: '/images/shoesrent.jpg', alt: foundDb.name, caption: foundDb.name }];
+
+          return createRentProductDetail({
+            id: foundDb._id,
+            slug: foundDb._id,
+            title: foundDb.name,
+            subtitle: foundDb.description || `${foundDb.name} · Tiêu chuẩn kiểm định ReUse`,
+            category: catName.toUpperCase(),
+            location: foundDb.location || 'Đà Nẵng',
+            rating: 5.0,
+            reviewCount: 1,
+            condition: condLabel,
+            grade: cond === 'NEW' ? 'Grade Mint' : 'Grade A+',
+            shutterOrUsage: `Lưu ký xác thực: ${condLabel}`,
+            pricePerDay: price,
+            deposit: deposit,
+            depositFormatted: `${deposit.toLocaleString('vi-VN')}₫`,
+            maxQuantity: foundDb.totalQuantity || 1,
+            images,
+            overview: [foundDb.description || `${foundDb.name} là sản phẩm lưu ký cao cấp.`],
+          });
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
 
   // 1. Tìm theo key map trực tiếp trong RENT_PRODUCT_DETAILS_MAP
   if (RENT_PRODUCT_DETAILS_MAP[clean]) {

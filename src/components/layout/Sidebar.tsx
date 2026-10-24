@@ -24,7 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ role }) => {
   const links = role === 'ADMIN' ? adminLinks : shopLinks;
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 min-h-screen p-4 flex flex-col shrink-0">
+    <aside className="w-64 bg-slate-900 text-slate-300 sticky top-28 h-[calc(100vh-7rem)] overflow-y-auto self-start p-4 flex flex-col shrink-0 [scrollbar-width:thin]">
       <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 px-3">
         {role === 'ADMIN' ? 'Admin Management' : 'Shop Management'}
       </div>
