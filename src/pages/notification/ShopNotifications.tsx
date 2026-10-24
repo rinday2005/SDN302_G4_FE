@@ -173,7 +173,11 @@ export const ShopNotifications: React.FC = () => {
 
   // Sync to localStorage
   useEffect(() => {
-    localStorage.setItem('reuse_shop_notifications', JSON.stringify(notifications));
+    try {
+      localStorage.setItem('reuse_shop_notifications', JSON.stringify(notifications));
+    } catch (e) {
+      console.warn('Lỗi lưu reuse_shop_notifications vào localStorage:', e);
+    }
   }, [notifications]);
 
   // Close modals on Escape key press

@@ -5,15 +5,18 @@ import "./index.css";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { CartWishlistProvider } from "./context/CartWishlistContext";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <CartWishlistProvider>
-          <App />
-        </CartWishlistProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <CartWishlistProvider>
+            <App />
+          </CartWishlistProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>
 );

@@ -1,3 +1,4 @@
+import axios from "axios";
 import api from "./api";
 
 export interface CartProductRent {
@@ -33,7 +34,14 @@ export const getCartApi = async (): Promise<CartResponseApi | null> => {
   try {
     const res = await api.get("/cart");
     return res.data?.data || res.data || null;
-  } catch (error) {
+  } catch (error: unknown) {
+    if (
+      axios.isAxiosError(error) &&
+      (error.response?.status === 403 || error.response?.status === 401)
+    ) {
+      // Bỏ qua lỗi 403/401 khi tài khoản (Admin/Shop) không có quyền truy cập giỏ hàng
+      return null;
+    }
     console.warn("Could not fetch cart from backend:", error);
     return null;
   }

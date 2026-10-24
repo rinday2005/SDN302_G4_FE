@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { mockRentProducts } from '../pages/data/shop/rentProductsData';
 import { AuthContext } from './auth-context';
-import { getPublicRentProductsApi } from '../services/rentProduct.api';
+import { safeGetItem, safeSetItem } from '../utils/safeStorage';
 
 // Thêm module augmentation để ép TypeScript hiểu User có name và username
 // (Giúp fix lỗi ở cả file header.tsx)
@@ -65,74 +65,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const currentOwnerId = auth?.user?.id || auth?.user?.username || 'OWNER-01';
 
   const [products, setProducts] = useState<ShopProductItem[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (err) {
-        console.error('Lỗi parse localStorage:', err);
-      }
-    }
-    // Gán mặc định nếu chưa có trong localStorage (dùng unknown thay vì any để pass lint)
-    return (mockRentProducts as unknown as RentProductItem[]).map((p) => ({
+    const defaultProducts = (mockRentProducts as unknown as RentProductItem[]).map((p) => ({
       ...p,
       ownerId: 'OWNER-01',
       isVisible: true,
       maintenanceUnits: p.inspectionUnits || 0,
     }));
+
+    const saved = safeGetItem<ShopProductItem[] | null>(STORAGE_KEY, null);
+    if (Array.isArray(saved) && saved.length > 0) {
+      return saved;
+    }
+    return defaultProducts;
   });
 
-  // Tự động nạp sản phẩm RENT từ MongoDB khi khởi động
+  // Tự động đồng bộ vào localStorage an toàn, chống QuotaExceededError
   useEffect(() => {
-    getPublicRentProductsApi()
-      .then((apiProducts) => {
-        if (apiProducts && apiProducts.length > 0) {
-          const mappedProducts: ShopProductItem[] = apiProducts.map((p) => {
-            const catName =
-              typeof p.categoryId === 'object' && p.categoryId
-                ? p.categoryId.name
-                : typeof p.category === 'object' && p.category
-                ? p.category.name
-                : 'RENT Equipment';
-            const ownerIdStr =
-              typeof p.ownerId === 'object' && p.ownerId
-                ? p.ownerId._id
-                : p.ownerId || currentOwnerId;
-            return {
-              sku: p._id,
-              name: p.name,
-              category: catName,
-              brand: 'Atelier / Chronos',
-              pricePerDay: p.pricePerDay || 0,
-              deposit: p.depositAmount || 0,
-              totalUnits: p.totalQuantity || 1,
-              readyUnits: p.totalQuantity || 1,
-              rentingUnits: 0,
-              approvalStatus:
-                p.status === 'APPROVED'
-                  ? 'APPROVED'
-                  : p.status === 'PENDING'
-                  ? 'PENDING'
-                  : 'DRAFT',
-              coverImage: p.images?.[0] || 'https://placehold.co/600x400',
-              description: p.description,
-              ownerId: ownerIdStr,
-              isVisible: p.status !== 'HIDDEN',
-              maintenanceUnits: 0,
-            };
-          });
-          setProducts(mappedProducts);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedProducts));
-        }
-      })
-      .catch((err) => {
-        console.warn('Lỗi nạp sản phẩm RENT từ MongoDB:', err);
-      });
-  }, [currentOwnerId]);
-
-  // Tự động đồng bộ vào localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+    safeSetItem(STORAGE_KEY, products, { cleanLargeBase64: true });
   }, [products]);
 
   // Lọc sản phẩm thuộc về Shop Owner hiện tại
