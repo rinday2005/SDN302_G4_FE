@@ -33,12 +33,15 @@ export interface UserKycResponse {
 }
 
 export interface SubmitKycDto {
+  idCardNumber?: string;
   citizenId?: string;
   fullName?: string;
   dob?: string;
   idType?: string;
   residentAddress?: string;
+  frontImageUrl?: string;
   cardFrontUrl?: string;
+  backImageUrl?: string;
   cardBackUrl?: string;
   livenessUrl?: string;
 }
@@ -55,16 +58,35 @@ export interface UpdateKycStatusDto {
  * Lấy thông tin KYC của người dùng hiện tại từ cơ sở dữ liệu
  */
 export const getKycStatusApi = async (): Promise<UserKycResponse> => {
-  const res = await api.get('/users/kyc');
-  return res.data?.data || res.data;
+  try {
+    const res = await api.get('/kyc/me');
+    return res.data?.data || res.data;
+  } catch {
+    const res = await api.get('/users/kyc');
+    return res.data?.data || res.data;
+  }
 };
 
 /**
  * Gửi hồ sơ KYC mới từ khách hàng
  */
 export const submitKycApi = async (data: SubmitKycDto): Promise<UserKycResponse> => {
-  const res = await api.post('/users/kyc/submit', data);
-  return res.data?.data || res.data;
+  const payload = {
+    ...data,
+    idCardNumber: data.idCardNumber || data.citizenId,
+    citizenId: data.citizenId || data.idCardNumber,
+    frontImageUrl: data.frontImageUrl || data.cardFrontUrl,
+    cardFrontUrl: data.cardFrontUrl || data.frontImageUrl,
+    backImageUrl: data.backImageUrl || data.cardBackUrl,
+    cardBackUrl: data.cardBackUrl || data.backImageUrl,
+  };
+  try {
+    const res = await api.post('/kyc/submit', payload);
+    return res.data?.data || res.data;
+  } catch {
+    const res = await api.post('/users/kyc/submit', payload);
+    return res.data?.data || res.data;
+  }
 };
 
 /**

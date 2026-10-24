@@ -4,6 +4,9 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
 import { getCategoryDetailConfig } from '../../data/categories/categoryDetailData';
 import type { CategoryDetailProduct } from '../../data/categories/categoryDetailData';
+import { getPublicRentProductsApi } from '../../../services/rentProduct.api';
+import { getPublicThriftListingsApi } from '../../../services/thrift.api';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 
 type DetailMode = 'rent' | 'thrift';
 
@@ -22,11 +25,155 @@ export const CategoryDetail: React.FC = () => {
     if (segments.length >= 2 && segments[0] === 'categories') {
       return segments[segments.length - 1].toLowerCase();
     }
-    return 'cameras';
+    return 'camera';
   }, [routeSlug, location.pathname]);
 
   // Load config based on slug parameter
   const category = useMemo(() => getCategoryDetailConfig(resolvedSlug), [resolvedSlug]);
+
+  // Dynamic live products fetched from MongoDB
+  const [dbRentItems, setDbRentItems] = useState<CategoryDetailProduct[]>([]);
+  const [dbThriftItems, setDbThriftItems] = useState<CategoryDetailProduct[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const matchesCategory = (cat: unknown, slug: string): boolean => {
+      const s = slug.toLowerCase();
+      let pSlug = '';
+      let pName = '';
+      if (typeof cat === 'object' && cat !== null) {
+        pSlug = ((cat as { slug?: string; name?: string }).slug || '').toLowerCase();
+        pName = ((cat as { slug?: string; name?: string }).name || '').toLowerCase();
+      } else if (typeof cat === 'string') {
+        pSlug = cat.toLowerCase();
+        pName = cat.toLowerCase();
+      }
+
+      if (s === 'camera' || s === 'cameras') {
+        return pSlug.includes('camera') || pName.includes('camera') || pName.includes('máy ảnh');
+      }
+      if (s === 'shoes' || s === 'giay-dep' || s === 'giay') {
+        return pSlug.includes('shoe') || pName.includes('giày') || pName.includes('sneaker');
+      }
+      if (s === 'dam-du-tiec' || s === 'dresses' || s === 'dam' || s === 'dam-tiec') {
+        return pSlug.includes('dam') || pName.includes('đầm') || pName.includes('váy');
+      }
+      if (s === 'clothing' || s === 'quan-ao' || s === 'fashion' || s === 'thoi-trang') {
+        return pSlug.includes('clothing') || pSlug.includes('fashion') || pName.includes('quần áo') || pName.includes('áo');
+      }
+      if (s === 'phu-kien' || s === 'accessories' || s === 'lifestyle' || s === 'electronics') {
+        return pSlug.includes('phu-kien') || pSlug.includes('accessory') || pName.includes('phụ kiện');
+      }
+      return pSlug === s || pName.includes(s);
+    };
+
+    Promise.all([
+      getPublicRentProductsApi({ limit: 200 }).catch(() => []),
+      getPublicThriftListingsApi().catch(() => []),
+    ]).then(([rentList, thriftList]) => {
+      if (!isMounted) return;
+
+      if (Array.isArray(rentList) && rentList.length > 0) {
+        const filteredRent = rentList.filter((item) =>
+          matchesCategory(item.categoryId || item.category, resolvedSlug)
+        );
+        const mappedRent: CategoryDetailProduct[] = filteredRent.map((item) => {
+          const img = Array.isArray(item.images) && item.images.length > 0 ? normalizeImageUrl(item.images[0]) : '';
+          const cond = item.condition || 'GOOD';
+          const condLabel = cond === 'NEW' ? 'Mới 100%' : cond === 'LIKE_NEW' ? 'Grade Mint (99%)' : 'Grade A (95%)';
+          return {
+            id: item._id,
+            title: item.name,
+            description: item.description || `${item.name} chính hãng được kiểm định chất lượng nghiêm ngặt.`,
+            image: img,
+            alt: item.name,
+            gradeBadge: condLabel,
+            locationBadge: item.location || 'Đà Nẵng',
+            verifiedBy: 'Shop Owner · Đã xác thực',
+            rating: 5.0,
+            reviewCount: 1,
+            price: Number(item.pricePerDay) || 0,
+            deposit: Number(item.depositAmount) || 0,
+            href: `/rent/products/${item._id}`,
+            mode: 'rent',
+          };
+        });
+        setDbRentItems(mappedRent);
+      }
+
+      if (Array.isArray(thriftList) && thriftList.length > 0) {
+        const filteredThrift = thriftList.filter((item) =>
+          matchesCategory(item.categoryId || item.category, resolvedSlug)
+        );
+        const mappedThrift: CategoryDetailProduct[] = filteredThrift.map((item) => {
+          const img = Array.isArray(item.images) && item.images.length > 0 ? normalizeImageUrl(item.images[0]) : '';
+          return {
+            id: item._id,
+            title: item.name,
+            description: item.description || `${item.name} lưu trữ tuyển chọn đã qua thẩm định vòng đời.`,
+            image: img,
+            alt: item.name,
+            gradeBadge: item.condition || 'Grade Mint (98%)',
+            locationBadge: item.location || 'Hà Nội',
+            verifiedBy: 'Shop Owner · Kiểm chứng',
+            rating: 5.0,
+            reviewCount: 1,
+            price: Number(item.price) || 0,
+            href: `/thrift/products/${item._id}`,
+            mode: 'thrift',
+            sourceType: (item.sourceType === 'rent' ? 'rent' : 'used') as 'rent' | 'used',
+            sourceLabel: item.sourceType === 'rent' ? 'Từ sản phẩm RENT' : 'Đồ đã qua sử dụng',
+          };
+        });
+        setDbThriftItems(mappedThrift);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [resolvedSlug]);
+
+  // Merge live DB products with static base config to guarantee updated images & pricing
+  const resolvedRentItems = useMemo(() => {
+    if (dbRentItems.length === 0) return category.rentItems;
+    const dbMap = new Map(dbRentItems.map((it) => [it.id, it]));
+    const updatedStatic = category.rentItems.map((st) => {
+      const live = dbMap.get(st.id);
+      if (live) {
+        dbMap.delete(st.id);
+        return {
+          ...st,
+          image: live.image || st.image,
+          price: live.price || st.price,
+          deposit: live.deposit !== undefined ? live.deposit : st.deposit,
+          title: live.title || st.title,
+        };
+      }
+      return st;
+    });
+    return [...updatedStatic, ...Array.from(dbMap.values())];
+  }, [category.rentItems, dbRentItems]);
+
+  const resolvedThriftItems = useMemo(() => {
+    if (dbThriftItems.length === 0) return category.thriftItems;
+    const dbMap = new Map(dbThriftItems.map((it) => [it.id, it]));
+    const updatedStatic = category.thriftItems.map((st) => {
+      const live = dbMap.get(st.id);
+      if (live) {
+        dbMap.delete(st.id);
+        return {
+          ...st,
+          image: live.image || st.image,
+          price: live.price || st.price,
+          title: live.title || st.title,
+        };
+      }
+      return st;
+    });
+    return [...updatedStatic, ...Array.from(dbMap.values())];
+  }, [category.thriftItems, dbThriftItems]);
 
   const [mode, setMode] = useState<DetailMode>('rent');
   const [searchQuery, setSearchQuery] = useState('');
@@ -139,7 +286,7 @@ export const CategoryDetail: React.FC = () => {
   // Filter RENT products
   const filteredRentProducts = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return category.rentItems.filter((item) => {
+    return resolvedRentItems.filter((item) => {
       const matchSearch =
         !q ||
         item.title.toLowerCase().includes(q) ||
@@ -159,12 +306,12 @@ export const CategoryDetail: React.FC = () => {
 
       return matchSearch && matchPrice && matchCondition && matchLocation;
     });
-  }, [category.rentItems, searchQuery, rentPriceRange, rentCondition, rentLocation]);
+  }, [resolvedRentItems, searchQuery, rentPriceRange, rentCondition, rentLocation]);
 
   // Filter THRIFT products
   const filteredThriftProducts = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return category.thriftItems.filter((item) => {
+    return resolvedThriftItems.filter((item) => {
       const matchSearch =
         !q ||
         item.title.toLowerCase().includes(q) ||
@@ -189,7 +336,7 @@ export const CategoryDetail: React.FC = () => {
 
       return matchSearch && matchPrice && matchSource && matchCondition && matchLocation;
     });
-  }, [category.thriftItems, searchQuery, thriftPriceRange, thriftSource, thriftCondition, thriftLocation]);
+  }, [resolvedThriftItems, searchQuery, thriftPriceRange, thriftSource, thriftCondition, thriftLocation]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -204,8 +351,10 @@ export const CategoryDetail: React.FC = () => {
 
   const formatVND = (num: number) => new Intl.NumberFormat('vi-VN').format(num) + '₫';
 
+  const rentCount = resolvedRentItems.length;
+  const thriftCount = resolvedThriftItems.length;
   const currentList = mode === 'rent' ? filteredRentProducts : filteredThriftProducts;
-  const totalCount = mode === 'rent' ? category.rentCount : category.thriftCount;
+  const totalCount = mode === 'rent' ? rentCount : thriftCount;
   const countLabel = mode === 'rent' ? 'thiết bị RENT' : 'sản phẩm THRIFT';
 
   return (
@@ -310,11 +459,11 @@ export const CategoryDetail: React.FC = () => {
           {/* Metrics Bar inside Header */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-[#E6E2DC]">
             <div className="flex flex-col">
-              <span className="font-serif text-2xl font-bold text-[#1C1A18]">{category.rentCount}</span>
+              <span className="font-serif text-2xl font-bold text-[#1C1A18]">{rentCount}</span>
               <span className="text-xs text-[#79716B] font-medium mt-0.5">Thiết bị RENT sẵn sàng</span>
             </div>
             <div className="flex flex-col">
-              <span className="font-serif text-2xl font-bold text-[#1C1A18]">{category.thriftCount}</span>
+              <span className="font-serif text-2xl font-bold text-[#1C1A18]">{thriftCount}</span>
               <span className="text-xs text-[#79716B] font-medium mt-0.5">Sản phẩm THRIFT lưu trữ</span>
             </div>
             <div className="flex flex-col">
@@ -349,7 +498,7 @@ export const CategoryDetail: React.FC = () => {
                   mode === 'rent' ? 'bg-white/20 text-white' : 'bg-[#E6E2DC] text-[#79716B]'
                 }`}
               >
-                {category.rentCount} thiết bị
+                {rentCount} thiết bị
               </span>
             </div>
             <p className={`text-xs leading-relaxed ${mode === 'rent' ? 'text-stone-300' : 'text-[#79716B]'}`}>
@@ -381,7 +530,7 @@ export const CategoryDetail: React.FC = () => {
                   mode === 'thrift' ? 'bg-white/20 text-white' : 'bg-[#E6E2DC] text-[#79716B]'
                 }`}
               >
-                {category.thriftCount} sản phẩm
+                {thriftCount} sản phẩm
               </span>
             </div>
             <p className={`text-xs leading-relaxed ${mode === 'thrift' ? 'text-stone-300' : 'text-[#79716B]'}`}>
@@ -576,7 +725,7 @@ export const CategoryDetail: React.FC = () => {
                       <div className="relative aspect-[4/3] bg-[#EFEBE4] overflow-hidden">
                         <Link to={product.href} className="block w-full h-full">
                           <img
-                            src={product.image}
+                            src={normalizeImageUrl(product.image)}
                             alt={product.alt}
                             loading="lazy"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"

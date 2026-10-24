@@ -25,6 +25,50 @@ export interface SortOption {
   label: string;
 }
 
+export interface FilterOption {
+  label: string;
+  value: string;
+}
+
+export const RENT_CATEGORY_OPTIONS: FilterOption[] = [
+  { label: 'Tất cả danh mục (5)', value: 'all' },
+  { label: 'Camera', value: 'camera' },
+  { label: 'Giày dép', value: 'shoes' },
+  { label: 'Đầm dự tiệc', value: 'dam-du-tiec' },
+  { label: 'Quần áo', value: 'clothing' },
+  { label: 'Phụ kiện', value: 'phu-kien' },
+];
+
+export const RENT_PRICE_OPTIONS: FilterOption[] = [
+  { label: 'Tất cả mức giá', value: 'all' },
+  { label: 'Dưới 150.000đ', value: 'under150' },
+  { label: '150.000đ - 300.000đ', value: '150to300' },
+  { label: 'Trên 300.000đ', value: 'above300' },
+];
+
+export const RENT_CONDITION_OPTIONS: FilterOption[] = [
+  { label: 'Tất cả tình trạng', value: 'all' },
+  { label: 'Như mới (99%)', value: 'LIKE_NEW' },
+  { label: 'Rất tốt (95%)', value: 'GOOD' },
+];
+
+export const RENT_LOCATION_OPTIONS: FilterOption[] = [
+  { label: 'Toàn quốc', value: 'all' },
+  { label: 'Đà Nẵng', value: 'Đà Nẵng' },
+  { label: 'TP. Hồ Chí Minh', value: 'TP. Hồ Chí Minh' },
+  { label: 'Hà Nội', value: 'Hà Nội' },
+];
+
+export const RENT_SIZE_OPTIONS: FilterOption[] = [
+  { label: 'Tất cả size', value: 'all' },
+  { label: 'Size S', value: 'S' },
+  { label: 'Size M', value: 'M' },
+  { label: 'Size L', value: 'L' },
+  { label: 'Size XL', value: 'XL' },
+  { label: 'Size Giày (38 - 42)', value: 'SHOES' },
+  { label: 'Free Size', value: 'FREE_SIZE' },
+];
+
 export interface RentProcessStep {
   step: string;
   title: string;
@@ -158,7 +202,7 @@ export const RENT_PRODUCTS: Product[] = [
     "deposit": "700.000đ",
     "available": true,
     "href": "/rent/products/6acee0804c6e5d97a2389e56",
-    "image": "https://images.unsplash.com/photo-1543163521-1bf539c55dd2"
+    "image": "/images/shoesrent.jpg"
   },
   {
     "id": "6ad286f6f507857852155c5a",

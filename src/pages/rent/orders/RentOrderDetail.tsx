@@ -11,6 +11,7 @@ import {
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { type StoredRentalOrderRecord, type StoredRentalOrderItem } from '../../data/rent/myRentOrdersData';
 import { resolveCleanAddress } from '../../../utils/address';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 
 interface OrderItemDetail {
   id: string;
@@ -345,27 +346,19 @@ export const RentOrderDetail: React.FC = () => {
             const list = JSON.parse(raw);
             if (Array.isArray(list)) {
               const cLower = orderData.code.replace('#', '').toLowerCase();
-              const hasWool = orderData.items.some((it) => {
-                const t = (it.title || '').toLowerCase();
-                return t.includes('áo khoác') || t.includes('wool') || it.productId === '6' || it.id === '6';
-              });
+              const pLower = (id || '').replace('#', '').toLowerCase();
 
               const updatedList = list.map((o) => {
                 const code = (o.orderCode || '').replace('#', '').toLowerCase();
                 const oId = String(o._id || o.id || '').toLowerCase();
-                const oItems = (o.items || []) as StoredRentalOrderItem[];
-                const hasMatchingItem = oItems.some((it) => {
-                  const t = (it.productName || it.title || '').toLowerCase();
-                  return t.includes('áo khoác') || t.includes('wool') || it.productId === '6' || it.id === '6';
-                });
                 const isMatch =
                   code === cLower ||
                   oId === cLower ||
                   (code && cLower.includes(code)) ||
-                  (hasWool && hasMatchingItem);
+                  (pLower && (code === pLower || oId === pLower));
 
                 if (isMatch) {
-                  return { ...o, status: 'RENTING', claProof: updatedProof };
+                  return { ...o, status: 'RENTING', claSigned: true, claProof: updatedProof };
                 }
                 return o;
               });
@@ -576,10 +569,8 @@ export const RentOrderDetail: React.FC = () => {
       const candidateKeys = [
         cleanCode,
         cleanParamId,
-        targetProductId,
-        '6',
-        'wool-coat',
-        'wool_coat',
+        source?.orderCode?.replace('#', '').trim(),
+        (source as RentalOrderApi)?._id,
       ].filter(Boolean) as string[];
 
       let localProofObj: ClaProofData | null = null;
@@ -643,7 +634,7 @@ export const RentOrderDetail: React.FC = () => {
         effectiveStatus = 'RETURNED';
       } else if (urlStatus === 'COMPLETED' || rawStatus === 'COMPLETED') {
         effectiveStatus = 'COMPLETED';
-      } else if (['PAID', 'PREPARING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(rawStatus)) {
+      } else if (['PAID', 'PREPARING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED', 'RENTING'].includes(rawStatus)) {
         effectiveStatus = isClaSigned ? 'RENTING' : 'DELIVERED';
       }
 
@@ -682,7 +673,7 @@ export const RentOrderDetail: React.FC = () => {
         statusLabel = 'CHỜ THANH TOÁN (PENDING PAYMENT)';
         dayProgress = '15%';
       } else if (effectiveStatus === 'DELIVERED') {
-        statusLabel = 'ĐÃ GIAO HÀNG · CHỜ KÝ CLA 3 GÓC';
+        statusLabel = 'KÝ ĐƠN HÀNG ĐỂ BẮT ĐẦU THUÊ';
         dayProgress = '50%';
       } else if (effectiveStatus === 'RENTING') {
         const pct = Math.min(100, Math.max(10, Math.round((elapsedDays / rentalDays) * 100)));
@@ -726,8 +717,8 @@ export const RentOrderDetail: React.FC = () => {
             itTitle.includes('RH-RNT-') ||
             price === 4400000;
 
-          if (isGenericMock || !image || image.includes('unsplash.com/photo-1516035069371') || deposit === 0) {
-            // 1. Try resolving by it.productId or targetProductId
+          if (isGenericMock || !image || image.includes('unsplash.com') || deposit === 0 || Boolean(targetProductId)) {
+            // 1. Try resolving by targetProductId or it.productId
             const pId = String(targetProductId || it.productId || (it as { id?: string }).id || '');
             if (pId && pId !== 'undefined' && !pId.startsWith('item-')) {
               const found = getRentProductDetail(pId);
@@ -782,7 +773,7 @@ export const RentOrderDetail: React.FC = () => {
               if (!deposit || deposit === 0 || deposit === 22000000) {
                 deposit = resolvedProd.deposit || (resolvedProd.pricePerDay * 4) || 1500000;
               }
-              if (!image || image.includes('unsplash.com/photo-1516035069371')) {
+              if (!image || image.includes('unsplash.com') || Boolean(targetProductId) || resolvedProd.images?.[0]?.src) {
                 image = resolvedProd.images?.[0]?.src || image;
               }
             }
@@ -830,7 +821,7 @@ export const RentOrderDetail: React.FC = () => {
             deposit,
             quantity: qty,
             itemTotal,
-            image,
+            image: normalizeImageUrl(image),
             accessoriesText: finalAccessories,
             benchReportText: finalBenchReport,
           });
@@ -1040,11 +1031,8 @@ export const RentOrderDetail: React.FC = () => {
       case 'HANDED_OVER':
       case 'SHIPPING':
       case 'DELIVERED':
-        // Đã thanh toán và pass qua shop duyệt/shipper trong môi trường test:
-        // Nếu đã ký CLA -> Bước 6: Đang thuê (index 5)
-        // Nếu chưa ký CLA -> Bước 5: Đã nhận - Khớp CLA 3 góc (index 4)
         return isSigned ? 5 : 4;
-      case 'RENTING': return 5; // 6. ĐANG THUÊ
+      case 'RENTING': return isSigned ? 5 : 4; // 6. ĐANG THUÊ chỉ khi đã ký CLA, chưa ký là Bước 5
       case 'RETURN_REQUESTED':
       case 'RETURNING': return 6; // 7. Yêu cầu trả
       case 'RETURNED': return 7; // 8. Bench Lab kiểm định
@@ -1052,6 +1040,18 @@ export const RentOrderDetail: React.FC = () => {
       default: return isSigned ? 5 : 4;
     }
   };
+
+  useEffect(() => {
+    if (!loading && window.location.hash.includes('cla')) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById('cla-sign') || document.getElementById('cla-section');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   const currentStep = useMemo(() => {
     return getActiveStep(orderData?.status || 'DELIVERED', claProof.isSigned);
@@ -1066,10 +1066,10 @@ export const RentOrderDetail: React.FC = () => {
     if (currentStep === 4) {
       return {
         progressWidth,
-        badgeText: 'ĐÃ GIAO HÀNG · CHỜ KHỚP BIÊN BẢN CLA 3 GÓC',
-        badgeColor: 'bg-amber-100 text-amber-800',
-        dotColor: 'bg-amber-600 animate-pulse',
-        timeCountdownText: 'Kiện hàng đã tới · Mời bạn mở kiện đối kiểm và ký nhận CLA bên dưới',
+        badgeText: 'KÝ ĐƠN HÀNG ĐỂ BẮT ĐẦU THUÊ',
+        badgeColor: 'bg-[#FFF4E5] text-[#C85A00] border border-[#FFD8A8]',
+        dotColor: 'bg-[#EA580C] animate-pulse',
+        timeCountdownText: 'Kiện hàng đã tới · Mời bạn mở kiện đối kiểm và ký đơn hàng CLA bên dưới để bắt đầu thuê',
       };
     }
 
@@ -1759,7 +1759,8 @@ export const RentOrderDetail: React.FC = () => {
                 </div>
 
                 {/* CUSTODY HANDOFF AUDIT TRAIL (CLA MINH CHỨNG BÀN GIAO ĐỐI KIỂM 3 GÓC) */}
-                <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border-none space-y-6">
+                <div id="cla-sign" className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border-none space-y-6 scroll-mt-24 relative">
+                  <div id="cla-section" className="absolute -top-24 left-0" />
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <span className="text-[10px] uppercase font-bold tracking-widest text-stone-500">
@@ -1775,9 +1776,9 @@ export const RentOrderDetail: React.FC = () => {
                         Khách hàng đã ký xác nhận {claProof.signDate}
                       </span>
                     ) : (
-                      <span className="px-3.5 py-1.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full self-start sm:self-auto border-none flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-amber-600 animate-pulse"></span>
-                        Chờ khách nhận bưu kiện &amp; ký nhận CLA
+                      <span className="px-3.5 py-1.5 bg-[#FFF4E5] text-[#C85A00] border border-[#FFD8A8] text-xs font-semibold rounded-full self-start sm:self-auto flex items-center gap-1.5 shadow-xs">
+                        <span className="w-2 h-2 rounded-full bg-[#EA580C] animate-pulse"></span>
+                        Chờ ký đơn hàng CLA để bắt đầu thuê
                       </span>
                     )}
                   </div>
@@ -2058,7 +2059,7 @@ export const RentOrderDetail: React.FC = () => {
                             className="px-5 py-2.5 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shadow-xs cursor-pointer"
                           >
                             <span className="material-symbols-outlined text-[16px]">draw</span>
-                            <span>{claProof.isSigned ? 'Lưu cập nhật biên bản CLA' : 'Ký nhận & Xác nhận bàn giao CLA'}</span>
+                            <span>{claProof.isSigned ? 'Lưu cập nhật biên bản CLA' : 'Ký đơn hàng để bắt đầu thuê'}</span>
                           </button>
                         </div>
                       </div>

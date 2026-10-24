@@ -12,7 +12,6 @@ import {
   updateThriftOrderStatusApi,
   type ThriftOrderApi,
 } from '../../../services/thriftOrder.api';
-import { resolveWishlistProduct } from '../../../services/wishlistProductResolver';
 
 export const ThriftCheckout: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
@@ -150,7 +149,6 @@ export const ThriftCheckout: React.FC = () => {
           : (item.sizeOrSpec || 'Kèm chứng thư số bảo chứng độc bản 1-of-1');
       const warranty = 'warranty' in item ? (item.warranty as string) : 'Bảo hành cơ học: 12 tháng';
       const vaultOrigin = 'vaultOrigin' in item ? (item.vaultOrigin as string) : 'Curated Archive Tokyo';
-      const size = 'size' in item && typeof item.size === 'string' ? item.size : 'L';
 
       return {
         ...item,
@@ -164,7 +162,6 @@ export const ThriftCheckout: React.FC = () => {
         specDetails,
         warranty,
         vaultOrigin,
-        size,
       };
     });
   }, [thriftItems]);
@@ -198,7 +195,6 @@ export const ThriftCheckout: React.FC = () => {
       items: itemizedList.map((item) => ({
         listingId: item.id,
         quantity: item.qty,
-        size: item.size || 'L',
         productName: item.title,
         price: item.price,
         imageUrl: item.image,
@@ -436,13 +432,7 @@ export const ThriftCheckout: React.FC = () => {
                       <img
                         alt={item.title}
                         className="w-full h-full object-cover transition-transform hover:scale-105"
-                        src={item.image || resolveWishlistProduct(item.id)?.image || 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80'}
-                        onError={(e) => {
-                          const res = resolveWishlistProduct(item.id);
-                          if (res?.image && e.currentTarget.src !== res.image) {
-                            e.currentTarget.src = res.image;
-                          }
-                        }}
+                        src={item.image}
                       />
                       <span className="absolute top-2 left-2 bg-[#141310]/90 text-white text-[9px] tracking-wider px-2 py-0.5 rounded font-bold uppercase backdrop-blur-xs">
                         Độc bản 1-of-1
@@ -459,16 +449,9 @@ export const ThriftCheckout: React.FC = () => {
                           <span className="text-[11px] uppercase tracking-wider text-[#576151] font-bold">
                             {item.category} · Seri {item.code}
                           </span>
-                          <div className="flex items-center gap-1.5">
-                            {item.size && (
-                              <span className="text-[10px] font-bold text-white bg-[#1C1A18] px-2 py-0.5 rounded">
-                                Size: {item.size}
-                              </span>
-                            )}
-                            <span className="text-xs text-[#7B766F] font-mono font-semibold">
-                              SL: {item.qty}
-                            </span>
-                          </div>
+                          <span className="text-xs text-[#7B766F] font-mono font-semibold">
+                            SL: {item.qty}
+                          </span>
                         </div>
                         <h3 className="font-serif text-base font-bold text-[#141310] mt-1 leading-snug">
                           {item.title}

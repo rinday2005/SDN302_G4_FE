@@ -14,6 +14,7 @@ import {
 import { resolveWishlistProduct } from '../../../services/wishlistProductResolver';
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { resolveCleanAddress } from '../../../utils/address';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 
 interface EvidencePhoto {
   id: string;
@@ -175,7 +176,8 @@ export const ReturnRequest: React.FC = () => {
         const rawTitle = (it.productName || it.title || resolved?.title || catalogDetail?.title || `Thiết bị thuê #${idx + 1}`) as string;
         const title = rawTitle.includes('Đơn hàng Thuê') ? (resolved?.title || catalogDetail?.title || rawTitle) : rawTitle;
 
-        let img = (it.image || it.imageUrl || resolved?.image || catalogDetail?.images?.[0]?.src || '') as string;
+        const rawImg = (it.image || it.imageUrl || resolved?.image || catalogDetail?.images?.[0]?.src || '') as string;
+        let img = normalizeImageUrl(rawImg);
         if (!img || img.includes('unsplash.com/photo-1516035069371')) {
           img = 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80';
         }

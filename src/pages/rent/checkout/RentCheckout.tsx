@@ -8,6 +8,7 @@ import {
   NANUK_SHIPPING_FEE,
 } from '../../data/rent/rentCheckoutData';
 import { redirectToVnPayGateway } from '../../../services/payment.api';
+import { getKycStatusApi } from '../../../services/kyc.api';
 import {
   getProductBookedDates,
   hasDateRangeConflict,
@@ -36,6 +37,56 @@ export const RentCheckout: React.FC = () => {
       navigate('/login', { replace: true, state: { from: location.pathname } });
     }
   }, [auth?.token, user, navigate, location.pathname]);
+
+  
+  // ── 1.1 KYC GUARD: Check KYC status for RENT custody (AC: Chặn checkout khi chưa APPROVED) ──
+  const [kycStatusState, setKycStatus] = useState<'LOADING' | 'APPROVED' | 'PENDING' | 'REJECTED' | 'NOT_SUBMITTED'>('LOADING');
+  const [kycRejectionReason, setKycRejectionReason] = useState<string | null>(null);
+  const kycStatus = (auth?.token || user) ? kycStatusState : 'NOT_SUBMITTED';
+
+  useEffect(() => {
+    if (!auth?.token && !user) {
+      return;
+    }
+
+    let isMounted = true;
+    const checkKyc = async () => {
+      try {
+        const res = await getKycStatusApi();
+        if (!isMounted) return;
+        const status = (res?.kycStatus || 'NOT_SUBMITTED').toUpperCase();
+        if (status === 'APPROVED' || status === 'VERIFIED') {
+          setKycStatus('APPROVED');
+        } else if (status === 'PENDING') {
+          setKycStatus('PENDING');
+        } else if (status === 'REJECTED') {
+          setKycStatus('REJECTED');
+          setKycRejectionReason(res?.kyc?.rejectionReason || null);
+        } else {
+          setKycStatus('NOT_SUBMITTED');
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('Không thể kiểm tra KYC từ API, dùng fallback:', err);
+        const fallbackStatus = (user as unknown as { kycStatus?: string })?.kycStatus?.toUpperCase();
+        if (fallbackStatus === 'APPROVED' || fallbackStatus === 'VERIFIED') {
+          setKycStatus('APPROVED');
+        } else if (fallbackStatus === 'PENDING') {
+          setKycStatus('PENDING');
+        } else if (fallbackStatus === 'REJECTED') {
+          setKycStatus('REJECTED');
+        } else {
+          setKycStatus('NOT_SUBMITTED');
+        }
+      }
+    };
+
+    checkKyc();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [auth?.token, user]);
 
   // ── 2. RENT ITEMS SELECTION (Only RENT items from Cart or Route ID) ──
   const rentItems = useMemo(() => {
@@ -546,7 +597,56 @@ export const RentCheckout: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <>
+            {/* ── KYC WARNING BANNER (AC: Hướng dẫn người dùng khi chưa APPROVED) ── */}
+        {kycStatus !== 'APPROVED' && kycStatus !== 'LOADING' && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 text-amber-900 shadow-sm mb-6 animate-fadeIn">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-200 text-amber-900 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-2xl">shield_person</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-bold text-sm text-amber-950">
+                    Yêu cầu Xác thực Danh tính (KYC) trước khi Thuê thiết bị
+                  </h4>
+                  <span className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full ${
+                    kycStatus === 'PENDING'
+                      ? 'bg-amber-200 text-amber-950'
+                      : kycStatus === 'REJECTED'
+                      ? 'bg-red-200 text-red-950'
+                      : 'bg-stone-200 text-stone-800'
+                  }`}>
+                    {kycStatus === 'PENDING' ? 'Đang chờ duyệt' : kycStatus === 'REJECTED' ? 'Bị từ chối' : 'Chưa nộp KYC'}
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                  {kycStatus === 'PENDING'
+                    ? 'Hồ sơ KYC của bạn đang được Giám định viên xét duyệt. Bạn cần đợi trạng thái APPROVED để có thể hoàn tất thanh toán đơn thuê này.'
+                    : kycStatus === 'REJECTED'
+                    ? `Hồ sơ KYC của bạn đã bị từ chối (${kycRejectionReason || 'Vui lòng cập nhật lại ảnh CCCD'}). Bạn cần nộp lại hồ sơ trước khi thuê đồ.`
+                    : 'Theo chính sách lưu ký ReUse Hub, khách hàng cần hoàn tất xác thực CCCD (APPROVED) để mở khóa quyền thuê RENT và nhận hạn ngạch miễn cọc.'}
+                </p>
+                <div className="mt-3 flex items-center gap-2.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/profile/kyc', { state: { from: location.pathname } })}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#141310] hover:bg-[#292724] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm text-amber-400">badge</span>
+                    <span>{kycStatus === 'REJECTED' ? 'Cập nhật lại hồ sơ KYC' : 'Xác thực KYC ngay (/profile/kyc)'}</span>
+                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                  </button>
+                  <span className="text-[11px] text-amber-800/80 italic">
+                    (Có hỗ trợ nạp nhanh dữ liệu CCCD demo để kiểm thử ngay)
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* LEFT COLUMN: WORKFLOW & ORDER SETUP (65%) */}
           <section className="lg:col-span-8 space-y-6">
             {/* SECTION 1: Selected Rental Items */}
@@ -1203,7 +1303,8 @@ export const RentCheckout: React.FC = () => {
               </div>
             </div>
           </aside>
-        </div>
+            </div>
+          </>
         )}
       </main>
 

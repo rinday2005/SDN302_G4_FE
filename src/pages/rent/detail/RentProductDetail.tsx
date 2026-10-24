@@ -16,6 +16,7 @@ import {
 } from '../../data/rent/rentOrderDetailData';
 import type { RentProductDetailData } from '../../data/rent/rentOrderDetailData';
 import { getPublicRentProductDetailApi } from '../../../services/rentProduct.api';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 
 type TabKey = 'desc' | 'terms' | 'audit' | 'deposit' | 'shipping';
 
@@ -38,7 +39,7 @@ export const RentProductDetail: React.FC = () => {
         const cond = p.condition || 'GOOD';
         const condLabel = cond === 'NEW' ? 'Mới 100%' : cond === 'LIKE_NEW' ? 'Như mới 99%' : 'Rất tốt 95%';
         const images = Array.isArray(p.images) && p.images.length > 0
-          ? p.images.map((src, idx) => ({ src, alt: `${p.name} - Ảnh ${idx + 1}`, caption: p.name }))
+          ? p.images.map((src, idx) => ({ src: normalizeImageUrl(src), alt: `${p.name} - Ảnh ${idx + 1}`, caption: p.name }))
           : [{ src: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80', alt: p.name, caption: p.name }];
         const price = Number(p.pricePerDay) || 100000;
         const deposit = Number(p.depositAmount) || (price * 5);

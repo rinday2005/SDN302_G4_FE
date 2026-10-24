@@ -6,6 +6,7 @@ import { DEFAULT_DEMO_CART_ITEMS } from '../data/cart/defaultCartData';
 import { RentalCalendarPicker } from '../../components/rent/RentalCalendarPicker';
 import { getProductBookedDates, hasDateRangeConflict } from '../data/rent/rentOrderDetailData';
 import { resolveWishlistProduct } from '../../services/wishlistProductResolver';
+import { UserSidebar } from '../../components/layout/UserSidebar';
 
 export const Cart: React.FC = () => {
   const navigate = useNavigate();
@@ -22,6 +23,26 @@ export const Cart: React.FC = () => {
     toggleWishlist,
     isWishlisted,
   } = useCartWishlist();
+
+  // Track sidebar collapsed state to display inline restore chip when collapsed
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleSync = (e: Event) => {
+      const customEvent = e as CustomEvent<boolean>;
+      if (typeof customEvent.detail === 'boolean') {
+        setIsSidebarCollapsed(customEvent.detail);
+      }
+    };
+    window.addEventListener('reuse_user_sidebar_toggle', handleSync);
+    return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
+  }, []);
 
   // If cart is empty on first mount, allow initializing demo items or user starts empty
   // Selection state (item IDs that are checked)
@@ -272,9 +293,31 @@ export const Cart: React.FC = () => {
         <span>{toast.message}</span>
       </div>
 
-      {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Breadcrumb & Header */}
+      {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
+      <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8 items-start">
+        {/* User Navigation Sidebar */}
+        <UserSidebar activeKey="cart" />
+
+        {/* ── MAIN CONTENT AREA ── */}
+        <main className="flex-1 min-w-0 space-y-6">
+          {/* Quick inline restore chip if user clicked 3-bar button to hide sidebar */}
+          {isSidebarCollapsed && (
+            <div className="flex items-center gap-2 mb-2 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('reuse_user_sidebar_toggle', { detail: false }))}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white border border-[#E8E4DC] text-xs font-semibold text-[#1C1A18] hover:bg-[#F6F3EE] hover:border-[#1C1A18]/40 transition-all shadow-2xs cursor-pointer group"
+                title="Mở lại menu điều hướng"
+              >
+                <span className="material-symbols-outlined text-[18px] text-[#5E6D5B] group-hover:scale-110 transition-transform">
+                  menu
+                </span>
+                <span>Hiện menu điều hướng</span>
+              </button>
+            </div>
+          )}
+
+          {/* Breadcrumb & Header */}
         <div className="py-2 flex flex-col gap-2">
           <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-[#7B766F]">
             <Link to="/" className="hover:text-[#141310] transition-colors">
@@ -1115,6 +1158,7 @@ export const Cart: React.FC = () => {
             </div>
           </div>
         )}
+        </main>
       </div>
 
       {/* Edit Rental Duration Modal directly with Calendar */}

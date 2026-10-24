@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { AppSidebar } from '../../../components/layout/AppSidebar';
+import { useAuth } from '../../../hooks/useAuth';
+import { UserSidebar } from '../../../components/layout/UserSidebar';
 import {
   CATEGORIES_DATA,
   CATEGORY_FILTER_OPTIONS,
@@ -9,10 +10,10 @@ import {
 import type { CategoryFilterKey, CategoryItem } from '../../data/categories/categoriesData';
 
 export const CategoriesMarketplace: React.FC = () => {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<CategoryFilterKey>('all');
   const searchInputRef = useRef<HTMLInputElement>(null);
-
   // Track sidebar collapsed state to display inline restore chip when collapsed
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -21,7 +22,6 @@ export const CategoriesMarketplace: React.FC = () => {
       return false;
     }
   });
-
   useEffect(() => {
     const handleSync = (e: Event) => {
       const customEvent = e as CustomEvent<boolean>;
@@ -32,12 +32,10 @@ export const CategoriesMarketplace: React.FC = () => {
     window.addEventListener('reuse_user_sidebar_toggle', handleSync);
     return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
   }, []);
-
   // Scroll to top on initial mount
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
-
   // Keyboard shortcut listener: Cmd+K or Ctrl+K to focus search input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -49,7 +47,6 @@ export const CategoriesMarketplace: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
   // Filter and search logic
   const filteredCategories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -57,7 +54,6 @@ export const CategoriesMarketplace: React.FC = () => {
       // 1. Tag filter
       const matchesFilter =
         activeFilter === 'all' || cat.tags.includes(activeFilter);
-
       // 2. Search query matching title, description, or subtitle
       const matchesSearch =
         !q ||
@@ -65,28 +61,24 @@ export const CategoriesMarketplace: React.FC = () => {
         cat.description.toLowerCase().includes(q) ||
         cat.subtitle.toLowerCase().includes(q) ||
         cat.code.toLowerCase().includes(q);
-
       return matchesFilter && matchesSearch;
     });
   }, [searchQuery, activeFilter]);
-
   const handleResetFilters = () => {
     setSearchQuery('');
     setActiveFilter('all');
     searchInputRef.current?.focus();
   };
-
   return (
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased">
       {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
       <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
-        {/* Navigation Sidebar (Fixed on left: GuestSidebar when guest, UserSidebar when logged in) */}
-        <AppSidebar activeKey="categories" />
-
+        {/* User Navigation Sidebar (Fixed on left) */}
+        <UserSidebar activeKey="categories" />
         {/* ── MAIN CONTENT AREA ── */}
         <main className="flex-1 min-w-0 space-y-12">
           {/* Quick inline restore chip if user clicked 3-bar button to hide sidebar */}
-          {isSidebarCollapsed && (
+          {isSidebarCollapsed && user?.role !== 'ADMIN' && (
             <div className="flex items-center gap-2 -mb-6 animate-fade-in">
               <button
                 type="button"
@@ -109,7 +101,6 @@ export const CategoriesMarketplace: React.FC = () => {
               KHÁM PHÁ · BỘ SƯU TẬP TUẦN HOÀN
             </span>
           </div>
-
           <div className="flex flex-col md:flex-row md:items-baseline md:justify-between gap-4">
             <h1 className="text-3xl sm:text-4xl text-[#1C1A18] font-bold tracking-tight mb-2 ">
               Bạn đang tìm gì?
@@ -118,12 +109,10 @@ export const CategoriesMarketplace: React.FC = () => {
               INDEX / 07 DANH MỤC LƯU TRỮ
             </span>
           </div>
-
           <p className="text-sm md:text-base text-[#79716B] font-normal leading-relaxed max-w-2xl pt-1">
             Tìm sản phẩm theo nhu cầu và cách bạn muốn sử dụng — từ thuê ngắn hạn tiện lợi đến sở hữu những món đồ lưu trữ vượt thời gian.
           </p>
         </section>
-
         {/* ── 2. SEARCH BAR & TAXONOMY FILTERS ── */}
         <section data-reveal className="space-y-4">
           {/* Elevated Minimalist Search Bar */}
@@ -155,7 +144,6 @@ export const CategoriesMarketplace: React.FC = () => {
               </span>
             </div>
           </div>
-
           {/* Quick Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs">
             {CATEGORY_FILTER_OPTIONS.map((pill) => {
@@ -177,7 +165,6 @@ export const CategoriesMarketplace: React.FC = () => {
             })}
           </div>
         </section>
-
         {/* ── 3. ASYMMETRIC BENTO CATEGORY GRID ── */}
         <section data-reveal className="space-y-6">
           <div className="flex items-center justify-between text-xs text-[#79716B] pb-2 border-b border-[#E6E2DC]">
@@ -186,7 +173,6 @@ export const CategoriesMarketplace: React.FC = () => {
             </span>
             <span className="hidden sm:inline-block">Định dạng hiển thị: Tạp chí tuyển tập</span>
           </div>
-
           {/* Bento Grid Container */}
           {filteredCategories.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
@@ -206,7 +192,6 @@ export const CategoriesMarketplace: React.FC = () => {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                       />
                     </Link>
-
                     {/* Top Action Badges */}
                     <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-10 pointer-events-auto">
                       {category.isThriftOnly ? (
@@ -239,13 +224,11 @@ export const CategoriesMarketplace: React.FC = () => {
                         </>
                       )}
                     </div>
-
                     {/* Monospace Code Badge */}
                     <span className="absolute bottom-3 right-4 font-mono text-[11px] text-white/90 bg-black/50 px-2 py-0.5 rounded backdrop-blur-xs select-none pointer-events-none">
                       {category.code}
                     </span>
                   </div>
-
                   {/* Card Content Body */}
                   <div className="p-6 sm:p-7 flex flex-col flex-1 justify-between bg-[#F7F5F0]">
                     <div>
@@ -258,7 +241,6 @@ export const CategoriesMarketplace: React.FC = () => {
                         {category.description}
                       </p>
                     </div>
-
                     <div className="pt-6 flex items-center justify-between mt-auto border-t border-[#E6E2DC]/60">
                       <span className="text-[11px] text-[#79716B] font-mono">
                         {category.subtitle}
@@ -297,7 +279,6 @@ export const CategoriesMarketplace: React.FC = () => {
             </div>
           )}
         </section>
-
         {/* ── 4. CIRCULAR METRIC BAR STRIP ── */}
         <section data-reveal className="py-2">
           <div className="bg-[#F0ECE1] rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xs border border-[#E6E2DC]">
@@ -323,7 +304,6 @@ export const CategoriesMarketplace: React.FC = () => {
             </div>
           </div>
         </section>
-
         {/* ── 5. FEATURED SECTION: CHỌN CÁCH BẠN MUỐN REUSE ── */}
         <section data-reveal className="space-y-6 pb-6">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 border-b border-[#E6E2DC] pb-4">
@@ -339,7 +319,6 @@ export const CategoriesMarketplace: React.FC = () => {
               Chúng tôi xây dựng hệ tuần hoàn để bạn tận hưởng giá trị công năng mà không phải tích trữ dư thừa.
             </p>
           </div>
-
           {/* Dual Editorial Banner Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
             {/* Card 1: RENT */}
@@ -354,7 +333,6 @@ export const CategoriesMarketplace: React.FC = () => {
                   cached
                 </span>
               </div>
-
               <div className="space-y-4 relative z-10">
                 <span className="inline-block text-[10px] font-mono uppercase tracking-[0.2em] px-3 py-1 rounded bg-white/10 text-white/80">
                   DỊCH VỤ THUÊ LINH HOẠT
@@ -366,7 +344,6 @@ export const CategoriesMarketplace: React.FC = () => {
                   Trải nghiệm thiết bị máy ảnh cao cấp, trang phục sự kiện hay lều trại dã ngoại trong thời gian mong muốn với tiền cọc bảo chứng minh bạch và hoàn trả nhanh chóng.
                 </p>
               </div>
-
               <div className="pt-8 relative z-10 flex items-center justify-between">
                 <span className="text-[11px] text-stone-400 font-mono">
                   Thủ tục duyệt online trong 15p
@@ -380,7 +357,6 @@ export const CategoriesMarketplace: React.FC = () => {
                 </Link>
               </div>
             </div>
-
             {/* Card 2: THRIFT */}
             <div
               data-reveal
@@ -393,7 +369,6 @@ export const CategoriesMarketplace: React.FC = () => {
                   shopping_bag
                 </span>
               </div>
-
               <div className="space-y-4 relative z-10">
                 <span className="inline-block text-[10px] font-mono uppercase tracking-[0.2em] px-3 py-1 rounded bg-[#E6E2DC] text-[#1C1A18] font-medium">
                   MUA SẮM TUẦN HOÀN BẢO CHỨNG
@@ -405,7 +380,6 @@ export const CategoriesMarketplace: React.FC = () => {
                   Sở hữu vĩnh viễn các sản phẩm đã qua kiểm định cơ học 100%, bảo hành đổi trả 72h và có nguồn gốc minh bạch từ kho lưu trữ ReUse Hub.
                 </p>
               </div>
-
               <div className="pt-8 relative z-10 flex items-center justify-between">
                 <span className="text-[11px] text-[#79716B] font-mono">
                   Kiểm định chất lượng 5 bước
@@ -426,5 +400,4 @@ export const CategoriesMarketplace: React.FC = () => {
     </div>
   );
 };
-
 export default CategoriesMarketplace;

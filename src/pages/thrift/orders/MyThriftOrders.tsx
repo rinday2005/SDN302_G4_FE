@@ -8,10 +8,8 @@ import {
   confirmDeliveredThriftOrderApi,
   type ThriftOrderApi,
   type ThriftOrderItemApi,
-  type ThriftShippingAddressApi,
 } from '../../../services/thriftOrder.api';
 import { redirectToVnPayGateway } from '../../../services/payment.api';
-import { resolveCleanAddress } from '../../../utils/address';
 
 export interface ThriftOrderRecord {
   id: string;
@@ -180,8 +178,9 @@ export const MyThriftOrders: React.FC = () => {
       };
     });
 
-    const addr = (typeof raw.shippingAddress === 'object' && raw.shippingAddress !== null ? raw.shippingAddress : {}) as Partial<ThriftShippingAddressApi>;
-    const fullAddr = resolveCleanAddress(raw.shippingAddress, user);
+    const addr = raw.shippingAddress || {};
+    const fullAddr = [addr.detail, addr.ward, addr.district, addr.province].filter(Boolean).join(', ') ||
+      '48 Bạch Đằng, Tầng 4 Archive Suite, Phường Hải Châu 1, Quận Hải Châu, TP. Đà Nẵng, Việt Nam';
 
     return {
       id: cleanId,
@@ -202,7 +201,7 @@ export const MyThriftOrders: React.FC = () => {
       escrowExpiresAt: raw.escrowExpiresAt,
       provenanceVaultCertId: raw.provenanceVaultCertId || `PRV-VAULT-2026-${cleanId.slice(-4).toUpperCase()}`,
       shippingAddress: {
-        recipientName: addr.recipientName || user?.fullName || displayName,
+        recipientName: addr.recipientName || displayName,
         recipientPhone: addr.recipientPhone || user?.phoneNumber || user?.phone || '0908 421 892',
         fullAddress: fullAddr,
       },

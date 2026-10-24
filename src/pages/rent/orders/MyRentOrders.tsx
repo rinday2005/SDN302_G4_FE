@@ -11,6 +11,7 @@ import {
 } from '../../data/rent/myRentOrdersData';
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { resolveCleanAddress } from '../../../utils/address';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 
 export const MyRentOrders: React.FC = () => {
   const { user } = useAuth();
@@ -137,28 +138,24 @@ export const MyRentOrders: React.FC = () => {
 
     const rawStatus = raw.status || 'PAID';
 
-    // 1. Kiểm tra trạng thái đã ký từ backend hoặc trạng thái RENTING
+    const cleanRawCode = rawCode.replace('#', '').trim().toLowerCase();
+    const cleanRawId = cleanId.toLowerCase();
+
+    // 1. Kiểm tra trạng thái đã ký CLA từ backend hoặc thuộc tính đã ký
     let hasClaSigned = Boolean(
       (raw as RentalOrderApi).claProof?.isSigned ||
-      raw.status === 'RENTING' ||
       (raw as { claSigned?: boolean }).claSigned
     );
 
-    // 2. Danh sách các key dự phòng cho đơn hàng trong localStorage
+    // 2. Danh sách các key lưu trữ trong localStorage thuộc CHÍNH đơn hàng này
     if (!hasClaSigned) {
       const candidateKeys = [
-        cleanId,
+        cleanRawId,
+        cleanRawCode,
         rawCode.replace('#', '').trim(),
         (raw.orderCode || '').replace('#', '').trim(),
         (raw as RentalOrderApi)._id,
         (raw as { id?: string }).id,
-        `RH-RNT-${cleanId}`,
-        cleanId.replace('RH-RNT-', ''),
-        'RH-RNT-2026-8845',
-        '8845',
-        '6',
-        'wool-coat',
-        'wool_coat',
       ].filter(Boolean) as string[];
 
       for (const k of candidateKeys) {
@@ -177,55 +174,6 @@ export const MyRentOrders: React.FC = () => {
       }
     }
 
-    // 3. Quét toàn bộ cla_proof_* trong localStorage đối chiếu với sản phẩm trong đơn
-    if (!hasClaSigned) {
-      try {
-        const rawItemsList = ((raw.items as StoredRentalOrderItem[]) || []);
-        const itemTitles = rawItemsList.map((i) => (i.productName || i.title || '').toLowerCase());
-        const itemIds = rawItemsList.map((i) => String(i.productId || i.id || ''));
-
-        // Kiểm tra xem đơn này có chứa Áo Khoác Dạ Wool không
-        const isWoolCoatOrder =
-          itemTitles.some((t) => t.includes('áo khoác') || t.includes('wool') || t.includes('dạ')) ||
-          itemIds.includes('6');
-
-        for (let i = 0; i < localStorage.length; i++) {
-          const lk = localStorage.key(i);
-          if (lk && lk.startsWith('cla_proof_')) {
-            const v = localStorage.getItem(lk);
-            if (v) {
-              const proof = JSON.parse(v);
-              if (proof && (proof.isSigned === true || proof.signedAt || proof.signDate)) {
-                const note = (proof.note || '').toLowerCase();
-
-                // Trùng khớp mã sản phẩm
-                if (itemIds.some((id) => id && (lk === `cla_proof_${id}` || lk === `cla_proof_prod_${id}`))) {
-                  hasClaSigned = true;
-                  break;
-                }
-
-                // Nếu là đơn Áo Khoác Dạ Wool và biên bản ký ghi nhận Áo Khoác Dạ
-                if (isWoolCoatOrder && (note.includes('áo khoác') || note.includes('wool') || note.includes('dạ') || lk.includes('wool') || lk.includes('6'))) {
-                  hasClaSigned = true;
-                  break;
-                }
-
-                // Trùng khớp tiêu đề sản phẩm dài hơn 5 ký tự
-                if (itemTitles.some((t) => t.length > 5 && note.includes(t))) {
-                  hasClaSigned = true;
-                  break;
-                }
-              }
-            }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    const cleanRawCode = rawCode.replace('#', '').trim().toLowerCase();
-    const cleanRawId = cleanId.toLowerCase();
     const isReturnRequested = Boolean(
       rawStatus === 'RETURN_REQUESTED' ||
       rawStatus === 'RETURNING' ||
@@ -242,7 +190,7 @@ export const MyRentOrders: React.FC = () => {
       statusVal = 'COMPLETED';
     } else if (isReturnRequested) {
       statusVal = 'RETURN_REQUESTED';
-    } else if (['PAID', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(rawStatus)) {
+    } else if (['PAID', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED', 'RENTING'].includes(rawStatus)) {
       statusVal = hasClaSigned ? 'RENTING' : 'DELIVERED';
     }
 
@@ -272,10 +220,10 @@ export const MyRentOrders: React.FC = () => {
       dotBg = 'bg-[#3B6E8C] animate-pulse';
       daysLeft = 'Bưu tá Nanuk đang chuyển phát bảo chứng 2 chiều';
     } else if (statusVal === 'DELIVERED') {
-      statusText = 'ĐÃ GIAO HÀNG · CHỜ KÝ CLA';
-      statusBg = 'bg-[#FCF5EB] text-[#A6620C] border-[#F2DEBF]';
-      dotBg = 'bg-[#C87A1E] animate-ping';
-      daysLeft = 'Bưu kiện đã tới · Mời kiểm tra & ký CLA để kích hoạt';
+      statusText = 'KÝ ĐƠN HÀNG ĐỂ BẮT ĐẦU THUÊ';
+      statusBg = 'bg-[#FFF4E5] text-[#C85A00] border-[#FFD8A8] ring-1 ring-[#FFD8A8]/60 shadow-xs';
+      dotBg = 'bg-[#EA580C] animate-pulse';
+      daysLeft = 'Bưu kiện đã tới · Mời kiểm tra & ký CLA để kích hoạt thuê';
     } else if (statusVal === 'RENTING') {
       statusText = 'ĐANG THUÊ (RENTING)';
       statusBg = 'bg-[#EEF2EC] text-[#37533E] border-[#D5E0D4]';
@@ -312,7 +260,7 @@ export const MyRentOrders: React.FC = () => {
       let image = it.imageUrl || it.image || '';
 
       const isGeneric = !title || title.includes('Đơn hàng Thuê') || title.includes('RH-RNT-');
-      if (isGeneric || !image || image.includes('unsplash.com/photo-1516035069371') || pricePerDay === 0) {
+      if (isGeneric || !image || image.includes('unsplash.com') || pricePerDay === 0) {
         let resolved = null;
         const pId = String(it.productId || it.id || '');
         if (pId && !pId.startsWith('item-')) {
@@ -346,7 +294,7 @@ export const MyRentOrders: React.FC = () => {
         if (resolved) {
           if (isGeneric) title = resolved.title;
           if (!pricePerDay) pricePerDay = resolved.pricePerDay;
-          if (!image || image.includes('unsplash.com/photo-1516035069371')) {
+          if (!image || image.includes('unsplash.com') || resolved.images?.[0]?.src) {
             image = resolved.images?.[0]?.src || image;
           }
         }
@@ -370,7 +318,7 @@ export const MyRentOrders: React.FC = () => {
         notes: 'Kiểm định chất lượng 8 bước ReUse Standard',
         dailyRate: `${pricePerDay.toLocaleString('vi-VN')}₫ / ngày`,
         itemTotal: `${itemTotal.toLocaleString('vi-VN')}₫`,
-        img: image,
+        img: normalizeImageUrl(image),
       };
     });
 
@@ -511,10 +459,10 @@ export const MyRentOrders: React.FC = () => {
       grandTotalVal: grandFee,
       shippingFee: `${shipFee.toLocaleString('vi-VN')}₫`,
       grandTotal: `${grandFee.toLocaleString('vi-VN')}₫`,
-      canReturn: statusVal === 'RENTING' && !isReturnRequested,
+      canReturn: statusVal === 'RENTING' && hasClaSigned && !isReturnRequested,
       canPay: !isPaid && ['PENDING', 'WAITING_PAYMENT', 'PENDING_PAYMENT'].includes(statusVal),
-      needsClaSign: statusVal === 'DELIVERED' && !hasClaSigned,
-      claSigned: Boolean(hasClaSigned || statusVal === 'RENTING' || isReturnRequested),
+      needsClaSign: statusVal === 'DELIVERED' || !hasClaSigned,
+      claSigned: Boolean(hasClaSigned),
       isReturningOrReturned: ['RETURN_REQUESTED', 'RETURNING', 'RETURNED'].includes(statusVal),
       isCompleted: statusVal === 'COMPLETED',
       recipientName: resolvedRecipientName,
@@ -769,8 +717,8 @@ export const MyRentOrders: React.FC = () => {
 
   // Dynamic status tabs grouped into clear lifecycle buckets to prevent confusion between active and returned orders
   const statusTabs = useMemo(() => {
-    const deliveredCount = orders.filter((o) => o.status === 'DELIVERED' && !o.claSigned).length;
-    const rentingCount = orders.filter((o) => (o.status === 'RENTING' || o.claSigned) && !['RETURN_REQUESTED', 'RETURNING', 'RETURNED', 'COMPLETED', 'CANCELLED'].includes(o.status)).length;
+    const deliveredCount = orders.filter((o) => (o.status === 'DELIVERED' || o.needsClaSign) && !o.claSigned).length;
+    const rentingCount = orders.filter((o) => o.status === 'RENTING' && o.claSigned && !['RETURN_REQUESTED', 'RETURNING', 'RETURNED', 'COMPLETED', 'CANCELLED'].includes(o.status)).length;
     const returningCount = orders.filter((o) =>
       ['RETURN_REQUESTED', 'RETURNING', 'RETURNED'].includes(o.status)
     ).length;
@@ -779,7 +727,7 @@ export const MyRentOrders: React.FC = () => {
 
     return [
       { key: 'ALL', label: `Tất cả (${String(orders.length).padStart(2, '0')})` },
-      { key: 'DELIVERED', label: `Chờ nhận & Ký CLA (Bước 5) (${String(deliveredCount).padStart(2, '0')})`, dot: deliveredCount > 0 ? 'bg-[#C87A1E] animate-ping' : undefined },
+      { key: 'DELIVERED', label: `Chờ ký đơn CLA (Bước 5) (${String(deliveredCount).padStart(2, '0')})`, dot: deliveredCount > 0 ? 'bg-[#EA580C] animate-ping' : undefined },
       { key: 'RENTING', label: `Đang thuê & Lưu ký (Bước 6) (${String(rentingCount).padStart(2, '0')})`, dot: 'bg-[#4A6B53]' },
       { key: 'RETURNING', label: `Hoàn trả & Bench Lab (Bước 7-8) (${String(returningCount).padStart(2, '0')})`, dot: returningCount > 0 ? 'bg-[#7A4FA0]' : undefined },
       { key: 'COMPLETED', label: `Đã hoàn tất & Hoàn cọc (Bước 9) (${String(completedCount).padStart(2, '0')})` },
@@ -791,9 +739,9 @@ export const MyRentOrders: React.FC = () => {
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (activeTab === 'DELIVERED') {
-        if (order.status !== 'DELIVERED' || order.claSigned) return false;
+        if (order.claSigned || (order.status !== 'DELIVERED' && !order.needsClaSign)) return false;
       } else if (activeTab === 'RENTING') {
-        if (order.status !== 'RENTING' && !order.claSigned) return false;
+        if (!order.claSigned || order.status !== 'RENTING') return false;
         if (['RETURN_REQUESTED', 'RETURNING', 'RETURNED', 'COMPLETED', 'CANCELLED'].includes(order.status)) return false;
       } else if (activeTab === 'ACTIVE') {
         const isActive = ['DELIVERED', 'RENTING', 'PAID', 'SHIPPING', 'HANDED_OVER', 'READY_FOR_HANDOVER', 'PREPARING'].includes(order.status);
@@ -1054,7 +1002,7 @@ export const MyRentOrders: React.FC = () => {
                 filteredOrders.map((order) => {
                   const isBenchLab = order.status === 'RETURNED';
                   const isReturning = ['RETURN_REQUESTED', 'RETURNING'].includes(order.status);
-                  const isDeliveredWaitingSign = order.needsClaSign;
+                  const isDeliveredWaitingSign = order.needsClaSign || (order.status === 'DELIVERED' && !order.claSigned) || (!order.claSigned && ['PAID', 'SHIPPING', 'DELIVERED', 'RENTING'].includes(order.status));
 
                   return (
                   <article
@@ -1090,9 +1038,9 @@ export const MyRentOrders: React.FC = () => {
                             ? 'Bước 3/9'
                             : ['READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING'].includes(order.status)
                             ? 'Bước 4/9'
-                            : isDeliveredWaitingSign
+                            : isDeliveredWaitingSign || order.status === 'DELIVERED' || !order.claSigned
                             ? 'Bước 5/9'
-                            : order.status === 'RENTING' || order.claSigned
+                            : order.status === 'RENTING' && order.claSigned
                             ? 'Bước 6/9'
                             : isReturning
                             ? 'Bước 7/9'
@@ -1144,28 +1092,28 @@ export const MyRentOrders: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Step 5 Banner: Đã nhận hàng · Chờ ký nhận CLA 3 góc */}
+                    {/* Step 5 Banner: Đơn thuê vừa tới · Bắt buộc ký CLA để bắt đầu thuê */}
                     {isDeliveredWaitingSign && (
                       <div className="mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-[#FFF9F0] via-[#FDF5EB] to-[#FFF9F0] border-2 border-[#E8CBA0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-[#6E4208] shadow-xs">
                         <div className="flex items-center gap-3">
-                          <span className="w-9 h-9 rounded-xl bg-[#C87A1E] text-white flex items-center justify-center shrink-0 shadow-xs">
-                            <span className="material-symbols-outlined text-[20px]">inventory</span>
+                          <span className="w-9 h-9 rounded-xl bg-[#EA580C] text-white flex items-center justify-center shrink-0 shadow-xs">
+                            <span className="material-symbols-outlined text-[20px]">draw</span>
                           </span>
                           <div>
                             <p className="font-bold text-[#4D2D04] uppercase tracking-wider text-[11px]">
-                              BƯỚC 5: ĐÃ GIAO HÀNG TẬN NƠI · CHỜ KÝ NHẬN ĐƠN &amp; ĐỐI KIỂM CLA 3 GÓC
+                              BƯỚC 5: ĐƠN THUÊ VỪA TỚI · VUI LÒNG KÝ CLA ĐỂ BẮT ĐẦU THUÊ
                             </p>
                             <p className="text-[#8F550B] text-xs mt-0.5 leading-relaxed">
-                              Bưu tá Nanuk đã giao kiện hàng. Vui lòng bấm <strong>[Ký nhận đơn để nhận bưu kiện &amp; Ký nhận CLA]</strong> bên dưới để mở kiện, kiểm đếm 3 góc và chính thức kích hoạt thời gian thuê (Bước 6).
+                              Kiện hàng đã tới nơi. Vui lòng bấm <strong>[Ký đơn hàng để bắt đầu thuê]</strong> bên dưới để mở kiện đối kiểm và kích hoạt trạng thái Đang thuê (Bước 6).
                             </p>
                           </div>
                         </div>
                         <Link
                           to={`/rent/orders/${order.id}#cla-sign`}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#C87A1E] hover:bg-[#A6620C] text-white font-bold text-xs shadow-md transition-colors shrink-0 self-start sm:self-center"
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] text-white font-bold text-xs shadow-xs transition-colors shrink-0 self-start sm:self-center"
                         >
                           <span className="material-symbols-outlined text-[16px]">draw</span>
-                          <span>Ký nhận CLA ngay</span>
+                          <span>Ký đơn ngay</span>
                         </Link>
                       </div>
                     )}
@@ -1275,15 +1223,19 @@ export const MyRentOrders: React.FC = () => {
                               <span className="text-xs text-[#76726B] block">Định mức: {it.dailyRate}</span>
                               <span className="text-xs font-bold text-[#22201D] mt-0.5 block">Tiền thuê: {it.itemTotal}</span>
                             </div>
-                            {order.claSigned && (
+                            {it.id && (
                               <Link
-                                to={`/rent/orders/${order.id}?productId=${it.id}#cla-section`}
-                                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors shadow-2xs border-none bg-white hover:bg-stone-50 text-stone-800"
+                                to={`/rent/orders/${order.id}?productId=${it.id}#${isDeliveredWaitingSign ? 'cla-sign' : 'cla-section'}`}
+                                className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors shadow-2xs border ${
+                                  isDeliveredWaitingSign
+                                    ? 'bg-[#FFF8F0] hover:bg-[#FEEFD8] border-[#FFD8A8] text-[#C85A00]'
+                                    : 'border-none bg-white hover:bg-stone-50 text-stone-800'
+                                }`}
                               >
-                                <span className="material-symbols-outlined text-[13px] text-emerald-700">
-                                  assignment
+                                <span className={`material-symbols-outlined text-[13px] ${isDeliveredWaitingSign ? 'text-[#C85A00]' : 'text-emerald-700'}`}>
+                                  {isDeliveredWaitingSign ? 'draw' : 'assignment'}
                                 </span>
-                                <span>Biên bản CLA</span>
+                                <span>{isDeliveredWaitingSign ? 'Ký biên bản CLA' : 'Biên bản CLA'}</span>
                               </Link>
                             )}
                           </div>
@@ -1318,26 +1270,26 @@ export const MyRentOrders: React.FC = () => {
                       {/* Phân định nút hành động theo từng bước trạng thái nghiệp vụ rõ ràng */}
                       <div className="md:col-span-5 flex flex-col gap-2.5">
                         {isDeliveredWaitingSign ? (
-                          /* BƯỚC 5: ĐÃ GIAO HÀNG · CHỜ KÝ NHẬN ĐƠN ĐỂ NHẬN BƯU KIỆN & KÝ NHẬN CLA */
+                          /* BƯỚC 5: ĐƠN THUÊ VỪA TỚI · CHỜ KÝ ĐƠN HÀNG ĐỂ BẮT ĐẦU THUÊ (CHƯA CÓ NÚT YÊU CẦU TRẢ ĐỒ) */
                           <>
                             <Link
                               to={`/rent/orders/${order.id}#cla-sign`}
-                              className="w-full text-center px-4 py-2.5 rounded-xl bg-[#C87A1E] hover:bg-[#A6620C] text-white font-bold text-xs tracking-wide shadow-md transition-all flex items-center justify-center gap-2 group cursor-pointer"
+                              className="w-full text-center px-4 py-2.5 rounded-xl bg-[#EA580C] hover:bg-[#C2410C] text-white font-bold text-xs tracking-wide shadow-xs transition-all flex items-center justify-center gap-2 group cursor-pointer"
                             >
                               <span className="material-symbols-outlined text-[16px] group-hover:scale-110 transition-transform">draw</span>
-                              <span>Ký nhận đơn để nhận bưu kiện &amp; Ký nhận CLA</span>
+                              <span>Ký đơn hàng để bắt đầu thuê</span>
                             </Link>
                             <div className="flex gap-2">
                               <Link
                                 to={`/rent/orders/${order.id}`}
-                                className="flex-1 text-center px-3 py-2 rounded-xl bg-white hover:bg-[#F6F3EE] border border-[#E8E4DC] text-[#22201D] font-semibold text-xs transition-colors flex items-center justify-center gap-1"
+                                className="flex-1 text-center px-4 py-2.5 rounded-xl bg-[#22201D] hover:bg-black text-white font-semibold text-xs tracking-wide shadow-2xs transition-colors flex items-center justify-center gap-1.5"
                               >
                                 <span className="material-symbols-outlined text-[15px]">visibility</span>
-                                <span>Xem chi tiết</span>
+                                <span>Xem chi tiết đơn thuê &amp; biên bản</span>
                               </Link>
                               <Link
                                 to={`/chat?orderId=${order.id}`}
-                                className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#F6F3EE] border border-[#E8E4DC] text-[#22201D] font-semibold text-xs transition-colors flex items-center justify-center gap-1"
+                                className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-[#F6F3EE] border border-[#E8E4DC] text-[#22201D] font-semibold text-xs transition-colors flex items-center justify-center gap-1"
                                 title="Nhắn tin với đơn vị cho thuê"
                               >
                                 <span className="material-symbols-outlined text-[15px]">chat</span>

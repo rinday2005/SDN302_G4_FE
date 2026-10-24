@@ -323,7 +323,7 @@ export const UserDashboard: React.FC = () => {
     if (raw.status === 'PAID') statusLabel = 'Đã thanh toán · Sẵn sàng bàn giao';
     else if (raw.status === 'SHIPPING' || raw.status === 'HANDED_OVER') statusLabel = 'Đang vận chuyển bảo chứng';
     else if (raw.status === 'RENTING') statusLabel = `Đang lưu giữ (còn ${remainingDays} ngày)`;
-    else if (raw.status === 'DELIVERED') statusLabel = 'Đã nhận thiết bị lưu ký';
+    else if (raw.status === 'DELIVERED') statusLabel = 'Đơn vừa tới · Chờ ký CLA để bắt đầu thuê';
 
     return {
       id: code,

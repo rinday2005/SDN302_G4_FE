@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
 import { getPublicThriftListingsApi } from '../../../services/thrift.api';
-import { AppSidebar } from '../../../components/layout/AppSidebar';
+import { UserSidebar } from '../../../components/layout/UserSidebar';
 import {
     THRIFT_PRODUCTS,
     THRIFT_CATEGORY_OPTIONS,
@@ -61,11 +61,6 @@ export const ThriftMarketplace: React.FC = () => {
                             href: `/thrift/products/${item._id}`,
                             image: img,
                             verifiedBy: 'ReUse Hub Kiểm định',
-                            quantity: item.quantity !== undefined ? item.quantity : (item.sourceType === 'RENTAL_PRODUCT' ? 1 : 10),
-                            size: (item.category === 'camera' || /canon|sony|nikon|fujifilm|dji|leica/i.test(item.name || '')) ? undefined : (item.size || undefined),
-                            sizes: (item.category === 'camera' || /canon|sony|nikon|fujifilm|dji|leica/i.test(item.name || '')) ? [] : (Array.isArray(item.sizes) ? item.sizes : []),
-                            status: item.status || 'APPROVED',
-                            sourceType: item.sourceType || 'NEW',
                         };
                     });
                     setDbProducts(mapped);
@@ -138,19 +133,38 @@ export const ThriftMarketplace: React.FC = () => {
     };
 
     // User interactions
+    const handleBuyNow = (product: ThriftProduct) => {
+        handleProtectedAction(
+            `mua ngay "${product.title}"`,
+            '/cart',
+            () => {
+                addToCart({
+                    id: product.id,
+                    title: product.title,
+                    price: product.price,
+                    image: product.image,
+                    mode: 'thrift',
+                    location: product.location,
+                    categoryLabel: product.category,
+                    gradeBadge: product.condition,
+                    quantity: 1,
+                });
+                navigate('/cart');
+            }
+        );
+    };
+
     const handleAddToCart = (product: ThriftProduct) => {
-        handleProtectedAction(`thêm "${product.title}" vào giỏ`, '/cart', () => {
-            addToCart({
-                id: product.id,
-                title: product.title,
-                price: product.price,
-                image: product.image,
-                mode: 'thrift',
-                location: product.location,
-                categoryLabel: product.category,
-                gradeBadge: product.condition,
-                quantity: 1,
-            });
+        addToCart({
+            id: product.id,
+            title: product.title,
+            price: product.price,
+            image: product.image,
+            mode: 'thrift',
+            location: product.location,
+            categoryLabel: product.category,
+            gradeBadge: product.condition,
+            quantity: 1,
         });
     };
 
@@ -340,8 +354,8 @@ export const ThriftMarketplace: React.FC = () => {
 
             {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
             <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
-                {/* Navigation Sidebar (Fixed on left: GuestSidebar when guest, UserSidebar when logged in) */}
-                <AppSidebar activeKey="thrift" />
+                {/* User Navigation Sidebar (Fixed on left) */}
+                <UserSidebar activeKey="thrift" />
 
                 {/* ── MAIN CONTENT AREA ── */}
                 <main className="flex-1 min-w-0 space-y-8">
@@ -652,41 +666,19 @@ export const ThriftMarketplace: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center justify-between text-xs pt-0.5 mb-1.5">
-                                                {product.status === 'SOLD' || (product.quantity !== undefined && product.quantity <= 0) ? (
-                                                    <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md">
-                                                        HẾT HÀNG / ĐÃ BÁN
-                                                    </span>
-                                                ) : product.sourceType === 'RENTAL_PRODUCT' ? (
-                                                    <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
-                                                        Độc bản 1-of-1 (Còn 1 chiếc)
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                                                        Còn lại: {product.quantity ?? 10} sản phẩm
-                                                    </span>
-                                                )}
-                                                {product.size && product.category !== 'camera' && !/canon|sony|nikon|fujifilm|dji|leica/i.test(product.name || '') && (
-                                                    <span className="text-[10px] font-semibold text-[#78736A] bg-[#F4F0EA] px-1.5 py-0.5 rounded border border-[#E6E2DC]">
-                                                        Size: {product.size}
-                                                    </span>
-                                                )}
-                                            </div>
-
                                             <div className="flex items-center gap-2 pt-1">
                                                 <button
                                                     type="button"
-                                                    onClick={() => navigate(product.href || `/thrift/products/${product.id}`)}
+                                                    onClick={() => handleBuyNow(product)}
                                                     className="flex-1 py-2 rounded-xl bg-[#1C1A18] text-white text-xs font-medium text-center hover:bg-[#292724] transition-colors shadow-sm cursor-pointer"
                                                 >
-                                                    Xem thông tin chi tiết
+                                                    Mua ngay
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleAddToCart(product)}
                                                     title="Thêm vào giỏ"
-                                                    disabled={product.status === 'SOLD' || (product.quantity !== undefined && product.quantity <= 0)}
-                                                    className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-[#1C1A18] hover:bg-[#F4F0EA] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer"
+                                                    className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-[#1C1A18] hover:bg-[#F4F0EA] transition-colors shadow-sm cursor-pointer"
                                                 >
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
                                                         <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" strokeLinecap="round" strokeLinejoin="round"></path>
