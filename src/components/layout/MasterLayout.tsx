@@ -5,7 +5,7 @@ import Footer from './Footer';
 import { Sidebar } from './Sidebar';
 import { GuestSidebar } from './GuestSidebar';
 import { UserSidebar } from './UserSidebar';
-import AdminLayout from './admin/AdminLayout';
+
 
 interface MasterLayoutProps {
   children: React.ReactNode;
@@ -16,36 +16,30 @@ interface MasterLayoutProps {
 export const MasterLayout: React.FC<MasterLayoutProps> = ({
   children,
   userRole = 'GUEST',
-  onLogout
+  onLogout,
 }) => {
-  // Dedicated layout for ADMIN role
-  if (userRole === 'ADMIN') {
-    return <AdminLayout>{children}</AdminLayout>;
-  }
-
-  const showShopSidebar = userRole === 'SHOP';
+  // Chỉ ADMIN mới dùng Sidebar cố định màu đen, SHOP sẽ dùng layout riêng (OwnerLayout)
+  const showAdminSidebar = userRole === 'ADMIN';
   const showGuestSidebar = userRole === 'GUEST';
   const showUserSidebar = userRole === 'USER';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fdf9f2] text-stone-900 antialiased">
-      {/* Header */}
+      {/* Header chung */}
       <Header userRole={userRole} onLogout={onLogout} />
 
       {/* Body Content */}
       <div className="flex flex-1 w-full">
-        {/* Sidebar SHOP — luôn hiện bên trái */}
-        {showShopSidebar && (
-          <Sidebar role="SHOP" />
-        )}
+        {/* Sidebar chỉ ghim cho ADMIN */}
+        {showAdminSidebar && <Sidebar role="ADMIN" />}
 
-        {/* Sidebar GUEST — toggle overlay khi role GUEST */}
+        {/* Sidebar Drawer cho GUEST */}
         {showGuestSidebar && <GuestSidebar />}
 
-        {/* Sidebar CUSTOMER / USER — toggle overlay khi role CUSTOMER */}
+        {/* Sidebar Drawer cho USER */}
         {showUserSidebar && <UserSidebar mode="drawer" />}
 
-        <main className={`flex-1 w-full pt-28 ${showShopSidebar ? 'px-4 lg:px-8' : ''}`}>
+        <main className={`flex-1 w-full pt-28 ${showAdminSidebar ? 'px-4 lg:px-8' : ''}`}>
           {children}
         </main>
       </div>
