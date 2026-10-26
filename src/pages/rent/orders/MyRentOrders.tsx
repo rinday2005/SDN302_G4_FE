@@ -13,6 +13,7 @@ import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { resolveCleanAddress } from '../../../utils/address';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { isObjectIdLike, isUnusableItemTitle, resolveRentProductsByIds } from '../../../utils/rentOrderItemResolver';
+import { ReviewModal, type ReviewOrderItemProduct } from '../../../components/review/ReviewModal';
 
 export const MyRentOrders: React.FC = () => {
   const { user } = useAuth();
@@ -77,6 +78,36 @@ export const MyRentOrders: React.FC = () => {
   }
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('Mới nhất trước');
+
+  // Review modal state [FE-S5-03]
+  const [reviewModalState, setReviewModalState] = useState<{
+    isOpen: boolean;
+    orderId: string;
+    orderCode?: string;
+    items: ReviewOrderItemProduct[];
+  }>({
+    isOpen: false,
+    orderId: '',
+    items: [],
+  });
+
+  const handleOpenReviewModal = (order: RentalOrderRecord) => {
+    const items: ReviewOrderItemProduct[] = (order.items || []).map((it) => ({
+      productId: it.id,
+      title: it.title,
+      image: it.img,
+      category: it.grade,
+      deposit: order.deposit,
+      price: it.dailyRate,
+    }));
+
+    setReviewModalState({
+      isOpen: true,
+      orderId: order.id,
+      orderCode: order.code,
+      items,
+    });
+  };
   const [periodOption, setPeriodOption] = useState('Năm 2026');
   const [showPaymentBanner, setShowPaymentBanner] = useState(Boolean(paymentSuccessParam));
   const [isLoading, setIsLoading] = useState(true);
@@ -1634,6 +1665,16 @@ export const MyRentOrders: React.FC = () => {
                               <span className="material-symbols-outlined text-[16px]">receipt_long</span>
                               <span>Xem quyết toán &amp; Báo cáo hoàn cọc</span>
                             </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReviewModal(order)}
+                              className="w-full text-center px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-950 font-bold text-xs tracking-wide shadow-2xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[16px] text-amber-600" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                star
+                              </span>
+                              <span>Đánh giá sản phẩm đã thuê</span>
+                            </button>
                             <div className="flex gap-2">
                               <Link
                                 to="/rent"
@@ -1668,7 +1709,7 @@ export const MyRentOrders: React.FC = () => {
                                     try {
                                       const c = (order.id || '').replace('#', '').trim().toLowerCase();
                                       if (c) localStorage.setItem(`user_initiated_return_${c}`, 'true');
-                                      const rawId = (order as any)._id;
+                                      const rawId = (order as unknown as { _id?: string })._id;
                                       if (rawId) localStorage.setItem(`user_initiated_return_${String(rawId).toLowerCase()}`, 'true');
                                       window.dispatchEvent(new Event('storage'));
                                       window.dispatchEvent(new Event('rental_order_updated'));
@@ -1767,6 +1808,15 @@ export const MyRentOrders: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {/* Review Modal [FE-S5-03] */}
+      <ReviewModal
+        isOpen={reviewModalState.isOpen}
+        onClose={() => setReviewModalState((prev) => ({ ...prev, isOpen: false }))}
+        orderId={reviewModalState.orderId}
+        orderCode={reviewModalState.orderCode}
+        orderItems={reviewModalState.items}
+      />
     </div>
   );
 };
