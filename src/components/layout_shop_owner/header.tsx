@@ -58,6 +58,13 @@ const shopNavItems = [
     matcher: (path: string) =>
       path.startsWith("/shop/revenue") || path.startsWith("/shop/payouts"),
   },
+  {
+    to: "/shop/messages",
+    label: "Tin nhắn",
+    icon: "chat",
+    matcher: (path: string) =>
+      path.startsWith("/shop/messages") || path.startsWith("/shop/chat"),
+  },
 ];
 
 export const ShopHeader: React.FC = () => {
@@ -115,6 +122,15 @@ export const ShopHeader: React.FC = () => {
           >
             <span className="material-symbols-outlined text-[16px]">storefront</span>
             <span>Xem sàn</span>
+          </Link>
+
+          {/* Nút tin nhắn Shop */}
+          <Link
+            to="/shop/messages"
+            className="p-1.5 text-[#57534e] hover:text-[#1c1c18] hover:bg-[#ebe8e1] transition-colors rounded-lg relative"
+            title="Tin nhắn khách hàng"
+          >
+            <span className="material-symbols-outlined text-[20px] block">chat</span>
           </Link>
 
           {/* Nút thông báo */}

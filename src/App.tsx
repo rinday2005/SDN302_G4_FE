@@ -100,6 +100,14 @@ const DashboardRouter = () => {
   return <Navigate to="/login" replace />;
 };
 
+const MessagesRouter = () => {
+  const auth = useContext(AuthContext);
+  const role = (auth?.user?.role as string) || "";
+  if (!auth?.token) return <Navigate to="/login" replace />;
+  if (role === "SHOP_OWNER" || role === "SHOP") return <Navigate to="/shop/messages" replace />;
+  return <Navigate to="/user/messages" replace />;
+};
+
 const AppLayout = ({
   role,
 }: {
@@ -144,6 +152,7 @@ const App = () => {
           <Route element={<AppLayout role="GUEST" />}>
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<DashboardRouter />} />
+            <Route path="/messages" element={<MessagesRouter />} />
             <Route path="/rent" element={<RentMarketplace />} />
             <Route path="/rent/marketplace" element={<RentMarketplace />} />
             <Route path="/rent/products/:id" element={<RentProductDetail />} />
@@ -200,6 +209,7 @@ const App = () => {
               <Route path="/profile/kyc" element={<CustomerKyc />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/user/chat" element={<ChatPage />} />
+              <Route path="/user/messages" element={<ChatPage />} />
             </Route>
           </Route>
 
@@ -215,6 +225,8 @@ const App = () => {
               <Route path="/shop/verification" element={<ShopOwnerKyc />} />
               <Route path="/shop/notifications" element={<ShopNotifications />} />
               <Route path="/shop/alerts" element={<ShopNotifications />} />
+              <Route path="/shop/messages" element={<ChatPage />} />
+              <Route path="/shop/chat" element={<ChatPage />} />
               <Route path="/shop/inventory" element={<ManageRentProducts />} />
 
               {/* Quản lý danh sách sản phẩm RENT */}

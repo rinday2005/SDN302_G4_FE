@@ -9,6 +9,7 @@ const shopNavItems = [
   { to: "/shop/thrift/listings", label: "Đồ bán THRIFT", icon: "sell" },
   { to: "/shop/thrift/orders", label: "Đơn bán THRIFT", icon: "local_shipping" },
   { to: "/shop/revenue", label: "Doanh thu", icon: "payments" },
+  { to: "/shop/messages", label: "Tin nhắn", icon: "chat" },
 ];
 
 export const ShopSubNav: React.FC = () => {

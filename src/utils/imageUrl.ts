@@ -3,7 +3,7 @@
  * Fixes relative paths like './src/assets/images/...' to proper root-relative public paths '/images/...',
  * ensuring images load correctly across all nested routes (/rent, /rent/products/:id, /rent/orders/:id, etc.).
  */
-export function normalizeImageUrl(url?: string): string {
+export function normalizeImageUrl(url?: string | null): string {
   if (!url) return '';
   const trimmed = url.trim();
 

@@ -12,7 +12,8 @@ import {
     Package,
     SlidersHorizontal,
     LayoutDashboard,
-    Store
+    Store,
+    MessageSquare,
 } from 'lucide-react';
 import { useCartWishlist } from '../../context/CartWishlistContext';
 
@@ -287,6 +288,18 @@ export const Header: React.FC<HeaderProps> = ({
                                 </Link>
                             )}
 
+                            {/* Messages Icon (hiện khi đã login) */}
+                            {effectiveRole !== 'GUEST' && (
+                                <Link
+                                    aria-label="Messages"
+                                    className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors"
+                                    to="/messages"
+                                    title="Tin nhắn & Hỗ trợ"
+                                >
+                                    <MessageSquare className="w-5 h-5" />
+                                </Link>
+                            )}
+
                             {/* Shopping Bag Icon */}
                             <Link
                                 aria-label="Shopping Bag"
@@ -392,6 +405,15 @@ export const Header: React.FC<HeaderProps> = ({
                                                 <span className="text-[10px] bg-[#EEF2EC] text-[#4A6B53] font-bold px-1.5 py-0.5 rounded-md">
                                                     RENT
                                                 </span>
+                                            </Link>
+
+                                            <Link
+                                                to="/messages"
+                                                onClick={() => setIsProfileDropdownOpen(false)}
+                                                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-[#1C1A18] hover:bg-[#F7F3EC] transition-all group"
+                                            >
+                                                <MessageSquare className="w-4 h-4 text-[#76726B] group-hover:text-[#1C1A18] transition-colors" />
+                                                <span>Tin nhắn &amp; Hỗ trợ</span>
                                             </Link>
 
                                             {/* Quick Link dành riêng cho Shop Owner / Admin trong Dropdown */}
