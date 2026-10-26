@@ -125,9 +125,30 @@ export const ThriftDetail: React.FC = () => {
     toggleWishlist(product.id, 'THRIFT');
   };
 
-  const handleChat = () =>
-    handleProtected(`chat với Shop Owner về "${product.title}"`, `/thrift/${product.slug}`,
-      () => { /* chat action */ });
+  const handleChat = () => {
+    if (user?.role === 'SHOP_OWNER') {
+      navigate('/shop/messages');
+      return;
+    }
+    handleProtected(
+      `chat với Shop Owner về "${product.title}"`,
+      `/thrift/${product.slug || product.id}`,
+      () => {
+        navigate('/messages', {
+          state: {
+            inquiry: {
+              id: product.id,
+              title: product.title,
+              imageUrl: activeImage || product.mainImage || '',
+              priceText: `${product.price.toLocaleString('vi-VN')}₫`,
+              type: 'THRIFT',
+              url: `/thrift/${product.slug || product.id}`,
+            },
+          },
+        });
+      }
+    );
+  };
 
   const closeAuthModal = () => setAuthModal({ open: false, actionName: '', targetUrl: '' });
 

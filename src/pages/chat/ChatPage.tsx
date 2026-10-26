@@ -1,222 +1,247 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useChat } from '../../hooks/useChat';
 import { UserSidebar } from '../../components/layout/UserSidebar';
+import type { ChatParticipant, Conversation } from '../../services/chat.api';
+import { normalizeImageUrl } from '../../utils/imageUrl';
 
-interface ChatMessage {
+export interface ProductInquiryState {
   id: string;
-  sender: 'atelier' | 'customer' | 'system';
-  senderName: string;
-  senderAvatar?: string;
-  senderRole?: string;
-  timestamp: string;
-  content: string;
-  bullets?: string[];
-  photos?: Array<{
-    title: string;
-    url: string;
-  }>;
-  attachment?: {
-    name: string;
-    size: string;
-    type: string;
-  };
-  deliveryPill?: string;
-  systemDetails?: {
-    title: string;
-    amount?: string;
-    code?: string;
-  };
+  title: string;
+  imageUrl?: string;
+  priceText?: string;
+  type: 'RENT' | 'THRIFT';
+  url: string;
 }
+
+// Tìm đối tác trong cuộc trò chuyện (Người kia là ai)
+const getPartner = (conv: Conversation | null, currentUserId: string): ChatParticipant | null => {
+  if (!conv?.participants || conv.participants.length === 0) return null;
+  const partner = conv.participants.find((p) => String(p._id) !== String(currentUserId));
+  return partner || conv.participants[0] || null;
+};
 
 export const ChatPage: React.FC = () => {
   const { user } = useAuth();
+  const userId = user?._id || user?.id || '';
+  const isShopOwner = user?.role === 'SHOP_OWNER';
+
   const [searchParams] = useSearchParams();
-  const orderIdParam = searchParams.get('orderId');
+  const location = useLocation();
+  const locationInquiry = (location.state as { inquiry?: ProductInquiryState })?.inquiry;
+  const [productInquiry, setProductInquiry] = useState<ProductInquiryState | undefined>(locationInquiry);
 
-  // Scroll to top
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  const initialConvId = searchParams.get('conversationId') || searchParams.get('convId');
 
-  // Customer info
-  const customerName = user?.fullName || 'Elena Rostova';
-  const customerAvatar =
-    user?.avatarUrl ||
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuBQ6QWck2gMxKHvp-BNnAYLTShVvi8aIFl7vTNPgzH49Ke6T2FhTntQMSLXaNijMGGnzXd6DY0Yc51u_8UC-77N43IUIBOalIoMpURHOhHZPkgtfYTPe08Ca65SRoXVtfjnZa2TePoqOijnQYTx8v5yspPf3n7u52KwnJtQwy0XLdW-cWKQoBwjyH29OdeTEzMIQ5A1PG9ARzYzwy_B1mz8gQwszq53cnvqgB6t5_Az';
+  const {
+    isConnected,
+    conversations,
+    activeConversation,
+    setActiveConversation,
+    messages,
+    loadingConversations,
+    loadingMessages,
+    isSending,
+    isUploadingImage,
+    partnerTyping,
+    unreadCounts,
+    totalUnreadCount,
+    error: chatError,
+    sendMessage,
+    sendImageMessage,
+    sendTyping,
+    sendStopTyping,
+    refreshConversations,
+  } = useChat(initialConvId);
 
-  // Topic filter
-  const [activeTopic, setActiveTopic] = useState<'all' | 'rent' | 'thrift' | 'contax'>('all');
+  // Search & filter state for conversations (dành cho Shop Owner hoặc tìm kiếm)
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterUnreadOnly, setFilterUnreadOnly] = useState(false);
 
-  // Input & state
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  // Input states
+  const [inputText, setInputText] = useState<string>(() => {
+    if (locationInquiry?.title) {
+      return `Xin chào Shop, mình đang quan tâm đến sản phẩm "${locationInquiry.title}" (${locationInquiry.priceText || ''}). Shop tư vấn giúp mình nhé!`;
+    }
+    return '';
+  });
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
-  // Modals
+  // Modals & previews
+  const [zoomImage, setZoomImage] = useState<{ title?: string; url: string } | null>(null);
   const [isHotlineOpen, setIsHotlineOpen] = useState(false);
-  const [isContractOpen, setIsContractOpen] = useState(false);
-  const [zoomImage, setZoomImage] = useState<{ title: string; url: string } | null>(null);
-
-  // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Messages list state
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    return [
-      {
-        id: 'sys-1',
-        sender: 'system',
-        senderName: 'ReUse Hub Escrow Protocol',
-        timestamp: '10:14 AM',
-        content:
-          'Tiền cọc 38.000.000₫ đã cách ly an toàn. Cửa sổ thẩm định 72h bắt đầu khi đơn vị giao hàng Nanuk bàn giao.',
-        systemDetails: {
-          title: 'Smart Escrow kích hoạt thành công (Hasselblad 907X)',
-          amount: '38.000.000₫',
-          code: '#ESC-998241',
-        },
-      },
-      {
-        id: 'msg-1',
-        sender: 'atelier',
-        senderName: 'Vũ Thanh Tùng (Master Custodian)',
-        senderRole: 'CUSTODIAN',
-        senderAvatar:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBgD0AT7Kf7zh1FWCGtS5UNoE5w02BFo5pBVmKhaNprtLB3NK_ZXDMUX0Z9EksTo5nlrg_XxyFrd7yBBzZbDcefEzU2R2MZ3HK-BwBSHL0Tnq9t2WdQqCvJSeYFuzzp3zLblmYxmMT6wr58VHRXv1a8yPcrilEixvfz0zPZ-12xlqR2I1dyuKOJ0X5V9-MtcWon9621TvJ2Ws0eYhpcKTA5DpQiOpSBXFnYmOlj5Bx-',
-        timestamp: '10:28 AM',
-        content:
-          'Chào bạn Elena. Tôi vừa hoàn tất quy trình hiệu chuẩn quang học Collimator cho thân máy Leica M6 Classic 0.72x (Black Chrome, Series #24819xx) và kiểm tra cơ cấu sensor medium format trên thân máy Hasselblad 907X 50C.\n\nMọi thông số về tốc độ màn trập từ 1/1s đến 1/1000s đều đạt dung sai cực hẹp ±2.1%. Bạn có thể xem ngay video kiểm tra thực tế và các phụ kiện nguyên bản đi kèm bên dưới:',
-        photos: [
-          {
-            title: 'Bàn test #01',
-            url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBgUw4sPIleEmRvVCsVZNueGCIgjQ-KdMrgBXwjb2X5zlJyUQSCuaGNkzQah4kxzk1BoPSW1QZzOyWgI0QLtDh7133pAUhhg61S4M01iKXKsXeyXsMLwgIAkrl4zb8vebNvtxdmmJQ8bvYGDFYsdT7b3_A6UZ_H9T_X8KamEWSLVe_AkmaRFvlnb1iX1arX14Wsgxz2ebmUOrYJXn4tNTAA2YYmor_wcpnuSpYSXdek',
-          },
-          {
-            title: 'Thấu kính & Màn trập',
-            url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDCCMW9gZiOdO9fK2e5jSiVgqJoub4MqpPbzYwXwdIa9pZBbKHpJmJJ2JRKcyIAA5iaV92hggSNk8Lv8Vt2wkR_TFIU2zzOfxTvKn3L_rmzu-VpthEIjQyYqi9zKpTfKaCJ6XJQ-bc2k7r1x9HsgKEfNQjqxVrS63P0yPiMCArAhwKxtbz8i2Z2wku86C-gwwdgc-bi-DCRB9nYohAxa5M9rWESpC9L2euaymBVhx9Q',
-          },
-          {
-            title: 'Phụ kiện kiểm định',
-            url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDI92L-jNzd4ekyAbTuyw6zaYBII0SccjIyVEEUZdoTYPeYRy4nZeScQDJ7L8MGLBqxBWwp_UwxDDT0VZS6ZtfTqg9Lrfi7LPTO19DKVAee1Tkt8pte1ci2esWi64M3sL8NS469NKzru_eirDhvwsXlfj6tRn5dM9dc6G_u9kAaBuiGDSgnOJLE7pkYY7tYkN4iL7m4vbXSLVgR69JlWCk84Gspnh-S5ZE6FJf963Dr',
-          },
-        ],
-        attachment: {
-          name: 'Bien_Ban_Do_Collimator_Leica_M6_072.pdf',
-          size: '3.4 MB',
-          type: 'PDF',
-        },
-      },
-      {
-        id: 'msg-2',
-        sender: 'customer',
-        senderName: customerName,
-        senderAvatar: customerAvatar,
-        timestamp: '10:35 AM',
-        content:
-          'Cảm ơn anh Tùng! Độ chính xác và chi tiết của biên bản test quang học rất ấn tượng.\n\nĐối với đơn Hasselblad 907X, tôi có dự định đem đi chụp dự án kiến trúc tại Đà Lạt cuối tuần này. Nhờ Atelier hỗ trợ thêm:',
-        bullets: [
-          'Bổ sung 01 viên pin dự phòng NP-TX1 (chính hãng)',
-          'Dây đeo cổ thủ công bằng da bò sáp cognac như trong ảnh layout',
-          'Khóa ren chuyển đổi Arca-Swiss plate tương thích tripod Gitzo',
-        ],
-      },
-      {
-        id: 'msg-3',
-        sender: 'atelier',
-        senderName: 'Vũ Thanh Tùng',
-        senderRole: 'CUSTODIAN',
-        senderAvatar:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuCdLeHuSahX_SC8gBcVoJQWJKup41bBSnFdMvL4tTfXEQ1BkY4bKFuO4rRQfAc0gVD7lBQTlx-JA_QtSIpiTlBgXHgMdIEH-4qEOfNnV3gb34SzRHtpxxCa6Bzz8-Qb5a1vUssAkvaJQViSxhPOa5cRDeHKGjyp1yrt4RdIEJp2o1-v9Z_F31fa3m25yyu30T7SPHbOv1lqfnOC7IHolyp3zBx-XMi3DbvcXA5l1Ndk',
-        timestamp: '10:41 AM',
-        content:
-          'Hoàn toàn khả thi, Elena. Tôi đã bổ sung 01 viên pin Hasselblad chính hãng (mức chai 0%) và tấm đế Arca-Swiss bọc nỉ chống trầy vào vali chống sốc Nanuk 935 của bạn mà không tính thêm phí phụ trợ.',
-        deliveryPill:
-          'Kiện hàng đã niêm phong kẹp chì ReUse Hub #SP-7718. Shipper chuyên biệt sẽ xuất phát lúc 14:00 hôm nay.',
-      },
-    ];
-  });
-
-  // Auto-scroll chat to bottom
-  const messageEndRef = useRef<HTMLDivElement>(null);
+  // Scroll to top khi mount
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+    window.scrollTo(0, 0);
+  }, []);
 
-  // Handle send message
-  const handleSendMessage = (textToSend?: string) => {
-    const text = (textToSend || inputText).trim();
-    if (!text) return;
+  // Auto-scroll messages to bottom khi có tin nhắn mới hoặc typing
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, partnerTyping.isTyping]);
 
-    const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sender: 'customer',
-      senderName: customerName,
-      senderAvatar: customerAvatar,
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-      content: text,
-    };
-
-    setMessages((prev) => [...prev, newMsg]);
-    setInputText('');
-
-    // Simulate intelligent atelier reply
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      let replyContent = `Đã ghi nhận yêu cầu của bạn về: "${text}". Atelier Silvergrain đã cập nhật vào hồ sơ đối soát hiện vật.`;
-      let deliveryPill: string | undefined = undefined;
-
-      if (text.includes('bảo hiểm')) {
-        replyContent =
-          'Atelier đã mở rộng gói bảo hiểm Diamond P1 thêm 48 giờ. Mọi rủi ro quang học và trầy xước thấu kính ngoài ý muốn đều được bảo hiểm bồi hoàn 100%.';
-      } else if (text.includes('Gia hạn')) {
-        replyContent =
-          'Yêu cầu gia hạn thêm 02 ngày thuê đã được duyệt tự động. Hợp đồng Smart Escrow sẽ duy trì mức cọc hiện tại đến hết ngày 21/03/2026.';
-      } else if (text.includes('màn trập') || text.includes('video')) {
-        replyContent =
-          'Đã gửi video ghi hình tốc trập 1/1000s của Leica M6 qua hệ thống lab. Bạn có thể kiểm tra trực tiếp độ đồng pha rèm vải.';
-        deliveryPill = 'Tệp video kiểm tra cơ học #VID-M6-1000S đã đính kèm vào hồ sơ lưu ký.';
-      } else if (text.includes('Filter') || text.includes('Zeiss')) {
-        replyContent =
-          'Hiện xưởng có sẵn kính lọc UV Carl Zeiss T* 39mm và 46mm nguyên hộp chống lóa T*. Tôi đã gửi kèm theo thùng Nanuk của bạn.';
+  // Giải phóng URL preview khi đổi ảnh
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
       }
+    };
+  }, [imagePreviewUrl]);
 
-      const replyMsg: ChatMessage = {
-        id: `reply-${Date.now()}`,
-        sender: 'atelier',
-        senderName: 'Vũ Thanh Tùng (Master Custodian)',
-        senderRole: 'CUSTODIAN',
-        senderAvatar:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuCdLeHuSahX_SC8gBcVoJQWJKup41bBSnFdMvL4tTfXEQ1BkY4bKFuO4rRQfAc0gVD7lBQTlx-JA_QtSIpiTlBgXHgMdIEH-4qEOfNnV3gb34SzRHtpxxCa6Bzz8-Qb5a1vUssAkvaJQViSxhPOa5cRDeHKGjyp1yrt4RdIEJp2o1-v9Z_F31fa3m25yyu30T7SPHbOv1lqfnOC7IHolyp3zBx-XMi3DbvcXA5l1Ndk',
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        content: replyContent,
-        deliveryPill,
-      };
+  // Xử lý chọn ảnh từ file picker
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      setMessages((prev) => [...prev, replyMsg]);
-    }, 1200);
+    if (!file.type.startsWith('image/')) {
+      showToast('Vui lòng chọn tệp định dạng hình ảnh (PNG, JPG, WEBP)');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Dung lượng ảnh tối đa 10MB');
+      return;
+    }
+
+    setSelectedImageFile(file);
+    const preview = URL.createObjectURL(file);
+    setImagePreviewUrl(preview);
+  };
+
+  const handleClearSelectedImage = () => {
+    setSelectedImageFile(null);
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const activePartner = useMemo(() => getPartner(activeConversation, userId), [activeConversation, userId]);
+
+  // Format timestamp hiển thị tin nhắn
+  const formatMessageTime = (isoString?: string) => {
+    if (!isoString) return '';
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  // Format ngày phân cách
+  const formatMessageDate = (isoString?: string) => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      const today = new Date();
+      if (d.toDateString() === today.toDateString()) {
+        return 'Hôm nay';
+      }
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      if (d.toDateString() === yesterday.toDateString()) {
+        return 'Hôm qua';
+      }
+      return d.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  // Xử lý gửi tin nhắn
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    const textToSend = inputText.trim();
+    if (!textToSend && !selectedImageFile) return;
+
+    if (selectedImageFile) {
+      const success = await sendImageMessage(selectedImageFile, textToSend);
+      if (success) {
+        handleClearSelectedImage();
+        setInputText('');
+      } else {
+        showToast('Không thể gửi ảnh, vui lòng thử lại');
+      }
+    } else {
+      const success = await sendMessage(textToSend);
+      if (success) {
+        setInputText('');
+      } else {
+        showToast('Không thể gửi tin nhắn, vui lòng thử lại');
+      }
+    }
+
+    sendStopTyping();
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
   };
 
   // Quick preset pills handler
   const handlePresetClick = (presetText: string) => {
-    handleSendMessage(presetText);
+    sendMessage(presetText);
   };
 
+  // Danh sách conversations đã lọc theo tìm kiếm và bộ lọc chưa đọc
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((c) => {
+      const partner = getPartner(c, userId);
+      const partnerName = partner?.fullName || 'Người dùng';
+      const lastText = c.lastMessage?.text || '';
+
+      const matchSearch =
+        !searchTerm.trim() ||
+        partnerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        lastText.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const unread = (c._id && unreadCounts[c._id]) || 0;
+      const matchUnread = !filterUnreadOnly || unread > 0;
+
+      return matchSearch && matchUnread;
+    });
+  }, [conversations, searchTerm, filterUnreadOnly, unreadCounts, userId]);
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#FBF9F5] text-brand-charcoal antialiased selection:bg-[#E8E2D5]">
-      {/* ── TOP BANNER (Circular Escrow Commitment) ── */}
-      <div className="bg-brand-charcoal text-[#EBE6DD] text-[11px] sm:text-xs font-medium tracking-wide py-1.5 px-4 text-center border-b border-[#36322D]">
-        <span>THUÊ NHỮNG GÌ BẠN CẦN · TÁI SỬ DỤNG NHỮNG GÌ ĐÃ CÓ · BẢO HIỂM HÀNG HÓA MINH BẠCH 100% VỚI SMART ESCROW</span>
+    <div className="min-h-screen flex flex-col bg-[#FAF8F5] text-[#1C1A18] antialiased selection:bg-[#E8E2D5]">
+      {/* ── TOP HEADER BANNER ── */}
+      <div className="bg-[#1C1A18] text-[#EBE6DD] text-[11px] sm:text-xs font-medium tracking-wide py-1.5 px-4 text-center border-b border-[#36322D]">
+        <span>
+          {isShopOwner
+            ? 'KÊNH QUẢN TRỊ SHOP OWNER · TRÒ CHUYỆN VÀ TƯ VẤN KHÁCH HÀNG TRỰC TIẾP REALTIME'
+            : 'TRÒ CHUYỆN TRỰC TIẾP VỚI SHOP OWNER DUY NHẤT CỦA REUSE HUB · SMART ESCROW BẢO VỆ 100%'}
+        </span>
       </div>
 
       {/* ── TOAST NOTIFICATION ── */}
       {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 border bg-brand-charcoal text-white border-brand-charcoal/80 animate-fadeIn">
-          <span className="material-symbols-outlined text-lg text-[#E7C890]">verified</span>
+        <div className="fixed top-6 right-6 z-50 px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border bg-[#1C1A18] text-white border-white/20 animate-fadeIn">
+          <span className="material-symbols-outlined text-lg text-[#E7C890]">info</span>
           <p className="text-xs font-semibold max-w-sm">{toastMessage}</p>
           <button
             type="button"
@@ -228,727 +253,912 @@ export const ChatPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── MAIN APP CONTAINER (Persistent Left Sidebar + Main Content) ── */}
-      <div className="flex-1 max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8">
-        {/* PERSISTENT CUSTOMER SIDEBAR */}
-        <aside className="w-64 shrink-0 hidden lg:block">
-          <UserSidebar activeKey="chat" />
-        </aside>
+      {/* ── MAIN CHAT VIEW CONTAINER ── */}
+      <div className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 lg:py-6 flex gap-6">
+        {/* Persistent User Sidebar cho khách hàng (ẩn khi là Shop Owner) */}
+        {!isShopOwner && (
+          <aside className="w-64 shrink-0 hidden lg:block">
+            <UserSidebar activeKey="chat" />
+          </aside>
+        )}
 
-        {/* MAIN DASHBOARD CONTENT AREA */}
-        <main className="flex-1 min-w-0 space-y-6">
-          <div className="flex flex-col w-full">
-            {/* Page Context Sub-Navigation & Header Ribbon */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-6 border-b border-brand-border/60">
-              <div>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-brand-muted font-bold mb-1.5">
-                  <span className="inline-block w-2 h-2 rounded-full bg-brand-sage animate-pulse" />
-                  <span>Concierge Kỹ thuật &amp; Giám định Độc quyền</span>
-                  <span className="text-brand-border">/</span>
-                  <span className="text-brand-charcoal">Phòng Đối Thoại Trực Tiếp</span>
-                </div>
-                <h1 className="font-serif text-2xl lg:text-3xl text-brand-charcoal font-bold tracking-tight">
-                  Atelier Silvergrain Concierge
-                </h1>
-                <p className="text-xs text-brand-muted mt-1 font-sans">
-                  Kênh trao đổi trực tiếp độc quyền giữa khách hàng{' '}
-                  <span className="font-semibold text-brand-charcoal">{customerName}</span> và Trưởng Kỹ thuật Viên Thẩm
-                  định <span className="font-semibold text-brand-charcoal">Vũ Thanh Tùng</span>.
-                </p>
+        {/* WORKSPACE CHAT CHÍNH (2 Khối: Danh sách cuộc hội thoại + Khung chat) */}
+        <div className="flex-1 min-w-0 flex flex-col h-[calc(100vh-130px)] bg-white rounded-3xl border border-[#E8E4DC] shadow-sm overflow-hidden">
+          
+          {/* HEADER TRÊN CÙNG CỦA KHUNG WORKSPACE */}
+          <div className="px-6 py-3.5 bg-[#F6F3ED] border-b border-[#E8E4DC] flex items-center justify-between gap-4 shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-[#1C1A18] text-white flex items-center justify-center shrink-0 shadow-xs">
+                <span className="material-symbols-outlined text-xl">forum</span>
               </div>
-
-              {/* Atelier Verification Badge */}
-              <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-2xl border border-brand-border shadow-2xs self-start md:self-auto">
-                <div className="relative">
-                  <img
-                    className="w-10 h-10 rounded-full object-cover ring-2 ring-brand-sage/30"
-                    alt="Chân dung nghệ nhân giám định Vũ Thanh Tùng"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTh1J0ai_UCuCvrMaON5TH-yoipsRqE6EideHgA7cymyCQOyd7H9Gw_xObXbBp8bkPgmE0BuAl2npsRyu3eTbl4iuW7l0_G-Dce4HOpPkE8bBaix3pG4jYpf6ku54qL4z3Krpia8DnirFBvMIB2SR_YuOXg_tz8hzKhpl-iFnsuzXZ4oOj4q2oOzttKBJt5a6HpfQM7egOYNk5zcFbp7PJNAzlohAMWXzSDuqsJWqj"
-                  />
-                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-brand-sage rounded-full border-2 border-white" />
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-brand-charcoal">Vũ Thanh Tùng</span>
-                    <span className="text-[9px] bg-brand-charcoal text-white font-semibold px-1.5 py-0.5 rounded tracking-wider">
-                      CUSTODIAN
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-brand-muted flex items-center gap-1 mt-0.5">
-                    <span className="material-symbols-outlined text-[12px] text-brand-sage">verified</span>
-                    Chứng nhận Giám định Tier-1 · SLA 15 phút
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="font-serif text-lg font-bold text-[#1C1A18] truncate">
+                    {isShopOwner ? 'Hộp thư tin nhắn Shop Owner' : 'ReUse Hub Concierge Chat'}
+                  </h1>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      isConnected
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border border-amber-300'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        isConnected ? 'bg-emerald-600 animate-pulse' : 'bg-amber-600'
+                      }`}
+                    />
+                    <span>{isConnected ? 'Realtime Online' : 'Đang đồng bộ'}</span>
                   </span>
                 </div>
+                <p className="text-[11px] text-[#76726B] truncate">
+                  {isShopOwner
+                    ? 'Quản lý trao đổi, tư vấn hiện vật và giải đáp thắc mắc cho từng khách hàng'
+                    : 'Kênh đối thoại độc quyền với Shop Owner duy nhất của hệ thống ReUse Hub'}
+                </p>
               </div>
             </div>
 
-            {/* Filter Context Ribbons / Topic Chips */}
-            <div className="py-4 flex flex-wrap items-center justify-between gap-3 border-b border-brand-border/40">
-              <div className="flex items-center gap-2 overflow-x-auto thin-scrollbar pb-1 md:pb-0">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mr-1">
-                  Luồng trao đổi:
-                </span>
+            {/* Nút hành động trên Header */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  refreshConversations();
+                  showToast('Đang làm mới danh sách cuộc hội thoại...');
+                }}
+                className="p-2 text-[#76726B] hover:text-[#1C1A18] hover:bg-[#EAE6DE] rounded-xl transition-colors cursor-pointer"
+                title="Làm mới hội thoại"
+              >
+                <span className="material-symbols-outlined text-lg">refresh</span>
+              </button>
+              {!isShopOwner && (
                 <button
                   type="button"
-                  onClick={() => setActiveTopic('all')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeTopic === 'all'
-                      ? 'bg-brand-charcoal text-white shadow-2xs'
-                      : 'bg-white hover:bg-brand-surface border border-brand-border text-brand-charcoal'
-                  }`}
+                  onClick={() => setIsHotlineOpen(true)}
+                  className="px-3 py-1.5 rounded-xl border border-[#D5D0C6] bg-white hover:bg-[#F6F3ED] text-xs font-semibold text-[#1C1A18] flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                 >
-                  <span className="material-symbols-outlined text-sm">all_inbox</span>
-                  Tất cả phiên
+                  <span className="material-symbols-outlined text-sm text-emerald-700">call</span>
+                  <span className="hidden sm:inline">Hotline Thẩm định</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('rent')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'rent'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-charcoal'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-brand-sage" />
-                  Thuê #RH-RNT-2024-8845 (Hasselblad 907X)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('thrift')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'thrift'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-charcoal'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#C88A37]" />
-                  Thrift #RH-THF-2025-0814 (Leica M6 Classic)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('contax')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'contax'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-muted hover:text-brand-charcoal'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">help_outline</span>
-                  Tư vấn quang sai Contax T2
-                </button>
-              </div>
-
-              {/* Quick Status Pill */}
-              <div className="text-[11px] font-medium text-brand-muted flex items-center gap-2">
-                <span className="material-symbols-outlined text-sm text-brand-sage">lock</span>
-                Kênh mã hóa đối kiểm Smart Escrow tuần hoàn
-              </div>
+              )}
             </div>
+          </div>
 
-            {/* Master Chat Workspace (2 Columns: Message Salon & Reference Specimen Drawer) */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mt-6 items-start">
-              {/* LEFT: Main Correspondence Salon (8 Cols) */}
-              <div className="xl:col-span-8 flex flex-col bg-white rounded-3xl border border-brand-border/80 shadow-sm overflow-hidden">
-                {/* Thread Header Bar */}
-                <div className="px-6 py-4 bg-brand-surface/70 border-b border-brand-border/60 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-brand-sand flex items-center justify-center text-brand-charcoal">
-                      <span className="material-symbols-outlined text-xl">precision_manufacturing</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-sm font-bold text-brand-charcoal">
-                          {activeTopic === 'rent'
-                            ? 'Phiên kiểm định: Hasselblad 907X 50C (Thuê RENT)'
-                            : activeTopic === 'thrift'
-                            ? 'Phiên lưu kho: Leica M6 Classic 0.72x (Mua THRIFT)'
-                            : activeTopic === 'contax'
-                            ? 'Tư vấn quang sai & Đo tốc cơ khí Contax T2'
-                            : 'Phiên thẩm định: Leica M6 Classic & Hasselblad 907X'}
-                        </h2>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-sage/15 text-brand-sage uppercase">
-                          Đang mở
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-brand-muted">
-                        Mã tham chiếu đối soát:{' '}
-                        <span className="font-mono text-brand-charcoal">
-                          {orderIdParam ? `#REF-${orderIdParam}` : 'SES-2024-VN-0982'}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
+          {/* NỘI DUNG 2 CỘT CHAT */}
+          <div className="flex-1 flex overflow-hidden">
+            
+            {/* ── CỘT TRÁI: DANH SÁCH CUỘC HỘI THOẠI (CONVERSATION LIST) ── */}
+            <div
+              className={`w-full md:w-80 lg:w-96 border-r border-[#E8E4DC] flex flex-col bg-[#FDFBF7] shrink-0 ${
+                activeConversation ? 'hidden md:flex' : 'flex'
+              }`}
+            >
+              {/* Thanh tìm kiếm & bộ lọc */}
+              <div className="p-3.5 border-b border-[#E8E4DC]/80 space-y-2.5">
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-2.5 text-stone-400 text-lg">
+                    search
+                  </span>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder={
+                      isShopOwner ? 'Tìm theo tên khách, nội dung...' : 'Tìm kiếm tin nhắn...'
+                    }
+                    className="w-full bg-white border border-[#E8E4DC] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[#1C1A18] placeholder-stone-400 focus:outline-none focus:border-[#1C1A18] transition-colors"
+                  />
+                  {searchTerm && (
                     <button
                       type="button"
-                      className="p-2 text-brand-muted hover:text-brand-charcoal hover:bg-brand-sand/50 rounded-xl transition-colors cursor-pointer"
-                      title="Tải biên bản đối soát"
-                      onClick={() => {
-                        showToast('Đang tải biên bản đối soát kỹ thuật số AES-256...');
-                        window.print();
-                      }}
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-700 text-xs"
                     >
-                      <span className="material-symbols-outlined text-lg">folder_open</span>
+                      ✕
                     </button>
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 rounded-xl border border-brand-border bg-white hover:bg-brand-sand/30 text-xs font-semibold text-brand-charcoal flex items-center gap-1.5 transition-colors cursor-pointer"
-                      title="Gọi khẩn cấp Atelier Concierge"
-                      onClick={() => setIsHotlineOpen(true)}
-                    >
-                      <span className="material-symbols-outlined text-sm text-brand-sage">call</span>
-                      <span className="hidden sm:inline">Hotline Kỹ thuật</span>
-                    </button>
-                  </div>
+                  )}
                 </div>
 
-                {/* Scrollable Message Canvas */}
-                <div className="p-6 space-y-6 max-h-[640px] overflow-y-auto thin-scrollbar bg-[#FAF8F5]">
-                  {/* Day Timestamp Divider */}
-                  <div className="flex items-center justify-center my-2">
-                    <div className="h-px bg-brand-border/80 flex-1" />
-                    <span className="px-4 text-[10px] uppercase font-bold tracking-widest text-brand-muted bg-[#FAF8F5]">
-                      Hôm nay, 14 Tháng 3, 2026
-                    </span>
-                    <div className="h-px bg-brand-border/80 flex-1" />
+                {/* Filter tags (Tất cả / Chưa đọc) */}
+                <div className="flex items-center justify-between text-xs pt-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setFilterUnreadOnly(false)}
+                      className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all cursor-pointer ${
+                        !filterUnreadOnly
+                          ? 'bg-[#1C1A18] text-white font-semibold'
+                          : 'bg-white hover:bg-stone-100 text-[#76726B] border border-[#E8E4DC]'
+                      }`}
+                    >
+                      Tất cả ({conversations.length})
+                    </button>
+                    {totalUnreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFilterUnreadOnly(true)}
+                        className={`px-2.5 py-1 rounded-lg font-medium text-[11px] flex items-center gap-1 transition-all cursor-pointer ${
+                          filterUnreadOnly
+                            ? 'bg-rose-600 text-white font-semibold'
+                            : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
+                        }`}
+                      >
+                        <span>Chưa đọc</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[9px] font-bold">
+                          {totalUnreadCount}
+                        </span>
+                      </button>
+                    )}
                   </div>
 
-                  {/* Messages Mapping */}
-                  {messages.map((msg) => {
-                    if (msg.sender === 'system') {
-                      return (
-                        <div
-                          key={msg.id}
-                          className="mx-auto max-w-md bg-white/90 border border-brand-border/70 rounded-2xl p-3.5 shadow-2xs flex items-start gap-3"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-brand-sage-light text-brand-sage flex items-center justify-center shrink-0 mt-0.5">
-                            <span className="material-symbols-outlined text-base">verified_user</span>
-                          </div>
-                          <div className="flex-1 text-xs">
-                            <p className="font-bold text-brand-charcoal">{msg.systemDetails?.title}</p>
-                            <p className="text-[11px] text-brand-muted mt-0.5">{msg.content}</p>
-                            <span className="text-[10px] text-brand-taupe mt-1 block font-mono">
-                              {msg.timestamp} · Mã giao dịch {msg.systemDetails?.code}
+                  {/* Thông tin mô hình 1 Shop Owner */}
+                  {!isShopOwner && (
+                    <span className="text-[10px] text-[#76726B] font-medium flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                      Shop Owner Duy Nhất
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Danh sách hội thoại cuộn */}
+              <div className="flex-1 overflow-y-auto thin-scrollbar p-2 space-y-1.5">
+                {loadingConversations ? (
+                  <div className="p-8 text-center text-xs text-[#76726B] space-y-2">
+                    <div className="w-6 h-6 border-2 border-[#1C1A18] border-t-transparent rounded-full animate-spin mx-auto" />
+                    <p>Đang tải danh sách cuộc trò chuyện...</p>
+                  </div>
+                ) : filteredConversations.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-[#76726B] space-y-2">
+                    <span className="material-symbols-outlined text-3xl text-stone-300">
+                      chat_bubble_outline
+                    </span>
+                    <p className="font-medium text-stone-600">
+                      {filterUnreadOnly
+                        ? 'Không có tin nhắn chưa đọc'
+                        : searchTerm
+                        ? 'Không tìm thấy cuộc trò chuyện nào'
+                        : 'Chưa có cuộc trò chuyện nào'}
+                    </p>
+                  </div>
+                ) : (
+                  filteredConversations.map((conv) => {
+                    const partner = getPartner(conv, userId);
+                    const partnerName = partner?.fullName || (isShopOwner ? 'Khách hàng' : 'Atelier Shop Owner');
+                    const partnerAvatar = normalizeImageUrl(partner?.avatarUrl);
+                    const partnerRole = partner?.role || (isShopOwner ? 'USER' : 'SHOP_OWNER');
+
+                    const isSelected = activeConversation?._id === conv._id;
+                    const unread = (conv._id && unreadCounts[conv._id]) || 0;
+                    const lastMsg = conv.lastMessage;
+                    const timeStr = formatMessageTime(lastMsg?.createdAt || conv.updatedAt);
+
+                    return (
+                      <div
+                        key={conv._id}
+                        onClick={() => setActiveConversation(conv)}
+                        className={`p-3 rounded-2xl flex items-start gap-3 transition-all cursor-pointer border ${
+                          isSelected
+                            ? 'bg-[#1C1A18] text-white border-[#1C1A18] shadow-sm'
+                            : 'bg-white hover:bg-[#F3EFE8] border-[#E8E4DC]/80 text-[#1C1A18]'
+                        }`}
+                      >
+                        {/* Avatar có indicator online */}
+                        <div className="relative shrink-0">
+                          {partnerAvatar ? (
+                            <img
+                              src={partnerAvatar}
+                              alt={partnerName}
+                              className={`w-11 h-11 rounded-full object-cover border ${
+                                isSelected ? 'border-white/30' : 'border-[#E8E4DC]'
+                              }`}
+                            />
+                          ) : (
+                            <div
+                              className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-xs ${
+                                isSelected
+                                  ? 'bg-white/20 text-white'
+                                  : 'bg-[#EAE6DE] text-[#1C1A18]'
+                              }`}
+                            >
+                              {partnerName.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          {/* Online status indicator */}
+                          <span
+                            className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 ${
+                              isSelected ? 'border-[#1C1A18]' : 'border-white'
+                            } ${isConnected ? 'bg-emerald-500' : 'bg-stone-400'}`}
+                            title={isConnected ? 'Đang online' : 'Ngoại tuyến'}
+                          />
+                        </div>
+
+                        {/* Nội dung tóm tắt cuộc hội thoại */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span
+                              className={`text-xs font-bold truncate ${
+                                isSelected ? 'text-white' : 'text-[#1C1A18]'
+                              }`}
+                            >
+                              {partnerName}
+                            </span>
+                            <span
+                              className={`text-[10px] shrink-0 ${
+                                isSelected ? 'text-stone-300' : 'text-[#76726B]'
+                              }`}
+                            >
+                              {timeStr}
                             </span>
                           </div>
-                        </div>
-                      );
-                    }
 
-                    if (msg.sender === 'customer') {
-                      return (
-                        <div key={msg.id} className="flex items-start gap-3.5 max-w-xl ml-auto flex-row-reverse">
-                          <img
-                            className="w-9 h-9 rounded-full object-cover ring-1 ring-brand-border shrink-0 mt-1"
-                            src={msg.senderAvatar || customerAvatar}
-                            alt={msg.senderName}
-                          />
-                          <div className="space-y-1.5 flex-1 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="text-[10px] text-brand-muted">{msg.timestamp}</span>
-                              <span className="text-xs font-bold text-brand-charcoal">{msg.senderName}</span>
-                            </div>
-                            <div className="bg-brand-charcoal text-white p-4 rounded-2xl rounded-tr-sm text-xs leading-relaxed shadow-sm space-y-2 text-left">
-                              <p className="whitespace-pre-line">{msg.content}</p>
-                              {msg.bullets && msg.bullets.length > 0 && (
-                                <ul className="list-disc list-inside space-y-1 text-white/90 text-[11px] pt-1">
-                                  {msg.bullets.map((b, bIdx) => (
-                                    <li key={bIdx}>{b}</li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span
+                              className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold tracking-wider uppercase ${
+                                isSelected
+                                  ? 'bg-white/20 text-white'
+                                  : partnerRole === 'SHOP_OWNER'
+                                  ? 'bg-[#EBE5DA] text-[#423C34]'
+                                  : 'bg-blue-50 text-blue-700'
+                              }`}
+                            >
+                              {partnerRole === 'SHOP_OWNER' ? 'SHOP OWNER' : 'KHÁCH HÀNG'}
+                            </span>
                           </div>
-                        </div>
-                      );
-                    }
 
-                    // Atelier message
-                    return (
-                      <div key={msg.id} className="flex items-start gap-3.5 max-w-2xl">
-                        <img
-                          className="w-9 h-9 rounded-full object-cover ring-1 ring-brand-border shrink-0 mt-1"
-                          src={
-                            msg.senderAvatar ||
-                            'https://lh3.googleusercontent.com/aida-public/AB6AXuBgD0AT7Kf7zh1FWCGtS5UNoE5w02BFo5pBVmKhaNprtLB3NK_ZXDMUX0Z9EksTo5nlrg_XxyFrd7yBBzZbDcefEzU2R2MZ3HK-BwBSHL0Tnq9t2WdQqCvJSeYFuzzp3zLblmYxmMT6wr58VHRXv1a8yPcrilEixvfz0zPZ-12xlqR2I1dyuKOJ0X5V9-MtcWon9621TvJ2Ws0eYhpcKTA5DpQiOpSBXFnYmOlj5Bx-'
-                          }
-                          alt={msg.senderName}
-                        />
-                        <div className="space-y-1.5 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-brand-charcoal">{msg.senderName}</span>
-                            <span className="text-[10px] text-brand-muted">{msg.timestamp}</span>
-                          </div>
-                          <div className="bg-white p-4 rounded-2xl rounded-tl-sm border border-brand-border text-xs text-brand-charcoal leading-relaxed shadow-2xs space-y-3">
-                            <p className="whitespace-pre-line">{msg.content}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p
+                              className={`text-[11px] truncate leading-tight ${
+                                isSelected
+                                  ? 'text-stone-200'
+                                  : unread > 0
+                                  ? 'font-bold text-[#1C1A18]'
+                                  : 'text-[#76726B]'
+                              }`}
+                            >
+                              {lastMsg?.imageUrl && !lastMsg?.text
+                                ? '📷 [Hình ảnh đính kèm]'
+                                : lastMsg?.text || 'Chưa có tin nhắn'}
+                            </p>
 
-                            {/* Photo gallery preview */}
-                            {msg.photos && msg.photos.length > 0 && (
-                              <div className="grid grid-cols-3 gap-2 pt-1">
-                                {msg.photos.map((ph, pIdx) => (
-                                  <div
-                                    key={pIdx}
-                                    className="relative group rounded-xl overflow-hidden aspect-4/3 border border-brand-border/60 cursor-pointer"
-                                    onClick={() => setZoomImage({ title: ph.title, url: ph.url })}
-                                  >
-                                    <img
-                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                      src={ph.url}
-                                      alt={ph.title}
-                                    />
-                                    <span className="absolute bottom-1 left-1.5 text-[9px] bg-black/70 text-white font-mono px-1 rounded">
-                                      {ph.title}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* PDF Attachment card */}
-                            {msg.attachment && (
-                              <div className="mt-2 flex items-center justify-between p-3 rounded-xl bg-brand-surface border border-brand-border/70 hover:bg-brand-sand/40 transition-colors">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-lg bg-[#C84337]/10 text-[#C84337] flex items-center justify-center font-bold text-xs">
-                                    PDF
-                                  </div>
-                                  <div>
-                                    <p className="text-xs font-bold text-brand-charcoal">{msg.attachment.name}</p>
-                                    <p className="text-[10px] text-brand-muted">
-                                      {msg.attachment.size} · Ký số bởi Atelier Silvergrain Lab
-                                    </p>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="px-3 py-1 rounded-lg bg-white border border-brand-border text-[11px] font-semibold text-brand-charcoal hover:bg-brand-surface shadow-2xs flex items-center gap-1 cursor-pointer"
-                                  onClick={() => {
-                                    showToast('Đang tải xuống biên bản đo Collimator...');
-                                    window.print();
-                                  }}
-                                >
-                                  <span className="material-symbols-outlined text-sm">download</span>
-                                  Tải về
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Delivery Seal Pill */}
-                            {msg.deliveryPill && (
-                              <div className="p-2.5 rounded-xl bg-brand-sage-light text-brand-sage font-medium text-[11px] flex items-center gap-2">
-                                <span className="material-symbols-outlined text-base">local_shipping</span>
-                                <span>{msg.deliveryPill}</span>
-                              </div>
+                            {/* Badge tin nhắn chưa đọc */}
+                            {unread > 0 && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-bold animate-pulse">
+                                {unread > 99 ? '99+' : unread}
+                              </span>
                             )}
                           </div>
                         </div>
                       </div>
                     );
-                  })}
+                  })
+                )}
+              </div>
 
-                  {/* Typing Indicator */}
-                  {isTyping && (
-                    <div className="flex items-center gap-2 text-xs text-brand-muted italic pl-12 animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-brand-sage animate-ping" />
-                      <span>Vũ Thanh Tùng đang phản hồi câu hỏi kỹ thuật...</span>
+              {/* Banner chân cột trái: Bảo chứng & quy tắc cách ly tin nhắn */}
+              <div className="p-3 bg-[#F2EDE4]/80 border-t border-[#E8E4DC] text-[10px] text-[#76726B] flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm text-emerald-700 shrink-0">
+                  security
+                </span>
+                <span>
+                  {isShopOwner
+                    ? 'Mỗi cuộc trò chuyện được phân tách độc lập giữa từng khách hàng.'
+                    : 'Cuộc trò chuyện được bảo mật, mã hóa độc quyền giữa bạn và Shop Owner.'}
+                </span>
+              </div>
+            </div>
+
+            {/* ── CỘT PHẢI: KHUNG CHAT CHI TIẾT (CHAT PANE) ── */}
+            <div
+              className={`flex-1 flex flex-col bg-white overflow-hidden ${
+                !activeConversation ? 'hidden md:flex' : 'flex'
+              }`}
+            >
+              {activeConversation ? (
+                <>
+                  {/* THANH THÔNG TIN ĐỐI TÁC TRONG PHÒNG CHAT */}
+                  <div className="px-5 py-3.5 bg-white border-b border-[#E8E4DC] flex items-center justify-between gap-3 shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {/* Nút Back dành cho mobile */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveConversation(null)}
+                        className="md:hidden p-1.5 text-stone-600 hover:text-stone-900 rounded-lg hover:bg-stone-100"
+                        title="Quay lại danh sách"
+                      >
+                        <span className="material-symbols-outlined text-xl">arrow_back</span>
+                      </button>
+
+                      {/* Avatar đối tác */}
+                      <div className="relative shrink-0">
+                        {normalizeImageUrl(activePartner?.avatarUrl) ? (
+                          <img
+                            src={normalizeImageUrl(activePartner?.avatarUrl)}
+                            alt={activePartner?.fullName}
+                            className="w-10 h-10 rounded-full object-cover border border-[#E8E4DC]"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-[#EAE6DE] text-[#1C1A18] flex items-center justify-center font-bold text-xs">
+                            {(activePartner?.fullName || 'KH').slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span
+                          className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                            isConnected ? 'bg-emerald-500' : 'bg-stone-400'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-sm font-bold text-[#1C1A18] truncate">
+                            {activePartner?.fullName ||
+                              (isShopOwner ? 'Khách hàng' : 'Vũ Thanh Tùng (Shop Owner)')}
+                          </h2>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-[#EAE6DE] text-[#423C34] uppercase tracking-wider">
+                            {activePartner?.role === 'SHOP_OWNER'
+                              ? 'SHOP OWNER'
+                              : 'KHÁCH HÀNG'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-[#76726B]">
+                          <span className="flex items-center gap-1">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isConnected ? 'bg-emerald-600 animate-pulse' : 'bg-stone-400'
+                              }`}
+                            />
+                            <span>{isConnected ? 'Đang trực tuyến' : 'Ngoại tuyến'}</span>
+                          </span>
+                          <span>·</span>
+                          <span className="truncate">{activePartner?.email || 'Hỗ trợ 24/7'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tiện ích nhanh */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          showToast('Đang tạo bản sao lưu biên bản đối thoại...');
+                          window.print();
+                        }}
+                        className="p-2 text-stone-500 hover:text-stone-800 hover:bg-stone-100 rounded-xl transition-colors cursor-pointer"
+                        title="In biên bản đối thoại"
+                      >
+                        <span className="material-symbols-outlined text-lg">print</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsHotlineOpen(true)}
+                        className="p-2 text-stone-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors cursor-pointer"
+                        title="Hotline hỗ trợ"
+                      >
+                        <span className="material-symbols-outlined text-lg">call</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* KHUNG TIN NHẮN (MESSAGES CANVAS) */}
+                  <div className="flex-1 p-4 sm:p-6 overflow-y-auto thin-scrollbar bg-[#FAF8F5] space-y-4">
+                    {loadingMessages ? (
+                      <div className="p-12 text-center text-xs text-[#76726B] space-y-2">
+                        <div className="w-6 h-6 border-2 border-[#1C1A18] border-t-transparent rounded-full animate-spin mx-auto" />
+                        <p>Đang đồng bộ lịch sử tin nhắn...</p>
+                      </div>
+                    ) : messages.length === 0 ? (
+                      /* Màn hình chào mừng khi chưa có tin nhắn */
+                      <div className="max-w-md mx-auto my-12 text-center p-6 rounded-3xl bg-white border border-[#E8E4DC] shadow-2xs space-y-3">
+                        <div className="w-12 h-12 rounded-2xl bg-[#F6F3ED] text-[#1C1A18] flex items-center justify-center mx-auto">
+                          <span className="material-symbols-outlined text-2xl">waving_hand</span>
+                        </div>
+                        <h3 className="font-serif text-base font-bold text-[#1C1A18]">
+                          {isShopOwner
+                            ? 'Bắt đầu cuộc trò chuyện với khách hàng'
+                            : 'Chào mừng bạn đến với kênh Concierge ReUse Hub'}
+                        </h3>
+                        <p className="text-xs text-[#76726B] leading-relaxed">
+                          {isShopOwner
+                            ? 'Giải đáp thắc mắc về hiện vật thuê hoặc mua thrift để gia tăng độ hài lòng của khách hàng.'
+                            : 'Shop Owner luôn sẵn sàng hỗ trợ bạn về tình trạng máy, kiểm định quang học, hợp đồng thuê và ví ký quỹ Smart Escrow.'}
+                        </p>
+                        {!isShopOwner && (
+                          <div className="pt-2 flex flex-wrap justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handlePresetClick('Xin chào Shop, mình muốn hỏi về đơn hàng thuê')}
+                              className="px-3 py-1.5 rounded-full bg-[#F6F3ED] hover:bg-[#EAE6DE] text-xs text-[#1C1A18] font-medium transition-colors"
+                            >
+                              💬 Hỏi về đơn thuê
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePresetClick('Shop cho mình hỏi về chính sách cọc Smart Escrow nhé')}
+                              className="px-3 py-1.5 rounded-full bg-[#F6F3ED] hover:bg-[#EAE6DE] text-xs text-[#1C1A18] font-medium transition-colors"
+                            >
+                              🛡️ Tiền cọc Escrow
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Danh sách tin nhắn */
+                      messages.map((msg, index) => {
+                        const senderIdStr =
+                          typeof msg.senderId === 'string'
+                            ? msg.senderId
+                            : msg.senderId?._id;
+
+                        const isMine = String(senderIdStr) === String(userId);
+                        const senderName =
+                          typeof msg.senderId === 'object' && msg.senderId?.fullName
+                            ? msg.senderId.fullName
+                            : isMine
+                            ? 'Tôi'
+                            : activePartner?.fullName || 'Đối tác';
+
+                        const senderAvatar =
+                          typeof msg.senderId === 'object' && msg.senderId?.avatarUrl
+                            ? normalizeImageUrl(msg.senderId.avatarUrl)
+                            : isMine
+                            ? normalizeImageUrl(user?.avatarUrl || user?.avatar)
+                            : normalizeImageUrl(activePartner?.avatarUrl);
+
+                        const time = formatMessageTime(msg.createdAt);
+
+                        // Hiển thị phân cách ngày nếu tin nhắn trước khác ngày
+                        const currentDateStr = formatMessageDate(msg.createdAt);
+                        const prevMsg = messages[index - 1];
+                        const prevDateStr = prevMsg ? formatMessageDate(prevMsg.createdAt) : null;
+                        const showDateSeparator = currentDateStr && currentDateStr !== prevDateStr;
+
+                        return (
+                          <React.Fragment key={msg._id || msg.id || index}>
+                            {showDateSeparator && (
+                              <div className="flex items-center justify-center my-3">
+                                <div className="h-px bg-[#E8E4DC] flex-1" />
+                                <span className="px-3 text-[10px] uppercase font-bold tracking-widest text-[#76726B] bg-[#FAF8F5]">
+                                  {currentDateStr}
+                                </span>
+                                <div className="h-px bg-[#E8E4DC] flex-1" />
+                              </div>
+                            )}
+
+                            <div
+                              className={`flex items-start gap-2.5 max-w-xl ${
+                                isMine ? 'ml-auto flex-row-reverse' : 'mr-auto'
+                              }`}
+                            >
+                              {/* Avatar người gửi */}
+                              {senderAvatar ? (
+                                <img
+                                  src={senderAvatar}
+                                  alt={senderName}
+                                  className="w-8 h-8 rounded-full object-cover border border-[#E8E4DC] shrink-0 mt-0.5"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-[#EAE6DE] text-[#1C1A18] flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                                  {senderName.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+
+                              {/* Bong bóng tin nhắn */}
+                              <div className={`space-y-1 ${isMine ? 'text-right' : 'text-left'}`}>
+                                <div className="flex items-center gap-1.5 px-1">
+                                  <span className="text-[11px] font-bold text-[#1C1A18]">
+                                    {isMine ? 'Tôi' : senderName}
+                                  </span>
+                                  <span className="text-[10px] text-[#76726B]">{time}</span>
+                                </div>
+
+                                <div
+                                  className={`p-3.5 rounded-2xl shadow-2xs text-xs leading-relaxed space-y-2 ${
+                                    isMine
+                                      ? 'bg-[#1C1A18] text-white rounded-tr-xs'
+                                      : 'bg-white border border-[#E8E4DC] text-[#1C1A18] rounded-tl-xs'
+                                  }`}
+                                >
+                                  {/* Hiển thị ảnh đính kèm nếu có */}
+                                  {msg.imageUrl && (
+                                    <div
+                                      onClick={() =>
+                                        setZoomImage({
+                                          title: 'Ảnh đính kèm trong tin nhắn',
+                                          url: normalizeImageUrl(msg.imageUrl),
+                                        })
+                                      }
+                                      className="rounded-xl overflow-hidden border border-black/10 cursor-pointer group relative max-w-sm"
+                                    >
+                                      <img
+                                        src={normalizeImageUrl(msg.imageUrl)}
+                                        alt="Ảnh đính kèm"
+                                        className="w-full max-h-72 object-cover group-hover:scale-102 transition-transform duration-200"
+                                      />
+                                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                        <span className="material-symbols-outlined text-2xl">
+                                          zoom_in
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Hiển thị nội dung text */}
+                                  {msg.text && (
+                                    <p className="whitespace-pre-line break-words text-xs">
+                                      {msg.text}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </React.Fragment>
+                        );
+                      })
+                    )}
+
+                    {/* Indicator đối tác đang gõ (Typing...) */}
+                    {partnerTyping.isTyping && (
+                      <div className="flex items-center gap-2 text-xs text-[#76726B] italic pl-10 animate-pulse">
+                        <span className="w-2 h-2 rounded-full bg-emerald-600 animate-ping" />
+                        <span>{partnerTyping.fullName || activePartner?.fullName || 'Đối tác'} đang nhập tin nhắn...</span>
+                      </div>
+                    )}
+
+                    <div ref={messagesEndRef} />
+                  </div>
+
+                  {/* THÔNG BÁO LỖI NẾU CÓ */}
+                  {chatError && (
+                    <div className="px-5 py-2 bg-rose-50 border-t border-rose-200 text-rose-700 text-xs flex items-center justify-between">
+                      <span>{chatError}</span>
+                      <button
+                        type="button"
+                        onClick={() => refreshConversations()}
+                        className="underline font-semibold ml-2 cursor-pointer"
+                      >
+                        Thử lại
+                      </button>
                     </div>
                   )}
 
-                  <div ref={messageEndRef} />
-                </div>
-
-                {/* Quick Preset Prompt Pills */}
-                <div className="px-6 pt-3 pb-2 bg-brand-surface/50 border-t border-brand-border/60 flex items-center gap-2 overflow-x-auto thin-scrollbar">
-                  <span className="text-[10px] uppercase font-bold text-brand-muted shrink-0">Hỏi nhanh:</span>
-                  <button
-                    type="button"
-                    onClick={() => handlePresetClick('+ Thêm thời hạn bảo hiểm quang học')}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-sand border border-brand-border text-[11px] text-brand-charcoal font-medium whitespace-nowrap transition-colors cursor-pointer"
-                  >
-                    + Thêm thời hạn bảo hiểm quang học
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePresetClick('Gia hạn ngày trả máy thêm 2 ngày')}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-sand border border-brand-border text-[11px] text-brand-charcoal font-medium whitespace-nowrap transition-colors cursor-pointer"
-                  >
-                    Gia hạn ngày trả máy thêm 2 ngày
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePresetClick('Yêu cầu video đo màn trập Leica')}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-sand border border-brand-border text-[11px] text-brand-charcoal font-medium whitespace-nowrap transition-colors cursor-pointer"
-                  >
-                    Yêu cầu video đo màn trập Leica
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePresetClick('Hỏi phụ kiện Filter Carl Zeiss T*')}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-sand border border-brand-border text-[11px] text-brand-charcoal font-medium whitespace-nowrap transition-colors cursor-pointer"
-                  >
-                    Hỏi phụ kiện Filter Carl Zeiss T*
-                  </button>
-                </div>
-
-                {/* Rich Composer Box */}
-                <div className="p-4 bg-white border-t border-brand-border/60">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }}
-                    className="bg-brand-surface rounded-2xl p-3 border border-brand-border/80 focus-within:border-brand-charcoal focus-within:bg-white transition-all"
-                  >
-                    <textarea
-                      className="w-full bg-transparent text-xs text-brand-charcoal placeholder-brand-muted focus:outline-none resize-none leading-relaxed"
-                      placeholder="Nhập tin nhắn trao đổi kỹ thuật hoặc yêu cầu với Trưởng Atelier Vũ Thanh Tùng..."
-                      rows={2}
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }
-                      }}
-                    />
-                    <div className="flex items-center justify-between pt-2 mt-1 border-t border-brand-border/40">
-                      {/* Media & Reference Shortcuts */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="p-1.5 text-brand-muted hover:text-brand-charcoal hover:bg-brand-sand/60 rounded-lg transition-colors cursor-pointer"
-                          title="Đính kèm ảnh hiện trạng hoặc tài liệu"
-                          onClick={() => showToast('Đã đính kèm ảnh kiểm tra thấu kính thực tế.')}
-                        >
-                          <span className="material-symbols-outlined text-lg">add_a_photo</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="p-1.5 text-brand-muted hover:text-brand-charcoal hover:bg-brand-sand/60 rounded-lg transition-colors cursor-pointer"
-                          title="Đính kèm tệp hồ sơ"
-                          onClick={() => showToast('Đã đính kèm tệp hồ sơ lưu ký.')}
-                        >
-                          <span className="material-symbols-outlined text-lg">attach_file</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="p-1.5 text-brand-muted hover:text-brand-charcoal hover:bg-brand-sand/60 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-semibold cursor-pointer"
-                          title="Gắn mã tham chiếu đơn hàng"
-                          onClick={() => {
-                            setInputText((prev) => `${prev} [Đơn tham chiếu: #RH-RNT-2024-8845]`);
-                          }}
-                        >
-                          <span className="material-symbols-outlined text-lg">tag</span>
-                          <span className="hidden sm:inline">Gắn thẻ đơn</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="p-1.5 text-brand-muted hover:text-brand-charcoal hover:bg-brand-sand/60 rounded-lg transition-colors cursor-pointer"
-                          title="Biểu tượng cảm xúc"
-                          onClick={() => setInputText((prev) => `${prev} 👍`)}
-                        >
-                          <span className="material-symbols-outlined text-lg">sentiment_satisfied</span>
-                        </button>
+                  {/* SẢN PHẨM ĐANG QUAN TÂM (PRODUCT INQUIRY BANNER) */}
+                  {productInquiry && (
+                    <div className="mx-4 my-2.5 p-3 rounded-2xl bg-white border border-[#D5D0C6] shadow-sm flex items-center justify-between gap-3 animate-fadeIn">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {productInquiry.imageUrl && (
+                          <img
+                            src={normalizeImageUrl(productInquiry.imageUrl)}
+                            alt={productInquiry.title}
+                            className="w-12 h-12 rounded-xl object-cover border border-[#E8E4DC] shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                                productInquiry.type === 'RENT'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {productInquiry.type === 'RENT' ? 'Hỏi đồ thuê RENT' : 'Hỏi đồ mua THRIFT'}
+                            </span>
+                            <span className="text-[10px] text-[#76726B] font-mono">
+                              #{String(productInquiry.id).slice(-6)}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-[#1C1A18] truncate mt-0.5">
+                            {productInquiry.title}
+                          </h4>
+                          <p className="text-[11px] text-[#76726B] font-semibold">
+                            {productInquiry.priceText}
+                          </p>
+                        </div>
                       </div>
 
-                      {/* Send Action Button */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const inquiryText = `Xin chào Shop, mình đang quan tâm đến sản phẩm "${productInquiry.title}" (${productInquiry.priceText || ''}).\nXem sản phẩm: ${window.location.origin}${productInquiry.url}\nShop tư vấn tình trạng và hỗ trợ mình với nhé!`;
+                            await sendMessage(inquiryText, productInquiry.imageUrl || null);
+                            setProductInquiry(undefined);
+                            showToast('Đã gửi thông tin sản phẩm vào cuộc trò chuyện!');
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-[#1C1A18] text-white hover:bg-black font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-sm">send</span>
+                          <span>Gửi vào chat</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProductInquiry(undefined)}
+                          className="p-1 text-stone-400 hover:text-stone-700 text-xs rounded-lg cursor-pointer"
+                          title="Bỏ qua"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* QUICK PRESET SUGGESTIONS CHO KHÁCH HÀNG */}
+                  {!isShopOwner && (
+                    <div className="px-5 py-2 bg-[#F6F3ED]/70 border-t border-[#E8E4DC] flex items-center gap-2 overflow-x-auto thin-scrollbar">
+                      <span className="text-[10px] uppercase font-bold text-[#76726B] shrink-0">
+                        Hỏi nhanh:
+                      </span>
                       <button
-                        type="submit"
-                        className="px-5 py-2 rounded-full bg-brand-charcoal text-white hover:bg-black font-semibold text-xs flex items-center gap-2 shadow-xs transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+                        type="button"
+                        onClick={() => handlePresetClick('Hỏi gia hạn thời gian thuê thêm 2 ngày')}
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-[#E8E4DC] text-[11px] font-medium whitespace-nowrap transition-colors cursor-pointer"
                       >
-                        <span>Gửi tin nhắn</span>
-                        <span className="material-symbols-outlined text-sm">send</span>
+                        + Gia hạn ngày thuê
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePresetClick('Tư vấn gói bảo hiểm quang học & trầy xước')}
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-[#E8E4DC] text-[11px] font-medium whitespace-nowrap transition-colors cursor-pointer"
+                      >
+                        🛡️ Bảo hiểm quang học
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePresetClick('Thời gian hoàn trả cọc sau khi trả máy')}
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 border border-[#E8E4DC] text-[11px] font-medium whitespace-nowrap transition-colors cursor-pointer"
+                      >
+                        💰 Hoàn cọc Escrow
                       </button>
                     </div>
-                  </form>
-                  <p className="text-[10px] text-brand-taupe mt-2 text-center">
-                    Mọi thỏa thuận về điều kiện máy và gia hạn đều được ghi nhận tự động vào Hợp đồng Lưu ký Điện tử ReUse
-                    Hub.
-                  </p>
-                </div>
-              </div>
+                  )}
 
-              {/* RIGHT: Active Reference Specimen & Order Drawer (4 Cols) */}
-              <div className="xl:col-span-4 space-y-6">
-                {/* Specimen #1: Hasselblad 907X (Currently in Rent) */}
-                <div className="bg-white rounded-3xl p-5 border border-brand-border/80 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-brand-border/60">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-brand-sage animate-ping" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-brand-charcoal">
-                        Hiện vật đang liên kết (RENT)
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-brand-sand text-brand-charcoal font-bold">
-                      #RH-RNT-8845
-                    </span>
-                  </div>
-
-                  {/* Item Media Card */}
-                  <div className="relative rounded-2xl overflow-hidden aspect-16/10 border border-brand-border/60 bg-brand-sand">
-                    <img
-                      className="w-full h-full object-cover"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGzgCQfJQ_ymumzHvCwbZ71wuEh7ts1Kl_6UT2dId2VJ3xW5NU4zPutOAAPZJei60vN2GRpL6ilK1x39QshyAOV7OdyaDbqX8Sh_qsLrND1FpWXqhcnrOBwAX5cLM7vQPDMr_oV_oDJP4NLK2wIU1JgL_MvINgQpo8-dGFvgoMC0GCHi8MHAgfgDhanub-EqSouF_yVRECOcVGFSii4mN4kzRWUNq8q9Ch8ujUlCQQ"
-                      alt="Hasselblad 907X 50C"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent flex flex-col justify-end p-3.5 text-white">
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-brand-sand font-semibold">
-                        Medium Format Digital Back
-                      </span>
-                      <h3 className="text-sm font-bold font-serif leading-tight">Hasselblad 907X 50C + XCD 45mm f/4 P</h3>
-                    </div>
-                  </div>
-
-                  {/* Specimen Metadata Grid */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2.5 rounded-xl bg-brand-surface border border-brand-border/50">
-                      <span className="text-[10px] text-brand-muted block uppercase">Tình trạng vật lý</span>
-                      <span className="font-bold text-brand-charcoal">Mint 98.5% (Like New)</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-brand-surface border border-brand-border/50">
-                      <span className="text-[10px] text-brand-muted block uppercase">Thời hạn thuê</span>
-                      <span className="font-bold text-brand-charcoal">5 Ngày (14/03 - 19/03)</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-brand-surface border border-brand-border/50">
-                      <span className="text-[10px] text-brand-muted block uppercase">Ký quỹ Smart Escrow</span>
-                      <span className="font-bold text-brand-sage">38.000.000₫ (Đã khóa)</span>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-brand-surface border border-brand-border/50">
-                      <span className="text-[10px] text-brand-muted block uppercase">Bảo hiểm va đập</span>
-                      <span className="font-bold text-brand-charcoal">Hạng Diamond P1</span>
-                    </div>
-                  </div>
-
-                  {/* Quick Specimen CTAs */}
-                  <div className="space-y-2 pt-1">
-                    <Link
-                      className="w-full py-2.5 px-3 rounded-xl bg-brand-charcoal text-white hover:bg-black font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
-                      to="/rent/orders"
-                    >
-                      <span className="material-symbols-outlined text-sm">inventory_2</span>
-                      <span>Chi tiết hành trình giao nhận Nanuk</span>
-                    </Link>
-                    <button
-                      type="button"
-                      className="w-full py-2 px-3 rounded-xl bg-brand-surface hover:bg-brand-sand border border-brand-border text-brand-charcoal font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                      onClick={() => setIsContractOpen(true)}
-                    >
-                      <span className="material-symbols-outlined text-sm">history_edu</span>
-                      <span>Mở hợp đồng thẩm định 10 điểm</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Specimen #2: Leica M6 Classic (Thrift Purchase Order) */}
-                <div className="bg-white rounded-3xl p-5 border border-brand-border/80 shadow-sm space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-brand-border/60">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#C88A37]" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-brand-charcoal">
-                        Hiện vật đang mua (THRIFT)
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-brand-sand text-brand-charcoal font-bold">
-                      #RH-THF-0814
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <img
-                      className="w-16 h-16 rounded-xl object-cover border border-brand-border shrink-0"
-                      src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDVdYxCEiyYkrAE-zufpBR55eRsvcHTxjd63zgbIf1Y_MEsOJcTuLKqIjJb2OSmx_DCwvQ9tH-sNSCXSxG_s6YwpZ0cy5BbyhO6t6N3Kb5TRRfhq93eNN8d7SCiy1fCkVkiu1J8JfGp8GrVzadLRLZ6Xkxo7Xq167ryh6QolMuiyJpd9vyEGaGneW24Cf7eACqSkcD1tsoryWs6uwlfhYUdicRF72P4a45ZywevEhx"
-                      alt="Leica M6 Classic"
-                    />
-                    <div className="overflow-hidden">
-                      <h4 className="text-xs font-bold text-brand-charcoal truncate">
-                        Leica M6 Classic 0.72x (Serial #2481920)
-                      </h4>
-                      <p className="text-[11px] text-brand-muted">Nguồn gốc: Sưu tập cá nhân Munich, Đức</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs font-bold text-brand-charcoal">64.500.000₫</span>
-                        <span className="text-[9px] bg-brand-sage-light text-brand-sage px-1.5 py-0.5 rounded font-bold uppercase">
-                          Cửa sổ kiểm tra 72h
-                        </span>
+                  {/* XEM TRƯỚC ẢNH ĐÍNH KÈM TRƯỚC KHI GỬI */}
+                  {imagePreviewUrl && (
+                    <div className="px-5 py-2.5 bg-[#F6F3ED] border-t border-[#E8E4DC] flex items-center gap-3">
+                      <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-[#D5D0C6] shrink-0">
+                        <img
+                          src={imagePreviewUrl}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleClearSelectedImage}
+                          className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-white flex items-center justify-center text-[10px] hover:bg-black"
+                          title="Hủy ảnh"
+                        >
+                          ✕
+                        </button>
                       </div>
+                      <div className="flex-1 text-xs">
+                        <p className="font-bold text-[#1C1A18] truncate">
+                          {selectedImageFile?.name}
+                        </p>
+                        <p className="text-[11px] text-[#76726B]">
+                          {(selectedImageFile ? selectedImageFile.size / 1024 : 0).toFixed(0)} KB ·
+                          Sẵn sàng gửi đính kèm
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClearSelectedImage}
+                        className="text-xs text-stone-500 hover:text-stone-800 underline cursor-pointer"
+                      >
+                        Bỏ chọn
+                      </button>
                     </div>
-                  </div>
-                  <div className="p-3 rounded-xl bg-brand-sand/60 border border-brand-border text-[11px] text-brand-muted space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-brand-charcoal">
-                      <span className="material-symbols-outlined text-sm text-brand-sage">shield</span>
-                      <span>Quyền lợi đối kiểm Atelier</span>
-                    </div>
-                    <p className="leading-relaxed">
-                      Bạn có toàn quyền kiểm tra máy trong 72 giờ thực nghiệm film trước khi hệ thống giải ngân tiền về
-                      chủ sở hữu cũ.
+                  )}
+
+                  {/* THANH SOẠN THẢO TIN NHẮN (COMPOSER) */}
+                  <div className="p-3.5 sm:p-4 bg-white border-t border-[#E8E4DC]">
+                    <form
+                      onSubmit={handleSend}
+                      className="bg-[#F8F6F2] rounded-2xl p-2.5 sm:p-3 border border-[#E8E4DC] focus-within:border-[#1C1A18] focus-within:bg-white transition-all"
+                    >
+                      {/* Hidden File Input */}
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+
+                      <textarea
+                        ref={textareaRef}
+                        value={inputText}
+                        onChange={(e) => {
+                          setInputText(e.target.value);
+                          sendTyping();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                          }
+                        }}
+                        rows={2}
+                        placeholder={
+                          isShopOwner
+                            ? 'Nhập tin nhắn giải đáp khách hàng (Nhấn Enter để gửi)...'
+                            : 'Nhập tin nhắn trao đổi hoặc yêu cầu với Shop Owner...'
+                        }
+                        className="w-full bg-transparent text-xs text-[#1C1A18] placeholder-stone-400 focus:outline-none resize-none leading-relaxed"
+                      />
+
+                      <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#E8E4DC]/60">
+                        {/* Tiện ích đính kèm ảnh & biểu tượng cảm xúc */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                            title="Gửi ảnh kiểm tra hiện trạng hoặc giấy tờ"
+                          >
+                            <span className="material-symbols-outlined text-lg">add_photo_alternate</span>
+                            <span className="text-[11px] font-semibold hidden sm:inline">Gửi ảnh</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInputText((prev) => `${prev} 👍`)}
+                            className="p-1.5 text-stone-500 hover:text-stone-900 hover:bg-stone-200/60 rounded-lg transition-colors cursor-pointer"
+                            title="Biểu tượng cảm xúc"
+                          >
+                            <span className="material-symbols-outlined text-lg">sentiment_satisfied</span>
+                          </button>
+                        </div>
+
+                        {/* Nút gửi tin nhắn */}
+                        <button
+                          type="submit"
+                          disabled={(!inputText.trim() && !selectedImageFile) || isSending || isUploadingImage}
+                          className="px-5 py-2 rounded-full bg-[#1C1A18] text-white hover:bg-black font-semibold text-xs flex items-center gap-2 shadow-xs transition-all hover:scale-[1.02] active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {isUploadingImage ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Đang tải ảnh...</span>
+                            </>
+                          ) : isSending ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Đang gửi...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Gửi</span>
+                              <span className="material-symbols-outlined text-sm">send</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                    <p className="text-[10px] text-[#76726B] mt-2 text-center">
+                      Tin nhắn hiển thị tức thời qua Socket.IO và được lưu vết an toàn trong hồ sơ đối soát hệ thống.
                     </p>
                   </div>
-                </div>
-
-                {/* Custodian Atelier Credential Card */}
-                <div className="bg-gradient-to-br from-[#F5F2EB] to-[#EAE5DC] rounded-3xl p-5 border border-brand-border text-brand-charcoal space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-muted">
-                    <span className="material-symbols-outlined text-base text-brand-charcoal">workspace_premium</span>
-                    <span>Hồ Sơ Atelier Silvergrain</span>
+                </>
+              ) : (
+                /* Trạng thái chưa chọn cuộc trò chuyện (dành cho Shop Owner) */
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-3 bg-[#FAF8F5]">
+                  <div className="w-16 h-16 rounded-3xl bg-[#EAE6DE] text-[#1C1A18] flex items-center justify-center shadow-xs">
+                    <span className="material-symbols-outlined text-3xl">chat</span>
                   </div>
-                  <p className="text-xs text-brand-charcoal/90 leading-relaxed">
-                    Xưởng thẩm định quang học &amp; cơ học độc quyền ReUse Hub. Đảm nhận 100% quy trình vệ sinh buồng
-                    tối, đo màn trập laser Kyoritsu và bảo chứng chứng thư tái lưu thông.
+                  <h3 className="font-serif text-lg font-bold text-[#1C1A18]">
+                    Chọn một cuộc trò chuyện để bắt đầu
+                  </h3>
+                  <p className="text-xs text-[#76726B] max-w-sm leading-relaxed">
+                    Chọn khách hàng từ danh sách bên trái để kiểm tra tin nhắn, hình ảnh hiện vật và trả lời trực tiếp.
                   </p>
-                  <div className="pt-2 border-t border-brand-charcoal/10 flex items-center justify-between text-[11px]">
-                    <span className="text-brand-muted">Tỉ lệ hoàn hảo:</span>
-                    <span className="font-bold text-brand-charcoal">99.8% (3.420+ lần bàn giao)</span>
-                  </div>
                 </div>
-              </div>
+              )}
             </div>
+
           </div>
-        </main>
+        </div>
       </div>
 
-      {/* ── MODAL: HOTLINE KỸ THUẬT ATELIER ── */}
-      {isHotlineOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-fadeIn border border-brand-border">
-            <div className="flex items-center justify-between pb-2 border-b border-brand-border/50">
+      {/* ── LIGHTBOX ZOOM ẢNH MODAL ── */}
+      {zoomImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setZoomImage(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 bg-[#1C1A18] text-white flex items-center justify-between">
+              <span className="text-xs font-bold">{zoomImage.title || 'Chi tiết hình ảnh'}</span>
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-xl text-brand-sage">support_agent</span>
-                <h3 className="font-serif text-lg font-bold text-brand-charcoal">Hotline Kỹ Thuật Atelier Concierge</h3>
+                <a
+                  href={zoomImage.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="p-1 hover:bg-white/20 rounded text-xs flex items-center gap-1 text-white"
+                  title="Mở tab mới"
+                >
+                  <span className="material-symbols-outlined text-base">open_in_new</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setZoomImage(null)}
+                  className="p-1 hover:bg-white/20 rounded text-stone-300 hover:text-white"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                type="button"
-                className="text-brand-muted hover:text-brand-charcoal cursor-pointer"
-                onClick={() => setIsHotlineOpen(false)}
-              >
-                <span className="material-symbols-outlined text-xl">close</span>
-              </button>
+            </div>
+            <div className="p-2 flex-1 overflow-auto flex items-center justify-center bg-black/5">
+              <img
+                src={zoomImage.url}
+                alt={zoomImage.title || 'Preview'}
+                className="max-h-[80vh] w-auto object-contain rounded-lg"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL HOTLINE THẨM ĐỊNH ── */}
+      {isHotlineOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setIsHotlineOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-[#E8E4DC] space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto">
+              <span className="material-symbols-outlined text-2xl">support_agent</span>
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="font-serif text-lg font-bold text-[#1C1A18]">
+                Hotline Kỹ Thuật &amp; Thẩm Định
+              </h3>
+              <p className="text-xs text-[#76726B]">
+                Đường dây nóng kết nối trực tiếp với Trưởng Atelier Vũ Thanh Tùng
+              </p>
             </div>
 
-            <div className="p-4 bg-brand-surface rounded-2xl space-y-2 text-xs text-brand-charcoal border border-brand-border/50">
-              <p className="font-bold text-sm">Trưởng Kỹ Thuật Viên: Vũ Thanh Tùng</p>
-              <p className="text-brand-muted">Phòng Thẩm Định &amp; Hiệu Chuẩn Quang Học (Saigon Vault)</p>
-              <div className="pt-2 flex items-center justify-between">
-                <span className="text-xs font-semibold">Đường dây nóng độc quyền:</span>
-                <span className="font-mono text-sm font-bold text-brand-sage">1900 8924 · Máy lẻ 102</span>
+            <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E8E4DC] space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[#76726B]">Số điện thoại:</span>
+                <a
+                  href="tel:19008899"
+                  className="font-mono font-bold text-emerald-800 text-sm hover:underline"
+                >
+                  1900 8899 (Phím 2)
+                </a>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold">Thời gian trực kỹ thuật:</span>
-                <span className="text-xs font-medium text-brand-charcoal">08:00 - 21:00 hàng ngày</span>
+                <span className="text-[#76726B]">Thời gian làm việc:</span>
+                <span className="font-semibold text-[#1C1A18]">08:00 - 22:00 (Hằng ngày)</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#76726B]">Cam kết phản hồi (SLA):</span>
+                <span className="font-semibold text-emerald-700">Dưới 15 phút</span>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-2">
               <button
                 type="button"
-                className="flex-1 py-2.5 rounded-xl bg-brand-surface hover:bg-brand-sand text-brand-charcoal text-xs font-semibold transition-colors cursor-pointer border border-brand-border/60"
                 onClick={() => setIsHotlineOpen(false)}
+                className="flex-1 py-2.5 rounded-xl border border-[#E8E4DC] hover:bg-stone-50 font-semibold text-xs text-[#1C1A18] cursor-pointer"
               >
                 Đóng
               </button>
               <a
-                href="tel:19008924"
-                className="flex-1 py-2.5 rounded-xl bg-brand-charcoal hover:bg-black text-white text-xs font-bold transition-all shadow-md text-center flex items-center justify-center gap-1.5"
+                href="tel:19008899"
+                className="flex-1 py-2.5 rounded-xl bg-[#1C1A18] text-white hover:bg-black font-semibold text-xs flex items-center justify-center gap-1.5 shadow-xs"
               >
                 <span className="material-symbols-outlined text-sm">call</span>
                 <span>Gọi ngay</span>
               </a>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL: HỢP ĐỒNG THẨM ĐỊNH 10 ĐIỂM ── */}
-      {isContractOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl space-y-4 animate-fadeIn border border-brand-border max-h-[85vh] overflow-y-auto thin-scrollbar">
-            <div className="flex items-center justify-between pb-2 border-b border-brand-border/50">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-xl text-brand-sage">history_edu</span>
-                <h3 className="font-serif text-lg font-bold text-brand-charcoal">Hợp Đồng Thẩm Định 10 Điểm</h3>
-              </div>
-              <button
-                type="button"
-                className="text-brand-muted hover:text-brand-charcoal cursor-pointer"
-                onClick={() => setIsContractOpen(false)}
-              >
-                <span className="material-symbols-outlined text-xl">close</span>
-              </button>
-            </div>
-
-            <p className="text-xs text-brand-muted leading-relaxed">
-              Biên bản bàn giao kèm kiểm định quang học và cảm biến số độc quyền cho hiện vật{' '}
-              <strong className="text-brand-charcoal">Hasselblad 907X 50C + XCD 45mm (#RH-RNT-8845)</strong>.
-            </p>
-
-            <div className="space-y-2 text-xs">
-              {[
-                '1. Vệ sinh buồng sensor và kiểm tra điểm chết (Dead/Stuck Pixels): 0 lỗi.',
-                '2. Kiểm tra dung sai trập điện tử và cơ học: ±2.1% (Chuẩn phòng lab).',
-                '3. Độ phẳng ngàm thấu kính XCD mount: 100% không cong vênh.',
-                '4. Màn hình lật 3.0 inch cảm ứng: Phản hồi nhạy, không ố vàng.',
-                '5. Cổng kết nối USB-C Tethering & HDMI: Nhận diện tín hiệu chuẩn xác.',
-                '6. Khay 2 khe thẻ nhớ UHS-II: Đọc ghi ổn định tốc độ 300MB/s.',
-                '7. Khe pin và lẫy khóa cơ khí: Chắc chắn, kèm 02 pin chính hãng.',
-                '8. Bọc đệm chống sốc Nanuk 935: Khử ẩm yếm khí 40% RH.',
-                '9. Bảo hiểm rủi ro rơi vỡ Diamond P1: Kích hoạt hiệu lực 100%.',
-                '10. Kẹp chì niêm phong ReUse Hub #SP-7718 nguyên vẹn.',
-              ].map((item, idx) => (
-                <div
-                  key={idx}
-                  className="p-2.5 rounded-xl bg-brand-surface border border-brand-border/40 text-brand-charcoal flex items-center justify-between"
-                >
-                  <span>{item}</span>
-                  <span className="text-[10px] bg-brand-sage-light text-brand-sage font-bold px-1.5 py-0.5 rounded shrink-0 ml-2">
-                    ĐẠT CHUẨN
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                className="flex-1 py-2.5 rounded-xl bg-brand-surface hover:bg-brand-sand text-brand-charcoal text-xs font-semibold transition-colors cursor-pointer border border-brand-border/60"
-                onClick={() => window.print()}
-              >
-                In Hợp Đồng
-              </button>
-              <button
-                type="button"
-                className="flex-1 py-2.5 rounded-xl bg-brand-charcoal text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
-                onClick={() => setIsContractOpen(false)}
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL: ZOOM ẢNH BÀN THẨM ĐỊNH ── */}
-      {zoomImage && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 animate-fadeIn border border-brand-border">
-            <div className="flex items-center justify-between pb-2 border-b border-brand-border/50">
-              <h3 className="font-serif text-base font-bold text-brand-charcoal">{zoomImage.title}</h3>
-              <button
-                type="button"
-                className="text-brand-muted hover:text-brand-charcoal cursor-pointer"
-                onClick={() => setZoomImage(null)}
-              >
-                <span className="material-symbols-outlined text-xl">close</span>
-              </button>
-            </div>
-            <div className="rounded-2xl overflow-hidden bg-brand-sand max-h-[60vh]">
-              <img src={zoomImage.url} alt={zoomImage.title} className="w-full h-full object-contain" />
-            </div>
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                className="px-5 py-2 rounded-xl bg-brand-charcoal text-white text-xs font-semibold hover:bg-black transition-colors cursor-pointer"
-                onClick={() => setZoomImage(null)}
-              >
-                Đóng
-              </button>
             </div>
           </div>
         </div>
