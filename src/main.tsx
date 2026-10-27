@@ -5,13 +5,16 @@ import "./index.css";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { CartWishlistProvider } from "./context/CartWishlistContext";
+import { ToastProvider } from "./context/ToastContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <CartWishlistProvider>
-          <App />
+          <ToastProvider>
+            <App />
+          </ToastProvider>
         </CartWishlistProvider>
       </AuthProvider>
     </BrowserRouter>

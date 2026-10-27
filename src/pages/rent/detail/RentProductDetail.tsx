@@ -17,6 +17,7 @@ import {
 import type { RentProductDetailData } from '../../data/rent/rentOrderDetailData';
 import { getPublicRentProductDetailApi } from '../../../services/rentProduct.api';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
+import { useToast } from '../../../context/ToastContext';
 
 type TabKey = 'desc' | 'terms' | 'audit' | 'deposit' | 'shipping';
 
@@ -119,28 +120,16 @@ export const RentProductDetail: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authActionName, setAuthActionName] = useState('');
 
-  // In-app Toast Feedback State
-  const [toast, setToast] = useState<{
-    show: boolean;
-    message: string;
-    icon: string;
-    type?: 'success' | 'info' | 'error' | 'warning';
-  }>({
-    show: false,
-    message: '',
-    icon: 'check_circle',
-    type: 'success',
-  });
-
+  const toast = useToast();
   const showToast = (
     message: string,
-    icon = 'check_circle',
+    _icon = 'check_circle',
     type: 'success' | 'info' | 'error' | 'warning' = 'success'
   ) => {
-    setToast({ show: true, message, icon, type });
-    setTimeout(() => {
-      setToast((prev) => ({ ...prev, show: false }));
-    }, 4000);
+    if (type === 'error') toast.error(message);
+    else if (type === 'warning') toast.warning(message);
+    else if (type === 'info') toast.info(message);
+    else toast.success(message);
   };
 
   useEffect(() => {
@@ -261,7 +250,12 @@ export const RentProductDetail: React.FC = () => {
   };
 
   const handleToggleWishlist = () => {
-    toggleWishlist(product.id);
+    const isNow = toggleWishlist(product.id, 'RENT');
+    if (isNow) {
+      toast.success('Đã lưu thiết bị vào Danh sách yêu thích!');
+    } else {
+      toast.info('Đã xóa thiết bị khỏi Danh sách yêu thích.');
+    }
   };
 
   const currentPreview = product.images[activeThumb] || product.images[0];
@@ -963,31 +957,6 @@ export const RentProductDetail: React.FC = () => {
             ))}
           </div>
         </section>
-      </div>
-      {/* In-app Toast Notification */}
-      <div
-        className={`fixed bottom-6 right-6 z-50 transform transition-all duration-300 pointer-events-none px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm font-medium ${
-          toast.show ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-12 opacity-0 scale-95'
-        } ${
-          toast.type === 'error'
-            ? 'bg-rose-950 text-rose-100 border border-rose-800/80'
-            : toast.type === 'warning'
-            ? 'bg-amber-950 text-amber-100 border border-amber-800/80'
-            : 'bg-[#141310] text-[#FBF9F6] border border-stone-800'
-        }`}
-      >
-        <span
-          className={`material-symbols-outlined text-[20px] ${
-            toast.type === 'error'
-              ? 'text-rose-400'
-              : toast.type === 'warning'
-              ? 'text-amber-400'
-              : 'text-emerald-400'
-          }`}
-        >
-          {toast.icon}
-        </span>
-        <span>{toast.message}</span>
       </div>
     </div>
   );

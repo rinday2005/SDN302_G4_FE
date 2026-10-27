@@ -13,6 +13,8 @@ import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { resolveCleanAddress } from '../../../utils/address';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { isObjectIdLike, isUnusableItemTitle, resolveRentProductsByIds } from '../../../utils/rentOrderItemResolver';
+import { OrdersListSkeleton } from '../../../components/common/Skeleton';
+import { EmptyState } from '../../../components/common/EmptyState';
 
 export const MyRentOrders: React.FC = () => {
   const { user } = useAuth();
@@ -1089,10 +1091,7 @@ export const MyRentOrders: React.FC = () => {
             {/* ORDER LISTING SECTION */}
             <div className="mt-6 space-y-6">
               {isLoading ? (
-                <div className="p-12 text-center bg-white rounded-3xl border border-[#E8E4DC] space-y-3">
-                  <span className="w-8 h-8 border-2 border-[#2D5A43] border-t-transparent rounded-full animate-spin inline-block" />
-                  <p className="text-xs font-semibold text-[#76726B]">Đang tải dữ liệu đơn thuê thực tế...</p>
-                </div>
+                <OrdersListSkeleton count={3} />
               ) : filteredOrders.length > 0 ? (
                 filteredOrders.map((order) => {
                   const isBenchLab = order.status === 'RETURNED';
@@ -1691,24 +1690,34 @@ export const MyRentOrders: React.FC = () => {
                 );
               })
               ) : (
-                <div className="p-12 text-center bg-white rounded-3xl border border-[#E8E4DC] space-y-4 shadow-2xs">
-                  <span className="material-symbols-outlined text-5xl text-[#76726B]/60">inventory_2</span>
-                  <div className="space-y-1">
-                    <p className="text-base font-bold text-[#22201D]">Chưa có đơn thuê nào đã thanh toán</p>
-                    <p className="text-xs text-[#76726B] max-w-sm mx-auto">
-                      Bạn chưa phát sinh đơn thuê thiết bị đã thanh toán nào hoặc đơn hàng chưa khớp bộ lọc hiện tại.
-                    </p>
-                  </div>
-                  <Link
-                    to="/rent"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#22201D] text-white text-xs font-semibold hover:bg-black transition-colors shadow-2xs"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">search</span>
-                    <span>Khám phá thiết bị thuê ngay</span>
-                  </Link>
-                </div>
+                <EmptyState
+                  type="orders"
+                  badge="SỔ LỆNH THUÊ TRỐNG"
+                  title="Chưa có đơn thuê nào khớp bộ lọc"
+                  description="Bạn chưa phát sinh đơn thuê thiết bị nào hoặc không có đơn hàng nào khớp với trạng thái hay từ khóa hiện tại."
+                  primaryAction={{
+                    label: 'Khám phá thiết bị RENT',
+                    href: '/rent',
+                    icon: 'search',
+                    variant: 'primary',
+                  }}
+                  secondaryAction={
+                    activeTab !== 'Tất cả' || searchQuery
+                      ? {
+                          label: 'Xóa bộ lọc tìm kiếm',
+                          onClick: () => {
+                            setActiveTab('Tất cả');
+                            setSearchQuery('');
+                          },
+                          icon: 'filter_alt_off',
+                          variant: 'secondary',
+                        }
+                      : undefined
+                  }
+                />
               )}
             </div>
+
 
             {/* PAGINATION */}
             <div className="mt-10 pt-6 border-t border-[#E8E4DC]/60 flex flex-col sm:flex-row items-center justify-between gap-4">

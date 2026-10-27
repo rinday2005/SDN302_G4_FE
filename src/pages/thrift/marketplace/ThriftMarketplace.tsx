@@ -15,6 +15,9 @@ import {
     THRIFT_CIRCULAR_STEPS,
 } from '../../data/thrift/thriftMarketplaceData';
 import type { ThriftProduct, ThriftSortKey, ThriftFilterOption } from '../../data/thrift/thriftMarketplaceData';
+import { useToast } from '../../../context/ToastContext';
+import { MarketplaceGridSkeleton } from '../../../components/common/Skeleton';
+import { EmptyState } from '../../../components/common/EmptyState';
 
 function getPageNumbers(current: number, total: number): (number | string)[] {
     if (total <= 5) {
@@ -32,8 +35,10 @@ function getPageNumbers(current: number, total: number): (number | string)[] {
 export const ThriftMarketplace: React.FC = () => {
     const navigate = useNavigate();
     const { isWishlisted, toggleWishlist, addToCart } = useCartWishlist();
+    const toast = useToast();
     const [dbProducts, setDbProducts] = useState<ThriftProduct[]>([]);
     const [categoryOptions, setCategoryOptions] = useState<ThriftFilterOption[]>(THRIFT_CATEGORY_OPTIONS);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Load active categories from MongoDB
     useEffect(() => {
@@ -125,9 +130,13 @@ export const ThriftMarketplace: React.FC = () => {
             })
             .catch((err) => {
                 console.warn('Could not load thrift products from API:', err);
+            })
+            .finally(() => {
+                if (isMounted) setIsLoading(false);
             });
         return () => { isMounted = false; };
     }, []);
+
     const [searchParams] = useSearchParams();
     const urlCat = searchParams.get('category')?.toLowerCase();
 
@@ -208,11 +217,15 @@ export const ThriftMarketplace: React.FC = () => {
             gradeBadge: product.condition,
             quantity: 1,
         });
+        toast.success(`Đã thêm "${product.title}" vào giỏ hàng!`);
     };
 
     const handleToggleWishlist = (product: ThriftProduct) => {
+        const wasSaved = isWishlisted(product.id);
         toggleWishlist(product.id, 'THRIFT');
+        toast.info(wasSaved ? `Đã bỏ lưu "${product.title}"` : `Đã thêm "${product.title}" vào yêu thích`);
     };
+
 
     // Master Catalog: Lấy trực tiếp 33 sản phẩm từ MongoDB thriftListings
     const allProducts = useMemo(() => {
@@ -633,7 +646,9 @@ export const ThriftMarketplace: React.FC = () => {
                 {/* END: SearchAndFilters */}
 
                 {/* BEGIN: ProductGrid */}
-                {filteredProducts.length > 0 ? (
+                {isLoading ? (
+                    <MarketplaceGridSkeleton count={8} />
+                ) : filteredProducts.length > 0 ? (
                     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                         {paginatedProducts.map((product) => {
                             const isSaved = isWishlisted(product.id);
@@ -768,25 +783,19 @@ export const ThriftMarketplace: React.FC = () => {
                     </section>
                 ) : (
                     /* Empty state */
-                    <div className="text-center py-16 bg-[#F7F5F0] border border-dashed border-[#E6E2DC] rounded-2xl mb-12">
-                        <svg className="w-12 h-12 mx-auto text-[#79716B] mb-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" x2="16.65" y1="21" y2="16.65"></line>
-                        </svg>
-                        <h3 className="text-lg text-[#1C1A18] font-semibold mb-1">
-                            Không tìm thấy sản phẩm THRIFT phù hợp.
-                        </h3>
-                        <p className="text-xs text-[#79716B] mb-4">
-                            Vui lòng điều chỉnh lại từ khóa, bộ lọc giá hoặc danh mục sản phẩm.
-                        </p>
-                        <button
-                            type="button"
-                            onClick={handleResetFilters}
-                            className="px-4 py-2 bg-[#1C1A18] text-white text-xs rounded-lg font-medium hover:bg-stone-800 transition-colors cursor-pointer"
-                        >
-                            Xóa bộ lọc
-                        </button>
-                    </div>
+                    <EmptyState
+                        type="search"
+                        badge="KHO HIỆN VẬT THRIFT"
+                        title="Không tìm thấy hiện vật THRIFT phù hợp"
+                        description="Vui lòng điều chỉnh lại từ khóa hoặc các bộ lọc tình trạng, tầm giá để tiếp tục tìm kiếm sản phẩm."
+                        primaryAction={{
+                            label: 'Xóa bộ lọc tìm kiếm',
+                            onClick: handleResetFilters,
+                            icon: 'filter_alt_off',
+                            variant: 'primary',
+                        }}
+                        className="mb-12"
+                    />
                 )}
                 {/* END: ProductGrid */}
 

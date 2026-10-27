@@ -15,6 +15,7 @@ import { resolveWishlistProduct } from '../../../services/wishlistProductResolve
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { resolveCleanAddress } from '../../../utils/address';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
+import { useToast } from '../../../context/ToastContext';
 
 interface EvidencePhoto {
   id: string;
@@ -52,6 +53,7 @@ export const ReturnRequest: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const toast = useToast();
   const uId = user?._id || user?.id || '';
 
   const cleanId = (id || '').replace('#', '').trim();
@@ -460,6 +462,7 @@ export const ReturnRequest: React.FC = () => {
 
     if (!confirmCommitment) {
       setCommitmentError(true);
+      toast.warning('Vui lòng xác nhận cam kết đóng gói và bảo quản trước khi gửi!');
       const el = document.getElementById('confirmCheckboxContainer');
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -572,12 +575,16 @@ export const ReturnRequest: React.FC = () => {
       // 4. Open celebratory Return Confirmation modal and notify
       setIsSubmitting(false);
       setShowSuccessModal(true);
+      toast.success('Đã gửi yêu cầu hoàn trả & đặt lịch bưu tá thu hồi thành công!');
     } catch (err: unknown) {
       console.error('Submit return error:', err);
-      setSubmitError('Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại hoặc liên hệ hỗ trợ.');
+      const msg = 'Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại hoặc liên hệ hỗ trợ.';
+      setSubmitError(msg);
+      toast.error(msg);
       setIsSubmitting(false);
     }
   };
+
 
   // Dynamic Bench Lab subtitle based on item category
   const benchLabSubtitle = useMemo(() => {

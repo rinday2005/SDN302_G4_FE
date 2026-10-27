@@ -14,6 +14,8 @@ import { resolveWishlistProduct } from '../../services/wishlistProductResolver';
 import { UserSidebar } from '../../components/layout/UserSidebar';
 import { getUserProfileAddress } from '../../utils/address';
 import { createRentalOrderApi } from '../../services/order.api';
+import { useToast } from '../../context/ToastContext';
+import { EmptyState } from '../../components/common/EmptyState';
 
 const formatDisplayDateVN = (ymd?: string) => {
   if (!ymd) return '--/--/----';
@@ -28,6 +30,7 @@ export const Cart: React.FC = () => {
   const navigate = useNavigate();
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const toastSystem = useToast();
 
   const {
     cart,
@@ -72,13 +75,6 @@ export const Cart: React.FC = () => {
 
   // Simulator tab state: 'both' | 'rent' | 'thrift' | 'empty'
   const [simState, setSimState] = useState<'both' | 'rent' | 'thrift' | 'empty'>('both');
-
-  // Toast message state
-  const [toast, setToast] = useState<{ show: boolean; message: string; icon: string }>({
-    show: false,
-    message: '',
-    icon: 'check_circle',
-  });
 
   // Countdown timer simulation for THRIFT hold (43m 20s)
   const [thriftSeconds, setThriftSeconds] = useState(43 * 60 + 20);
@@ -331,10 +327,15 @@ export const Cart: React.FC = () => {
   };
 
   const showToast = (message: string, icon = 'check_circle') => {
-    setToast({ show: true, message, icon });
-    setTimeout(() => {
-      setToast((prev) => ({ ...prev, show: false }));
-    }, 2500);
+    if (icon === 'delete' || icon === 'heart_broken') {
+      toastSystem.info(message);
+    } else if (icon === 'warning') {
+      toastSystem.warning(message);
+    } else if (icon === 'info') {
+      toastSystem.info(message);
+    } else {
+      toastSystem.success(message);
+    }
   };
 
   const formatCurrency = (val: number) => {
@@ -518,17 +519,6 @@ export const Cart: React.FC = () => {
 
   return (
     <div className="w-full min-h-[calc(100vh-12rem)] bg-[#FBF9F5] text-[#1C1C18] antialiased">
-      {/* Toast Notification */}
-      <div
-        className={`fixed bottom-6 right-6 z-50 transform transition-all duration-300 pointer-events-none bg-[#1C1A18] text-[#FBF9F5] px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-medium ${
-          toast.show ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-12 opacity-0 scale-95'
-        }`}
-      >
-        <span className="material-symbols-outlined text-[20px] text-emerald-400">
-          {toast.icon}
-        </span>
-        <span>{toast.message}</span>
-      </div>
 
       {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
       <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8 items-start">
@@ -668,44 +658,32 @@ export const Cart: React.FC = () => {
         {/* View Condition: Empty State vs Active Cart */}
         {isViewEmpty ? (
           /* ================= EMPTY STATE CONTAINER ================= */
-          <div className="flex flex-col items-center justify-center py-16 px-4 bg-white rounded-3xl shadow-sm text-center border border-[#EBE8E1] my-4">
-            <div className="w-24 h-24 rounded-full bg-[#F7F3EC] flex items-center justify-center mb-5 text-[#7B766F]">
-              <span className="material-symbols-outlined text-[48px]">shopping_bag</span>
-            </div>
-            <span className="px-3 py-1 rounded bg-[#D8E3CE] text-[#5B6655] text-xs font-semibold uppercase tracking-wider mb-2">
-              Kho lưu trữ cá nhân trống
-            </span>
-            <h2 className="font-serif text-2xl sm:text-3xl text-[#141310] font-bold max-w-md">
-              Giỏ hàng của bạn đang trống
-            </h2>
-            <p className="text-xs sm:text-sm text-[#7B766F] max-w-lg mt-2 mb-8 leading-relaxed">
-              Bạn chưa thêm bất kỳ thiết bị thuê định kỳ hoặc món đồ tuần hoàn độc bản nào. Hãy khám phá kho tàng thiết bị chuẩn kiểm định của ReUse Hub.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <Link
-                to="/rent"
-                className="px-6 py-3 rounded-xl bg-[#141310] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#292724] transition-all flex items-center gap-2 shadow-sm"
-              >
-                <span className="material-symbols-outlined text-[18px]">timelapse</span>
-                <span>Khám phá RENT</span>
-              </Link>
-              <Link
-                to="/thrift"
-                className="px-6 py-3 rounded-xl bg-[#F1EDE6] text-[#1C1C18] hover:bg-[#EBE8E1] text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-                <span>Săn đồ độc bản THRIFT</span>
-              </Link>
-              <button
-                type="button"
-                onClick={handleLoadDemoItems}
-                className="px-6 py-3 rounded-xl border border-[#141310] text-[#141310] hover:bg-[#141310] hover:text-white text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[18px]">data_saver_on</span>
-                <span>Nạp sản phẩm mẫu Demo</span>
-              </button>
-            </div>
-            <div className="mt-14 pt-6 border-t border-[#F7F3EC] flex flex-wrap items-center justify-center gap-6 text-xs text-[#7B766F]">
+          <EmptyState
+            type="cart"
+            badge="Kho lưu trữ cá nhân trống"
+            title="Giỏ hàng của bạn đang trống"
+            description="Bạn chưa thêm bất kỳ thiết bị thuê định kỳ hoặc món đồ tuần hoàn độc bản nào. Hãy khám phá kho tàng thiết bị chuẩn kiểm định của ReUse Hub."
+            primaryAction={{
+              label: 'Khám phá RENT',
+              href: '/rent',
+              icon: 'timelapse',
+              variant: 'primary',
+            }}
+            secondaryAction={{
+              label: 'Săn đồ độc bản THRIFT',
+              href: '/thrift',
+              icon: 'auto_awesome',
+              variant: 'secondary',
+            }}
+            tertiaryAction={{
+              label: 'Nạp sản phẩm mẫu Demo',
+              onClick: handleLoadDemoItems,
+              icon: 'data_saver_on',
+              variant: 'outline',
+            }}
+            className="my-4"
+          >
+            <div className="pt-6 border-t border-[#F7F3EC] flex flex-wrap items-center justify-center gap-6 text-xs text-[#7B766F]">
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[18px] text-[#576151]">
                   check_circle
@@ -725,8 +703,9 @@ export const Cart: React.FC = () => {
                 <span>Giao nhanh trong 2h tại Hà Nội &amp; TP.HCM</span>
               </span>
             </div>
-          </div>
+          </EmptyState>
         ) : (
+
           /* ================= ACTIVE CART LAYOUT ================= */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* LEFT 8 COLS: CART ITEMS STREAM */}

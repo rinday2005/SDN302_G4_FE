@@ -1,10 +1,20 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { recordBookedDates } from '../data/rent/rentOrderDetailData';
+import { useToast } from '../../context/ToastContext';
 
 export const PaymentSuccess: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const toast = useToast();
+  const hasShownToast = useRef(false);
+
+  useEffect(() => {
+    if (!hasShownToast.current) {
+      hasShownToast.current = true;
+      toast.success('Thanh toán đơn hàng thành công qua VNPay!');
+    }
+  }, [toast]);
 
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
 

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
+import { useToast } from '../../../context/ToastContext';
 import { getPublicThriftListingByIdApi } from '../../../services/thrift.api';
 import {
   getThriftProductDetail,
@@ -16,6 +17,7 @@ export const ThriftDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isWishlisted, toggleWishlist, addToCart } = useCartWishlist();
+  const toast = useToast();
 
   const baseProduct: ThriftProductDetail = useMemo(() => getThriftProductDetail(id), [id]);
   const [dbProduct, setDbProduct] = useState<Partial<ThriftProductDetail> | null>(null);
@@ -117,10 +119,16 @@ export const ThriftDetail: React.FC = () => {
       quantity: 1,
       size: showSizeSelector ? selectedSize : undefined,
     });
+    toast.success(`Đã thêm "${product.title}" vào giỏ hàng!`);
   };
 
   const handleWishlist = () => {
-    toggleWishlist(product.id, 'THRIFT');
+    const isNow = toggleWishlist(product.id, 'THRIFT');
+    if (isNow) {
+      toast.success('Đã lưu sản phẩm vào Danh sách yêu thích!');
+    } else {
+      toast.info('Đã xóa sản phẩm khỏi Danh sách yêu thích.');
+    }
   };
 
   const handleChat = () =>
