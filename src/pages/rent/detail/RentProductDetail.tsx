@@ -17,6 +17,7 @@ import {
 import type { RentProductDetailData } from '../../data/rent/rentOrderDetailData';
 import { getPublicRentProductDetailApi } from '../../../services/rentProduct.api';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
+import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
 
 type TabKey = 'desc' | 'terms' | 'audit' | 'deposit' | 'shipping';
 
@@ -853,7 +854,16 @@ export const RentProductDetail: React.FC = () => {
           )}
         </section>
 
-        {/* 4. QUY TRÌNH THUÊ BẢO ĐẢM 8 BƯỚC */}
+        {/* 4. ĐÁNH GIÁ & NHẬN XÉT SẢN PHẨM [FE-S5-03] */}
+        <ProductReviewsSection
+          productId={product.id || id || ''}
+          productTitle={product.title}
+          productImage={product.images[0]?.src}
+          initialRating={product.rating}
+          initialCount={product.reviewCount}
+        />
+
+        {/* 5. QUY TRÌNH THUÊ BẢO ĐẢM 8 BƯỚC */}
         <section className="bg-[#F4F0EA]/40 rounded-2xl p-6 sm:p-8 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>

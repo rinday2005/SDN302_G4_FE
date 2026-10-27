@@ -8,6 +8,7 @@ import {
   THRIFT_RELATED_PRODUCTS,
 } from '../../data/thrift/thriftDetailData';
 import type { ThriftProductDetail } from '../../data/thrift/thriftDetailData';
+import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
 
 type InfoTab = 'desc' | 'audit' | 'origin' | 'shipping';
 
@@ -485,6 +486,15 @@ export const ThriftDetail: React.FC = () => {
             )}
           </div>
         </section>
+
+        {/* ── Đánh giá & Nhận xét sản phẩm [FE-S5-03] ── */}
+        <ProductReviewsSection
+          productId={product.id || id || ''}
+          productTitle={product.title}
+          productImage={product.mainImage}
+          initialRating={product.rating || 5.0}
+          initialCount={product.reviewCount || 0}
+        />
 
         {/* ── Related Products ── */}
         <section data-reveal className="space-y-5 pb-6">

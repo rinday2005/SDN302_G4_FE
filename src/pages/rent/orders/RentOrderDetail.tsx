@@ -13,6 +13,7 @@ import { type StoredRentalOrderRecord, type StoredRentalOrderItem } from '../../
 import { resolveCleanAddress } from '../../../utils/address';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { isObjectIdLike, isUnusableItemTitle, resolveRentProductsByIds } from '../../../utils/rentOrderItemResolver';
+import { ReviewModal } from '../../../components/review/ReviewModal';
 
 interface OrderItemDetail {
   id: string;
@@ -473,6 +474,10 @@ export const RentOrderDetail: React.FC = () => {
   // Master order resolution
   const [orderData, setOrderData] = useState<OrderFullData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Review modal state [FE-S5-03]
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [preselectedReviewProductId, setPreselectedReviewProductId] = useState<string>('');
 
   useEffect(() => {
     let isMounted = true;
@@ -1592,6 +1597,19 @@ export const RentOrderDetail: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreselectedReviewProductId(orderData.items[0]?.productId || '');
+                      setIsReviewModalOpen(true);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      star
+                    </span>
+                    <span>Đánh giá sản phẩm</span>
+                  </button>
                   <Link
                     to="/wallet"
                     className="px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
@@ -1902,6 +1920,21 @@ export const RentOrderDetail: React.FC = () => {
                           </div>
 
                           <div className="flex gap-2">
+                            {orderData.status === 'COMPLETED' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreselectedReviewProductId(item.productId || item.id);
+                                  setIsReviewModalOpen(true);
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                              >
+                                <span className="material-symbols-outlined text-[16px] text-amber-600" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                  star
+                                </span>
+                                <span>Đánh giá</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -2765,6 +2798,28 @@ export const RentOrderDetail: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 5. Review Modal [FE-S5-03] */}
+      {orderData && (
+        <ReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          orderId={orderData.id}
+          orderCode={orderData.code}
+          orderItems={orderData.items.map((it) => ({
+            productId: it.productId || it.id,
+            title: it.title,
+            image: it.image,
+            category: it.category,
+            deposit: it.deposit,
+            price: it.dailyRate,
+          }))}
+          preselectedProductId={preselectedReviewProductId}
+          onReviewSuccess={() => {
+            showToast('Đã gửi đánh giá sản phẩm thành công!');
+          }}
+        />
       )}
 
       {/* Dynamic In-App Toast Notification */}
