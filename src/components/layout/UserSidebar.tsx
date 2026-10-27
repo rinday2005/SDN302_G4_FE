@@ -557,12 +557,16 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
         </Link>
         {/* Messages / Chat */}
         <Link
-          to="/chat"
+          to="/messages"
           onClick={handleLinkClick}
-          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${isCurrent('chat', '/chat')
+          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-colors group ${
+            isCurrent('chat', '/chat') ||
+            isCurrent('messages', '/messages') ||
+            currentPath.includes('/messages') ||
+            currentPath.includes('/chat')
               ? 'bg-[#1C1A18] text-white'
               : 'text-[#1C1A18] hover:bg-white border border-transparent hover:border-[#E8E4DC]/60'
-            }`}
+          }`}
         >
           <div className="flex items-center gap-3">
             <svg

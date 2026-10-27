@@ -255,8 +255,24 @@ export const RentProductDetail: React.FC = () => {
   };
 
   const handleChat = () => {
+    if (user?.role === 'SHOP_OWNER') {
+      showToast('Bạn đang quản trị với vai trò Shop Owner của hệ thống.', 'store', 'info');
+      navigate('/shop/messages');
+      return;
+    }
     handleProtectedAction('trò chuyện trực tiếp với Shop Owner', () => {
-      navigate('/chat');
+      navigate('/messages', {
+        state: {
+          inquiry: {
+            id: product.id,
+            title: product.title,
+            imageUrl: product.images[0]?.src || '',
+            priceText: `${product.pricePerDay.toLocaleString('vi-VN')}₫/ngày (Cọc: ${product.deposit.toLocaleString('vi-VN')}₫)`,
+            type: 'RENT',
+            url: `/rent/products/${product.id}`,
+          },
+        },
+      });
     });
   };
 
@@ -738,6 +754,15 @@ export const RentProductDetail: React.FC = () => {
                     <span className="text-emerald-700 font-medium">{SHOP_OWNER_DATA.responseTime}</span>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={handleChat}
+                  className="px-3 py-1.5 rounded-lg border border-[#D5D0C6] hover:bg-[#F4F0EA] text-[#1C1A18] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                  title="Nhắn tin trực tiếp với Shop Owner"
+                >
+                  <span className="material-symbols-outlined text-[16px]">chat</span>
+                  <span>Nhắn tin</span>
+                </button>
               </div>
             </div>
           </div>
