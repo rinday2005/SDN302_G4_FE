@@ -86,7 +86,6 @@ export const ThriftDetail: React.FC = () => {
   };
 
   const handleBuyNow = () => {
-    if (isSoldOut) return;
     handleProtected(`mua ngay "${product.title}"`, '/cart',
       () => {
         addToCart({
@@ -106,7 +105,6 @@ export const ThriftDetail: React.FC = () => {
   };
 
   const handleAddToCart = () => {
-    if (isSoldOut) return;
     addToCart({
       id: product.id,
       title: product.title,
@@ -382,24 +380,14 @@ export const ThriftDetail: React.FC = () => {
 
               {/* Tình trạng tồn kho */}
               <div className="bg-[#F4F0EA]/60 rounded-xl p-3 border border-[#E7E2DA] text-xs">
-                {isSoldOut ? (
-                  <div className="flex items-center gap-2 text-rose-700 font-bold">
-                    <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
-                    <span>Mặt hàng đã HẾT HÀNG / ĐÃ BÁN (Ngừng nhận đơn giao dịch)</span>
-                  </div>
-                ) : isRentalSource ? (
-                  <div className="flex items-center gap-2 text-amber-900 font-bold">
-                    <span className="w-2 h-2 rounded-full bg-amber-600"></span>
-                    <span>Hiện vật độc bản duy nhất 1 chiếc (Chuyển đổi từ Rent · 1-of-1)</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#5E5A53]">Số lượng tồn kho trong kho:</span>
-                    <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      Còn {product.quantity ?? 10} sản phẩm
-                    </span>
-                  </div>
-                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-[#5E5A53]">
+                    {isRentalSource ? 'Hiện vật tuần hoàn Second-Life:' : 'Số lượng tồn kho trong kho:'}
+                  </span>
+                  <span className="font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Còn {product.quantity ?? 5} sản phẩm
+                  </span>
+                </div>
               </div>
 
               {/* CTA Buttons */}
@@ -407,26 +395,16 @@ export const ThriftDetail: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    disabled={isSoldOut}
                     onClick={handleBuyNow}
-                    className={`w-full py-3.5 px-4 text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      isSoldOut
-                        ? 'bg-stone-300 text-stone-500 cursor-not-allowed shadow-none'
-                        : 'bg-[#1C1A18] hover:bg-black text-white hover:shadow-lg'
-                    }`}
+                    className="w-full py-3.5 px-4 text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer bg-[#1C1A18] hover:bg-black text-white hover:shadow-lg"
                   >
                     <span className="material-symbols-outlined text-[16px]">bolt</span>
-                    {isSoldOut ? 'Hết hàng / Đã bán' : 'Mua ngay'}
+                    Mua ngay
                   </button>
                   <button
                     type="button"
-                    disabled={isSoldOut}
                     onClick={handleAddToCart}
-                    className={`w-full py-3.5 px-4 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      isSoldOut
-                        ? 'bg-stone-100 text-stone-400 border-stone-200 cursor-not-allowed'
-                        : 'bg-[#F4F0EA] hover:bg-[#EBE5DE] text-[#1C1A18] border-[#E7E2DA]'
-                    }`}
+                    className="w-full py-3.5 px-4 text-xs font-bold uppercase tracking-wider rounded-xl border transition-all flex items-center justify-center gap-2 cursor-pointer bg-[#F4F0EA] hover:bg-[#EBE5DE] text-[#1C1A18] border-[#E7E2DA]"
                   >
                     <span className="material-symbols-outlined text-[16px]">shopping_bag</span>
                     Thêm vào giỏ

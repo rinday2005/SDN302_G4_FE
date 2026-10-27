@@ -721,27 +721,30 @@ export const RentOrderDetail: React.FC = () => {
 
       // Fetch real product data for items whose name is missing / a raw ObjectId
       const apiProductMap = await resolveRentProductsByIds(
-        ((source?.items as StoredRentalOrderItem[] | undefined) || []).flatMap((it) => [
-          String(it.productId || it.id || ''),
-          String(it.productName || it.title || ''),
-        ])
+        ((source?.items as StoredRentalOrderItem[] | undefined) || []).flatMap((it) => {
+          const pObj = typeof it.productId === 'object' && it.productId !== null ? (it.productId as Record<string, unknown>) : null;
+          const pIdStr = pObj?._id ? String(pObj._id) : (typeof it.productId === 'string' ? it.productId : String(it.id || ''));
+          return [pIdStr, String(it.productName || it.title || '')];
+        })
       );
 
       if (source?.items && Array.isArray(source.items) && source.items.length > 0) {
         source.items.forEach((it: StoredRentalOrderItem, idx: number) => {
-          const itId = String(it.productId || it.id || `item-${idx + 1}`);
+          const pObj = typeof it.productId === 'object' && it.productId !== null ? (it.productId as Record<string, unknown>) : null;
+          const itId = pObj?._id ? String(pObj._id) : (typeof it.productId === 'string' ? it.productId : String(it.id || `item-${idx + 1}`));
           const apiProd =
             apiProductMap.get(itId) ||
             apiProductMap.get(String(it.productName || it.title || ''));
-          let itTitle = it.productName || it.title || `Sản phẩm thuê #${idx + 1}`;
-          let price = Number(it.pricePerDay || it.dailyPrice || (it as { price?: number }).price || 0);
+          let itTitle = it.productName || it.title || (pObj?.name ? String(pObj.name) : '') || `Sản phẩm thuê #${idx + 1}`;
+          let price = Number(it.pricePerDay || it.dailyPrice || (pObj?.pricePerDay ? Number(pObj.pricePerDay) : 0) || (it as { price?: number }).price || 0);
           let deposit = Number(
             it.depositAmount ||
+            (pObj?.depositAmount ? Number(pObj.depositAmount) : 0) ||
             (it as { itemDeposit?: number }).itemDeposit ||
             (it as { deposit?: number }).deposit ||
             0
           );
-          let image = it.imageUrl || it.image || '';
+          let image = it.imageUrl || it.image || (Array.isArray(pObj?.images) && pObj.images.length > 0 ? String(pObj.images[0]) : '');
 
           if (apiProd) {
             if (isUnusableItemTitle(itTitle)) itTitle = apiProd.name;
@@ -750,21 +753,16 @@ export const RentOrderDetail: React.FC = () => {
             if (!image || image.includes('unsplash.com')) image = apiProd.image || image;
           }
 
-          // If item is generic mock (e.g. from seeded 4.4M order or generic title)
+          // If item title or image is still missing, lookup in master catalog
           let resolvedProd = null;
-          const isGenericMock = !apiProd && (isUnusableItemTitle(itTitle) || isObjectIdLike(itTitle) || itTitle.includes('6adde') || price === 4400000);
-
-          if (!apiProd && (isGenericMock || !image || image.includes('unsplash.com') || deposit === 0 || Boolean(targetProductId))) {
-            // 1. Try resolving by targetProductId or it.productId
-            const pId = String(targetProductId || it.productId || (it as { id?: string }).id || '');
-            if (pId && pId !== 'undefined' && !pId.startsWith('item-')) {
-              const found = getRentProductDetail(pId);
-              if (found && found.title && !found.title.includes('Thuê') && !isUnusableItemTitle(found.title)) {
+          if (isUnusableItemTitle(itTitle) || isObjectIdLike(itTitle) || !image) {
+            if (itId && !itId.startsWith('item-')) {
+              const found = getRentProductDetail(itId);
+              if (found && !isUnusableItemTitle(found.title)) {
                 resolvedProd = found;
               }
             }
 
-            // 2. Try resolving from reuse_shared_booked_dates
             if (!resolvedProd) {
               try {
                 const sharedRaw = localStorage.getItem('reuse_shared_booked_dates');
@@ -795,40 +793,20 @@ export const RentOrderDetail: React.FC = () => {
               }
             }
 
-            // 3. Fallback specifically to user's luxury rental dress
-            if (!resolvedProd || isUnusableItemTitle(resolvedProd.title)) {
-              resolvedProd = getRentProductDetail('6ad286f6f507857852155c64');
-            }
-
             if (resolvedProd) {
-              if (isGenericMock) {
+              if (isUnusableItemTitle(itTitle) || isObjectIdLike(itTitle)) {
                 itTitle = resolvedProd.title;
               }
-              if (!price || price === 4400000 || price === 2300000 || price === 0) {
-                price = resolvedProd.pricePerDay || 350000;
-              }
-              if (!deposit || deposit === 0 || deposit === 22000000) {
-                deposit = resolvedProd.deposit || (resolvedProd.pricePerDay * 4) || 1800000;
-              }
-              if (!image || image.includes('unsplash.com') || Boolean(targetProductId) || resolvedProd.images?.[0]?.src) {
-                image = resolvedProd.images?.[0]?.src || image;
-              }
+              if (!price) price = resolvedProd.pricePerDay || 250000;
+              if (!deposit) deposit = resolvedProd.deposit || (resolvedProd.pricePerDay * 4) || 1000000;
+              if (!image) image = resolvedProd.images?.[0]?.src || '';
             }
           }
 
-          if (isUnusableItemTitle(itTitle) || isObjectIdLike(itTitle) || itTitle.includes('6adde')) {
-            const dress = getRentProductDetail('6ad286f6f507857852155c64');
-            itTitle = dress.title;
-            if (!price || price === 2300000) price = dress.pricePerDay || 350000;
-            if (!deposit || deposit === 0) deposit = dress.deposit || 1800000;
-            if (!image || image.includes('unsplash.com')) image = dress.images?.[0]?.src || '/images/partydress4.jpg';
-          }
-
-          if (!price) price = 350000;
-          if (!deposit) deposit = price * 4 || 1800000;
-
+          if (!price) price = 250000;
+          if (!deposit) deposit = price * 4 || 1000000;
           if (!image) {
-            image = '/images/partydress4.jpg';
+            image = '/images/shoesrent.jpg';
           }
 
           const qty = it.quantity || (it as { qty?: number }).qty || 1;

@@ -75,7 +75,13 @@ export const UserWallet: React.FC = () => {
       setLoading(true);
       try {
         const res = await getMyRentalOrdersApi();
-        const combinedOrders: RentalOrderApi[] = Array.isArray(res) ? [...res] : [];
+        const rawList = Array.isArray(res) ? res : [];
+        const combinedOrders: RentalOrderApi[] = rawList.filter((o) => {
+          const rId = typeof o.renterId === 'object' && o.renterId !== null
+            ? (o.renterId as { _id?: string })._id
+            : String(o.renterId || '');
+          return !rId || !uId || rId === String(uId);
+        });
 
         // Đồng bộ thêm các đơn trong localStorage nếu có trạng thái trả hàng mới hơn
         if (uId) {
@@ -85,6 +91,7 @@ export const UserWallet: React.FC = () => {
               const localList = JSON.parse(localRaw);
               if (Array.isArray(localList)) {
                 localList.forEach((lo) => {
+                  if (lo.renterId && String(lo.renterId) !== String(uId)) return;
                   const matchIdx = combinedOrders.findIndex(
                     (o) =>
                       (o._id && lo._id && o._id === lo._id) ||
@@ -97,7 +104,7 @@ export const UserWallet: React.FC = () => {
                     ) {
                       combinedOrders[matchIdx] = { ...combinedOrders[matchIdx], ...lo };
                     }
-                  } else if (lo.orderCode || lo._id) {
+                  } else if (combinedOrders.length === 0 && (lo.orderCode || lo._id)) {
                     combinedOrders.push(lo);
                   }
                 });

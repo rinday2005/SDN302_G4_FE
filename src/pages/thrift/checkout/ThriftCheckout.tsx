@@ -257,6 +257,53 @@ export const ThriftCheckout: React.FC = () => {
       const key = uId ? `user_thrift_orders_${uId}` : 'user_thrift_orders';
       const existing = JSON.parse(localStorage.getItem(key) || '[]');
       localStorage.setItem(key, JSON.stringify([orderRes, ...existing]));
+
+      // Sync immediately to SHOP_THRIFT_ORDERS_DATA for Shop Owner view
+      const shopKey = 'SHOP_THRIFT_ORDERS_DATA';
+      const shopExisting = JSON.parse(localStorage.getItem(shopKey) || '[]');
+      const existsInShop = shopExisting.some(
+        (o: { id?: string; _dbId?: string }) =>
+          o.id === orderRes.orderCode ||
+          o.id === `#${orderRes.orderCode}` ||
+          o._dbId === orderRes._id
+      );
+      if (!existsInShop) {
+        const mappedShopOrder = {
+          id: orderRes.orderCode?.startsWith('#') ? orderRes.orderCode : `#${orderRes.orderCode || orderRes._id}`,
+          _dbId: orderRes._id,
+          createdAt: new Date().toLocaleDateString('vi-VN'),
+          rawCreatedAt: Date.now(),
+          buyer: {
+            name: consigneeName,
+            phone,
+            email: user?.email || 'buyer@reuse.vn',
+            shippingAddress,
+            kycTier: 'KYC Xác thực CCCD · TIER 2',
+          },
+          listings: itemizedList.map((item, idx) => ({
+            id: item.id || `item-${idx}`,
+            title: item.title,
+            serialNumber: `#GARMENT-${String(item.id).slice(-6).toUpperCase()}`,
+            grade: item.grade || 'Grade 1 · Rất tốt (98%)',
+            price: item.price,
+            imageUrl: item.image,
+          })),
+          pricing: {
+            subtotal: itemsSubtotal,
+            shippingFee: THRIFT_SHIPPING_FEE,
+            totalAmount: grandTotal,
+          },
+          status: 'PAID',
+          shippingInfo: {
+            carrier: 'Bưu tá Nanuk Garment Express',
+            trackingCode: orderRes.trackingCode || `#NK-${Math.floor(100000 + Math.random() * 900000)}`,
+            dispatchedAt: undefined,
+            sealCode: orderRes.sealCode || `SEAL-ATELIER-${Math.floor(1000 + Math.random() * 9000)}`,
+          },
+        };
+        localStorage.setItem(shopKey, JSON.stringify([mappedShopOrder, ...shopExisting]));
+      }
+
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new Event('rental_order_updated'));
     } catch {
@@ -358,6 +405,20 @@ export const ThriftCheckout: React.FC = () => {
           localStorage.setItem(key, JSON.stringify(updated));
           window.dispatchEvent(new Event('storage'));
           window.dispatchEvent(new Event('rental_order_updated'));
+        }
+        // Also update in SHOP_THRIFT_ORDERS_DATA
+        const shopKey = 'SHOP_THRIFT_ORDERS_DATA';
+        const shopRaw = localStorage.getItem(shopKey);
+        if (shopRaw) {
+          const shopList = JSON.parse(shopRaw);
+          const updatedShop = shopList.map((o: { id?: string; _dbId?: string; status?: string }) =>
+            o._dbId === orderRes._id ||
+            o.id === orderRes.orderCode ||
+            o.id === `#${orderRes.orderCode}`
+              ? { ...o, status: 'PAID' }
+              : o
+          );
+          localStorage.setItem(shopKey, JSON.stringify(updatedShop));
         }
       } catch {
         // ignore
@@ -598,7 +659,7 @@ export const ThriftCheckout: React.FC = () => {
                         Bưu tá bảo hiểm bọc thép White-Glove Insured Secondhand Courier
                       </h3>
                       <p className="text-xs text-[#7B766F] mt-1 leading-relaxed">
-                        Gộp chung toàn bộ {itemizedList.length} hiện vật trong thùng gỗ đệm chống sốc, niêm phong ni-tơ yếm khí, GPS thời gian thực và bàn giao tận tay kèm biên bản nghiệm thu.
+                        Gộp chung toàn bộ {itemizedList.length} hiện vật trong vali đệm bảo vệ phom dáng, niêm phong thẻ sáp Atelier, định vị thời gian thực và bàn giao tận tay kèm hướng dẫn mặc thử.
                       </p>
                       <div className="flex flex-wrap gap-4 mt-2 text-[11px] text-[#7B766F] uppercase font-semibold">
                         <span className="inline-flex items-center gap-1 text-[#576151]">
@@ -745,7 +806,7 @@ export const ThriftCheckout: React.FC = () => {
                 <div className="flex justify-between items-center pt-1 border-t border-[#F1EDE6]">
                   <div>
                     <p className="font-medium text-[#1C1C18]">Bảo hiểm lưu ký ký quỹ Escrow</p>
-                    <p className="text-[11px] text-[#7B766F]">Bảo vệ quyền nghiệm thu 72 giờ</p>
+                    <p className="text-[11px] text-[#7B766F]">Bảo vệ 72h mặc thử &amp; đối kiểm phom dáng</p>
                   </div>
                   <span className="text-[11px] uppercase font-bold text-[#576151]">
                     0₫ (Đài thọ)
