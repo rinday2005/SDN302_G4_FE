@@ -290,17 +290,19 @@ export const MyRentOrders: React.FC = () => {
     // Items
     const rawItems: StoredRentalOrderItem[] = (raw.items as StoredRentalOrderItem[]) || [];
     const items = rawItems.map((it, idx) => {
-      let pricePerDay = it.pricePerDay || it.dailyPrice || (it as { price?: number }).price || 0;
+      const pObj = typeof it.productId === 'object' && it.productId !== null ? (it.productId as Record<string, unknown>) : null;
+      const pIdStr = pObj?._id ? String(pObj._id) : (typeof it.productId === 'string' ? it.productId : String(it.id || ''));
+      let pricePerDay = it.pricePerDay || it.dailyPrice || (pObj?.pricePerDay ? Number(pObj.pricePerDay) : 0) || (it as { price?: number }).price || 0;
       const qty = it.quantity || 1;
-      let title = it.productName || it.title || '';
-      let image = it.imageUrl || it.image || '';
+      let title = it.productName || it.title || (pObj?.name ? String(pObj.name) : '');
+      let image = it.imageUrl || it.image || (Array.isArray(pObj?.images) && pObj.images.length > 0 ? String(pObj.images[0]) : '');
 
+      // Resolve from master catalog if title is generic or image is missing
       const isGeneric = !title || isUnusableItemTitle(title) || isObjectIdLike(title) || title.includes('6adde');
-      if (isGeneric || !image || image.includes('unsplash.com') || pricePerDay === 0) {
+      if (isGeneric || !image) {
         let resolved = null;
-        const pId = String(it.productId || it.id || '');
-        if (pId && !pId.startsWith('item-')) {
-          const found = getRentProductDetail(pId);
+        if (pIdStr && !pIdStr.startsWith('item-')) {
+          const found = getRentProductDetail(pIdStr);
           if (found && !isUnusableItemTitle(found.title)) resolved = found;
         }
 
@@ -327,38 +329,23 @@ export const MyRentOrders: React.FC = () => {
           }
         }
 
-        // Fallback specifically to user's luxury rental dress
-        if (!resolved || isUnusableItemTitle(resolved.title)) {
-          resolved = getRentProductDetail('6ad286f6f507857852155c64');
-        }
-
         if (resolved) {
           if (isGeneric) title = resolved.title;
-          if (!pricePerDay || pricePerDay === 2300000) pricePerDay = resolved.pricePerDay || 350000;
-          if (!image || image.includes('unsplash.com') || resolved.images?.[0]?.src) {
-            image = resolved.images?.[0]?.src || image;
-          }
+          if (!pricePerDay) pricePerDay = resolved.pricePerDay || 250000;
+          if (!image) image = resolved.images?.[0]?.src || '';
         }
-      }
-
-      if (isUnusableItemTitle(title) || isObjectIdLike(title) || title.includes('6adde')) {
-        const luxuryDress = getRentProductDetail('6ad286f6f507857852155c64');
-        title = luxuryDress?.title || 'Đầm Dạ Hội Cúp Ngực Đính Pha Lê Đuôi Cá';
-        if (!image || image.includes('unsplash.com')) image = luxuryDress?.images?.[0]?.src || '/images/partydress4.jpg';
-        if (!pricePerDay || pricePerDay === 2300000) pricePerDay = luxuryDress?.pricePerDay || 350000;
       }
 
       if (!pricePerDay) pricePerDay = 220000;
       if (!title) title = `Sản phẩm thuê (${rawCode})`;
       if (!image) {
-        image =
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBmFHFDSIg4hOhOPqA36mT1kkDCl3WPEhUJRK08XZrwDTHzuiTwpPS19S9rp72RfWd75ovkeghRObBnjMEjwjM4C-han-LYxuwvvmbNoQxfmQdJ0b32KcCw-X0Jnqe_U23o9wu4QRqi1jvm0k2QIjvQX3uucHyHqIp2-wcXnh_PJzwTUThv7mBwqwtAjiXdUPGAdc-I8uwnLjfVeTg2aWPw2sXhSqhHAp-MSwbmguRZ';
+        image = '/images/shoesrent.jpg';
       }
 
       const itemTotal = it.itemRentTotal || (pricePerDay * dayCount * qty);
 
       return {
-        id: it.productId || it.id || `item-${cleanId}-${idx}`,
+        id: pIdStr || `item-${cleanId}-${idx}`,
         title,
         grade: it.grade || 'Grade A+',
         codeBadge: `Lưu ký #${rawCode.slice(-4)}-${idx + 1}`,
@@ -579,10 +566,19 @@ export const MyRentOrders: React.FC = () => {
       }
 
       // B. Read from backend API (Source of truth strictly isolated for the currently authenticated user)
+      let apiSuccess = false;
       try {
         const apiOrders = await getMyRentalOrdersApi();
-        if (Array.isArray(apiOrders) && apiOrders.length > 0) {
+        if (Array.isArray(apiOrders)) {
+          apiSuccess = true;
           for (const raw of apiOrders) {
+            const orderRenterId = typeof raw.renterId === 'object' && raw.renterId !== null
+              ? (raw.renterId as { _id?: string })._id
+              : String(raw.renterId || '');
+            if (uId && orderRenterId && orderRenterId !== String(uId)) {
+              continue;
+            }
+
             const key = (raw.orderCode || raw._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
             if (!seenIds.has(key)) {
               const mapped = mapOrderToRecord(raw);
@@ -597,7 +593,8 @@ export const MyRentOrders: React.FC = () => {
               const existingList = existingRaw ? JSON.parse(existingRaw) : [];
               const returnMap = new Map<string, { status: string; pickupScheduled?: boolean; returnedAt?: string }>();
               if (Array.isArray(existingList)) {
-                existingList.forEach((e: { orderCode?: string; _id?: string; status?: string; pickupScheduled?: boolean; returnedAt?: string }) => {
+                existingList.forEach((e: { orderCode?: string; _id?: string; status?: string; pickupScheduled?: boolean; returnedAt?: string; renterId?: string }) => {
+                  if (e.renterId && String(e.renterId) !== String(uId)) return;
                   if (e.status === 'RETURN_REQUESTED' || e.pickupScheduled) {
                     const c = (e.orderCode || e._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                     if (c) returnMap.set(c, { status: e.status || 'RETURN_REQUESTED', pickupScheduled: e.pickupScheduled, returnedAt: e.returnedAt });
@@ -605,14 +602,21 @@ export const MyRentOrders: React.FC = () => {
                 });
               }
 
-              const mergedApiOrders = apiOrders.map((o) => {
-                const c = (o.orderCode || o._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                const localReq = returnMap.get(c);
-                if (localReq && o.status !== 'COMPLETED' && o.status !== 'RETURNED') {
-                  return { ...o, status: 'RETURN_REQUESTED', pickupScheduled: true, returnedAt: localReq.returnedAt };
-                }
-                return o;
-              });
+              const mergedApiOrders = apiOrders
+                .filter((o) => {
+                  const oRenter = typeof o.renterId === 'object' && o.renterId !== null
+                    ? (o.renterId as { _id?: string })._id
+                    : String(o.renterId || '');
+                  return !oRenter || !uId || oRenter === String(uId);
+                })
+                .map((o) => {
+                  const c = (o.orderCode || o._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                  const localReq = returnMap.get(c);
+                  if (localReq && o.status !== 'COMPLETED' && o.status !== 'RETURNED') {
+                    return { ...o, status: 'RETURN_REQUESTED', pickupScheduled: true, returnedAt: localReq.returnedAt };
+                  }
+                  return o;
+                });
               localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(mergedApiOrders));
             } catch {
               localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(apiOrders));
@@ -623,8 +627,8 @@ export const MyRentOrders: React.FC = () => {
         console.warn('Could not load orders from API:', err);
       }
 
-      // C. Read stored orders ONLY from this specific user's scoped key (offline / optimistic cache)
-      if (uId) {
+      // C. Read stored orders ONLY if API is completely offline / failed
+      if (uId && !apiSuccess) {
         try {
           const userKey = `user_rental_orders_${uId}`;
           const storedRaw = localStorage.getItem(userKey);
@@ -632,6 +636,7 @@ export const MyRentOrders: React.FC = () => {
             const parsed = JSON.parse(storedRaw);
             const userOrders: StoredRentalOrderRecord[] = Array.isArray(parsed) ? parsed : [parsed];
             for (const stored of userOrders) {
+              if (stored.renterId && String(stored.renterId) !== String(uId)) continue;
               const key = (stored.orderCode || stored._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
               if (key && !seenIds.has(key)) {
                 const mapped = mapOrderToRecord(stored);
@@ -678,9 +683,6 @@ export const MyRentOrders: React.FC = () => {
             if (info) {
               if (isUnusableItemTitle(it.title)) it.title = info.name;
               if (info.image) it.img = normalizeImageUrl(info.image);
-            } else if (isUnusableItemTitle(it.title) || isObjectIdLike(it.title) || it.title.includes('6adde')) {
-              it.title = 'Đầm Dạ Hội Cúp Ngực Đính Pha Lê Đuôi Cá';
-              it.img = '/images/partydress4.jpg';
             }
           });
         });
@@ -736,14 +738,6 @@ export const MyRentOrders: React.FC = () => {
               ...it,
               title: info.name,
               img: info.image ? normalizeImageUrl(info.image) : it.img,
-            };
-          }
-          if (isUnusableItemTitle(it.title) || isObjectIdLike(it.title) || it.title.includes('6adde')) {
-            changed = true;
-            return {
-              ...it,
-              title: 'Đầm Dạ Hội Cúp Ngực Đính Pha Lê Đuôi Cá',
-              img: '/images/partydress4.jpg',
             };
           }
           return it;

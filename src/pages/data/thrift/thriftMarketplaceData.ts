@@ -21,6 +21,7 @@ export interface ThriftProduct {
   status?: string;
   sourceType?: string;
   name?: string;
+  isSold?: boolean;
 }
 
 export type ThriftSortKey = 'recommended' | 'price-asc' | 'price-desc' | 'latest';

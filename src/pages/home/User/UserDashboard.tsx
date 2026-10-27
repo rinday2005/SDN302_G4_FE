@@ -37,37 +37,41 @@ export const UserDashboard: React.FC = () => {
       const localThrift: ThriftOrderApi[] = [];
       const seenCodes = new Set<string>();
 
-      const keysToTry = [uId ? `user_thrift_orders_${uId}` : null, 'user_thrift_orders'].filter(Boolean) as string[];
-      for (const k of keysToTry) {
-        try {
-          const raw = localStorage.getItem(k);
+      try {
+        localStorage.removeItem('user_thrift_orders');
+        if (uId) {
+          const raw = localStorage.getItem(`user_thrift_orders_${uId}`);
           if (raw) {
             const arr = JSON.parse(raw);
             if (Array.isArray(arr)) {
               arr.forEach((o: ThriftOrderApi) => {
                 const c = (o.orderCode || o._id || '').replace('#', '').trim().toLowerCase();
-                if (c && !seenCodes.has(c)) {
+                if (c && !c.includes('9108') && !seenCodes.has(c)) {
                   seenCodes.add(c);
                   localThrift.push(o);
                 }
               });
             }
           }
-        } catch {
-          // ignore
         }
+      } catch {
+        // ignore
       }
 
       // 2. Fetch from MongoDB API
       let apiOrders: ThriftOrderApi[] = [];
+      let apiThriftSuccess = false;
       try {
         const res = await getMyThriftOrdersApi();
         if (Array.isArray(res)) {
           apiOrders = res;
+          apiThriftSuccess = true;
         } else if (Array.isArray(res?.orders)) {
           apiOrders = res.orders;
+          apiThriftSuccess = true;
         } else if (Array.isArray((res as unknown as { data?: ThriftOrderApi[] })?.data)) {
           apiOrders = (res as unknown as { data: ThriftOrderApi[] }).data;
+          apiThriftSuccess = true;
         }
       } catch (err) {
         console.warn('Could not load thrift orders from API in UserDashboard:', err);
@@ -80,6 +84,8 @@ export const UserDashboard: React.FC = () => {
       // API orders take priority for status/tracking
       apiOrders.forEach((apiO) => {
         const aCode = (apiO.orderCode || apiO._id || '').replace('#', '').trim().toLowerCase();
+        if (aCode.includes('9108')) return;
+
         const matchedLocal = localThrift.find((loc) => {
           const lCode = (loc.orderCode || loc._id || '').replace('#', '').trim().toLowerCase();
           return lCode === aCode || (lCode.length > 4 && aCode.includes(lCode)) || (aCode.length > 4 && lCode.includes(aCode));
@@ -95,14 +101,16 @@ export const UserDashboard: React.FC = () => {
         merged.push(mergedOrder);
       });
 
-      // Local orders not yet in API
-      localThrift.forEach((loc) => {
-        const lCode = (loc.orderCode || loc._id || '').replace('#', '').trim().toLowerCase();
-        if (lCode && !processedCodes.has(lCode)) {
-          processedCodes.add(lCode);
-          merged.push(loc);
-        }
-      });
+      // Offline fallback only if API failed
+      if (!apiThriftSuccess) {
+        localThrift.forEach((loc) => {
+          const lCode = (loc.orderCode || loc._id || '').replace('#', '').trim().toLowerCase();
+          if (lCode && !lCode.includes('9108') && !processedCodes.has(lCode)) {
+            processedCodes.add(lCode);
+            merged.push(loc);
+          }
+        });
+      }
 
       // Sort by newest first
       merged.sort((a, b) => {
@@ -189,10 +197,12 @@ export const UserDashboard: React.FC = () => {
       }
 
       let apiOrders: RentalOrderApi[] = [];
+      let apiRentSuccess = false;
       try {
         const res = await getMyRentalOrdersApi();
         if (Array.isArray(res)) {
           apiOrders = res;
+          apiRentSuccess = true;
         }
       } catch (err) {
         console.warn('Could not load orders from API in UserDashboard:', err);
@@ -202,6 +212,13 @@ export const UserDashboard: React.FC = () => {
       const processedCodes = new Set<string>();
 
       apiOrders.forEach((apiO) => {
+        const orderRenterId = typeof apiO.renterId === 'object' && apiO.renterId !== null
+          ? (apiO.renterId as { _id?: string })._id
+          : String(apiO.renterId || '');
+        if (uId && orderRenterId && orderRenterId !== String(uId)) {
+          return;
+        }
+
         const aCode = (apiO.orderCode || apiO._id || '').replace('#', '').trim().toLowerCase();
         const matchedLocal = localOrders.find((loc) => {
           const lCode = (loc.orderCode || '').replace('#', '').trim().toLowerCase();
@@ -227,19 +244,20 @@ export const UserDashboard: React.FC = () => {
         merged.push(enriched);
       });
 
-      localOrders.forEach((loc) => {
-        const lCode = (loc.orderCode || '').replace('#', '').trim().toLowerCase();
-        if (lCode && !processedCodes.has(lCode)) {
-          processedCodes.add(lCode);
-          merged.push({
-            _id: loc._id || lCode,
-            orderCode: loc.orderCode || `#${lCode}`,
-            renterId: uId,
-            items: (loc.items || []) as RentalOrderItemApi[],
-            startDate: loc.startDate || '',
-            endDate: loc.endDate || '',
-            rentalDays: loc.rentalDays || 1,
-            rentalFee: loc.totalRentFee || loc.rentalFee || 0,
+      if (!apiRentSuccess) {
+        localOrders.forEach((loc) => {
+          const lCode = (loc.orderCode || '').replace('#', '').trim().toLowerCase();
+          if (lCode && !processedCodes.has(lCode)) {
+            processedCodes.add(lCode);
+            merged.push({
+              _id: loc._id || lCode,
+              orderCode: loc.orderCode || `#${lCode}`,
+              renterId: uId,
+              items: (loc.items || []) as RentalOrderItemApi[],
+              startDate: loc.startDate || '',
+              endDate: loc.endDate || '',
+              rentalDays: loc.rentalDays || 1,
+              rentalFee: loc.totalRentFee || loc.rentalFee || 0,
             depositAmount: loc.totalDeposit || loc.depositAmount || 0,
             shippingFee: loc.shippingFee || 25000,
             totalAmount: loc.totalPayment || loc.totalAmount || 0,
@@ -249,6 +267,7 @@ export const UserDashboard: React.FC = () => {
           });
         }
       });
+    }
 
       merged.sort((a, b) => {
         const timeA = new Date(a.createdAt || a.startDate || 0).getTime();

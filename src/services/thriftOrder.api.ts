@@ -1,11 +1,15 @@
 import api from './api';
 
 export interface ThriftOrderItemApi {
-  listingId: string | { _id: string; name?: string; price?: number; condition?: string; images?: string[]; location?: string };
-  productName: string;
+  listingId: string | { _id: string; name?: string; title?: string; price?: number; condition?: string; images?: string[]; location?: string };
+  productId?: string | { _id: string; name?: string; title?: string; price?: number; condition?: string; images?: string[]; location?: string };
+  productName?: string;
+  name?: string;
+  title?: string;
   price: number;
   quantity: number;
   imageUrl?: string;
+  images?: string[];
   condition?: string;
   vaultOrigin?: string;
   warranty?: string;
@@ -59,6 +63,7 @@ export interface ThriftOrderApi {
   paymentMethod: string;
   trackingCode?: string;
   courierName?: string;
+  sealCode?: string;
   escrowStatus?: 'PENDING' | 'HELD_72H' | 'RELEASED' | 'REFUNDED';
   escrowExpiresAt?: string | null;
   provenanceVaultCertId?: string;
@@ -74,6 +79,8 @@ export interface ThriftOrderApi {
   reviews?: ThriftOrderReview[];
   note?: string;
   timeline?: ThriftOrderTimelineApi[];
+  buyerConfirmed?: boolean;
+  buyerConfirmedAt?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -193,9 +200,10 @@ export const reviewThriftOrderApi = async (
  */
 export const updateThriftOrderStatusApi = async (
   id: string,
-  data: { status?: string; trackingCode?: string; courierName?: string; note?: string }
+  data: { status?: string; trackingCode?: string; courierName?: string; note?: string; sealCode?: string }
 ): Promise<ThriftOrderApi> => {
-  const res = await api.patch(`/thrift/orders/${id}/status`, data);
+  const cleanId = id.replace(/^#/, '');
+  const res = await api.patch(`/thrift/orders/${cleanId}/status`, data);
   return res.data?.data || res.data;
 };
 
@@ -207,7 +215,35 @@ export const getShopThriftOrdersApi = async (params?: {
   limit?: number;
   status?: string;
 }): Promise<GetMyThriftOrdersResponse> => {
-  const res = await api.get('/thrift/orders/shop', { params });
-  return res.data?.data || res.data;
+  let res;
+  try {
+    res = await api.get('/thrift/orders/seller-orders', { params });
+  } catch {
+    res = await api.get('/thrift/orders/shop', { params });
+  }
+  const payload = res.data?.data || res.data;
+  if (Array.isArray(payload)) {
+    return {
+      orders: payload,
+      pagination: {
+        page: 1,
+        limit: payload.length,
+        total: payload.length,
+        totalPages: 1,
+      },
+    };
+  }
+  if (Array.isArray(payload?.orders)) {
+    return payload;
+  }
+  return {
+    orders: [],
+    pagination: {
+      page: 1,
+      limit: 10,
+      total: 0,
+      totalPages: 0,
+    },
+  };
 };
 

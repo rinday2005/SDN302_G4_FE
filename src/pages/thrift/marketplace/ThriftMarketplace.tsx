@@ -115,6 +115,9 @@ export const ThriftMarketplace: React.FC = () => {
                             href: `/thrift/products/${item._id}`,
                             image: img,
                             verifiedBy: 'ReUse Hub Kiểm định',
+                            status: item.status || 'APPROVED',
+                            quantity: item.quantity !== undefined ? Number(item.quantity) : 5,
+                            isSold: false,
                         };
                     });
                     setDbProducts(mapped);
@@ -162,6 +165,21 @@ export const ThriftMarketplace: React.FC = () => {
         return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
     }, []);
 
+    // Listen to order creation / payment updates to refresh marketplace catalog
+    const [ordersVersion, setOrdersVersion] = useState(0);
+
+    useEffect(() => {
+        const handleOrdersChange = () => {
+            setOrdersVersion((v) => v + 1);
+        };
+        window.addEventListener('storage', handleOrdersChange);
+        window.addEventListener('rental_order_updated', handleOrdersChange);
+        return () => {
+            window.removeEventListener('storage', handleOrdersChange);
+            window.removeEventListener('rental_order_updated', handleOrdersChange);
+        };
+    }, []);
+
     // Auth requirement modal state
     const [authModal, setAuthModal] = useState<{
         open: boolean;
@@ -196,9 +214,18 @@ export const ThriftMarketplace: React.FC = () => {
         toggleWishlist(product.id, 'THRIFT');
     };
 
+    // Master Catalog: Lấy trực tiếp 33 sản phẩm từ MongoDB thriftListings
+    const allProducts = useMemo(() => {
+        void ordersVersion;
+        if (dbProducts.length > 0) {
+            return dbProducts;
+        }
+        return THRIFT_PRODUCTS;
+    }, [dbProducts, ordersVersion]);
+
     // Filter & sort logic
     const filteredProducts = useMemo(() => {
-        const sourceProducts = dbProducts.length > 0 ? dbProducts : THRIFT_PRODUCTS;
+        const sourceProducts = allProducts;
         const list = sourceProducts.filter((item) => {
             // Search text
             if (searchQuery.trim()) {
@@ -283,7 +310,7 @@ export const ThriftMarketplace: React.FC = () => {
 
         return list;
     }, [
-        dbProducts,
+        allProducts,
         searchQuery,
         selectedCategory,
         selectedPrice,
@@ -631,6 +658,12 @@ export const ThriftMarketplace: React.FC = () => {
                                             <span className="bg-[#FAF0D7] text-[#8C6D1F] text-[11px] font-semibold px-2 py-0.5 rounded-md shadow-2xs">
                                                 Đồ cũ
                                             </span>
+                                            {product.quantity !== undefined && (
+                                                <span className="bg-[#1C1A18]/85 backdrop-blur-xs text-[#F5F2EB] text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs flex items-center gap-1 border border-stone-700/40">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                                    Còn tồn kho: {product.quantity}
+                                                </span>
+                                            )}
                                         </div>
 
                                         {/* Wishlist Button top-right */}

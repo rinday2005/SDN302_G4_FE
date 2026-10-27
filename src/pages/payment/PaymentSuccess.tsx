@@ -36,7 +36,11 @@ interface StoredOrder {
   useEffect(() => {
     try {
       const cleanTarget = orderCode.replace('#', '').trim().toLowerCase();
-      const isThrift = cleanTarget.includes('trf');
+      const isThrift =
+        cleanTarget.includes('trf') ||
+        cleanTarget.includes('thf') ||
+        cleanTarget.includes('thrift') ||
+        params.get('type') === 'THRIFT';
 
       let uId = '';
       try {
@@ -49,43 +53,76 @@ interface StoredOrder {
         // ignore
       }
 
-      if (uId) {
-        if (isThrift) {
-          // Cập nhật đơn hàng THRIFT
-          const thriftKey = `user_thrift_orders_${uId}`;
+      if (isThrift) {
+        // Cập nhật đơn hàng THRIFT trong tất cả các key liên quan
+        const keys = [uId ? `user_thrift_orders_${uId}` : null, 'user_thrift_orders'].filter(Boolean) as string[];
+        keys.forEach((thriftKey) => {
           const rawThrift = localStorage.getItem(thriftKey);
           if (rawThrift) {
-            const thriftOrders: StoredOrder[] = JSON.parse(rawThrift);
-            if (Array.isArray(thriftOrders)) {
-              let updated = false;
-              const newThriftOrders = thriftOrders.map((o: StoredOrder, idx: number) => {
-                const oCode = (o.orderCode || '').replace('#', '').trim().toLowerCase();
-                const isMatch =
-                  oCode === cleanTarget ||
-                  oCode.includes(cleanTarget) ||
-                  cleanTarget.includes(oCode) ||
-                  (idx === 0 && o.status === 'PENDING_PAYMENT');
+            try {
+              const thriftOrders: StoredOrder[] = JSON.parse(rawThrift);
+              if (Array.isArray(thriftOrders)) {
+                let updated = false;
+                const newThriftOrders = thriftOrders.map((o: StoredOrder, idx: number) => {
+                  const oCode = (o.orderCode || '').replace('#', '').trim().toLowerCase();
+                  const isMatch =
+                    oCode === cleanTarget ||
+                    oCode.includes(cleanTarget) ||
+                    cleanTarget.includes(oCode) ||
+                    (idx === 0 && o.status === 'PENDING_PAYMENT');
 
-                if (isMatch) {
-                  updated = true;
+                  if (isMatch) {
+                    updated = true;
+                    return {
+                      ...o,
+                      status: 'PAID',
+                      paymentStatus: 'PAID',
+                      escrowStatus: 'HELD_72H',
+                      transactionNo,
+                      bankCode,
+                      paidAt: new Date().toISOString(),
+                    };
+                  }
+                  return o;
+                });
+                if (updated) {
+                  localStorage.setItem(thriftKey, JSON.stringify(newThriftOrders));
+                }
+              }
+            } catch {
+              // ignore
+            }
+          }
+        });
+
+        // Đồng bộ sang SHOP_THRIFT_ORDERS_DATA
+        try {
+          const shopRaw = localStorage.getItem('SHOP_THRIFT_ORDERS_DATA');
+          if (shopRaw) {
+            const shopOrders = JSON.parse(shopRaw);
+            if (Array.isArray(shopOrders)) {
+              let shopUpdated = false;
+              const newShopOrders = shopOrders.map((so: { id?: string; _dbId?: string; status?: string; paymentStatus?: string }) => {
+                const soCode = (so.id || so._dbId || '').replace('#', '').trim().toLowerCase();
+                if (soCode === cleanTarget || soCode.includes(cleanTarget) || cleanTarget.includes(soCode)) {
+                  shopUpdated = true;
                   return {
-                    ...o,
+                    ...so,
                     status: 'PAID',
                     paymentStatus: 'PAID',
-                    escrowStatus: 'HELD_72H',
-                    transactionNo,
-                    bankCode,
-                    paidAt: new Date().toISOString(),
                   };
                 }
-                return o;
+                return so;
               });
-              if (updated) {
-                localStorage.setItem(thriftKey, JSON.stringify(newThriftOrders));
+              if (shopUpdated) {
+                localStorage.setItem('SHOP_THRIFT_ORDERS_DATA', JSON.stringify(newShopOrders));
               }
             }
           }
-        } else {
+        } catch {
+          // ignore
+        }
+      } else if (uId) {
           // Cập nhật đơn hàng RENT
           const rentKey = `user_rental_orders_${uId}`;
           const raw = localStorage.getItem(rentKey);
@@ -129,14 +166,13 @@ interface StoredOrder {
             }
           }
         }
-      }
 
       // Clean up legacy global shared keys to prevent cross-account pollution
       localStorage.removeItem('user_rental_orders');
     } catch {
       // ignore
     }
-  }, [orderCode, transactionNo, bankCode]);
+  }, [orderCode, transactionNo, bankCode, params]);
 
   return (
     <div className="min-h-screen bg-[#FBF9F5] text-[#1E1E1E] font-sans antialiased flex flex-col justify-between">

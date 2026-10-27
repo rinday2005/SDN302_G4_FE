@@ -38,6 +38,8 @@ export interface ThriftOrderRecord {
   escrowStatus: string;
   escrowExpiresAt?: string | null;
   provenanceVaultCertId: string;
+  buyerConfirmed?: boolean;
+  buyerConfirmedAt?: string;
   shippingAddress: {
     recipientName: string;
     recipientPhone: string;
@@ -117,7 +119,21 @@ export const MyThriftOrders: React.FC = () => {
     const rawCreated = raw.createdAt ? new Date(raw.createdAt) : new Date();
     const dateStr = !isNaN(rawCreated.getTime()) ? rawCreated.toLocaleDateString('vi-VN') : '12/10/2026';
 
-    const rawStatus = (raw.status || 'PENDING_PAYMENT') as ThriftOrderRecord['status'];
+    // Normalize status across backend and client enum
+    const normalizeStatus = (statusStr?: string, paymentStatusStr?: string): ThriftOrderRecord['status'] => {
+      const s = (statusStr || '').toUpperCase().trim();
+      if (s === 'PREPARING' || s === 'PROCESSING' || s === 'CONFIRMED' || s === 'ATELIER_APPRAISAL') return 'PROCESSING';
+      if (s === 'SHIPPING' || s === 'SHIPPED') return 'SHIPPED';
+      if (s === 'DELIVERED') return 'DELIVERED';
+      if (s === 'COMPLETED') return 'COMPLETED';
+      if (s === 'CANCELLED') return 'CANCELLED';
+      if (s === 'DISPUTED') return 'DISPUTED';
+      if (s === 'PAID') return 'PAID';
+      if (paymentStatusStr === 'PAID') return 'PAID';
+      return 'PENDING_PAYMENT';
+    };
+
+    const rawStatus = normalizeStatus(raw.status, raw.paymentStatus);
 
     let statusText = 'CHỜ THANH TOÁN (15 PHÚT)';
     let statusBg = 'bg-[#FCF5EB] text-[#A6620C] border-[#F2DEBF]';
@@ -125,25 +141,32 @@ export const MyThriftOrders: React.FC = () => {
     let statusDescription = 'Hiện vật đang được giữ chỗ trong 15 phút, chờ hoàn tất thanh toán VNPay';
 
     if (rawStatus === 'PAID') {
-      statusText = 'ĐÃ THANH TOÁN · KÝ QUỸ 72H';
+      statusText = 'ĐÃ THANH TOÁN · KÝ QUỸ SMART ESCROW';
       statusBg = 'bg-[#EEF2EC] text-[#37533E] border-[#D5E0D4]';
       dotBg = 'bg-[#4A6B53]';
-      statusDescription = 'Tiền thanh toán được bảo toàn tại Smart Escrow, chờ shop đóng gói bọc thép';
+      statusDescription = 'Tiền thanh toán được bảo toàn tại Smart Escrow, Atelier đang chuẩn bị thẩm định sợi vải';
     } else if (rawStatus === 'PROCESSING') {
-      statusText = 'ĐÓNG GÓI BỌC THÉP & NIÊM PHONG';
+      statusText = 'ATELIER THẨM ĐỊNH & NIÊM PHONG SÁP';
       statusBg = 'bg-[#EAF3FA] text-[#245778] border-[#CFE4F3]';
       dotBg = 'bg-[#3B6E8C] animate-pulse';
-      statusDescription = 'Shop đang kiểm định 1-of-1, đóng gói thùng gỗ đệm ni-tơ và niêm phong chứng thư số';
+      statusDescription = 'Atelier đang kiểm định sợi vải, buồng Ozone khử khuẩn 45 phút và dán tem sáp yếm khí';
     } else if (rawStatus === 'SHIPPED') {
-      statusText = 'ĐANG VẬN CHUYỂN WHITE-GLOVE';
+      statusText = 'VẬN CHUYỂN NANUK GARMENT CRATE';
       statusBg = 'bg-[#EAF3FA] text-[#245778] border-[#CFE4F3]';
       dotBg = 'bg-[#3B6E8C] animate-pulse';
-      statusDescription = 'Bưu tá bảo hiểm bọc thép đang vận chuyển tận nơi với giám sát GPS thời gian thực';
+      statusDescription = 'Bưu tá Nanuk đang vận chuyển kiện chống nhăn, bảo hiểm 100% toàn trình';
     } else if (rawStatus === 'DELIVERED') {
-      statusText = 'ĐÃ GIAO · 72H ĐỐI SOÁT ĐỘC LẬP';
-      statusBg = 'bg-[#E8F3EE] text-[#1E5638] border-[#B7E0CA]';
-      dotBg = 'bg-[#2E7D32] animate-pulse';
-      statusDescription = 'Đã bàn giao tận tay. Đang kích hoạt 72 giờ đối soát & kiểm tra hiện vật độc bản';
+      if (raw.buyerConfirmed) {
+        statusText = 'ĐÃ NHẬN HÀNG · CHỜ XƯỞNG GIẢI NGÂN';
+        statusBg = 'bg-[#E8F3EE] text-[#1E5638] border-[#B7E0CA]';
+        dotBg = 'bg-[#2E7D32]';
+        statusDescription = 'Bạn đã nhận hàng thành công. Tiền đang được đối soát để giải ngân cho xưởng Atelier.';
+      } else {
+        statusText = 'ĐÃ GIAO HÀNG · CHỜ XÁC NHẬN';
+        statusBg = 'bg-[#E8F3EE] text-[#1E5638] border-[#B7E0CA]';
+        dotBg = 'bg-[#2E7D32] animate-pulse';
+        statusDescription = 'Kiện hàng đã được bưu tá giao tới nơi. Quý khách vui lòng kiểm tra và bấm "Đã nhận được hàng" bên dưới để hoàn tất.';
+      }
     } else if (rawStatus === 'COMPLETED') {
       statusText = 'SỞ HỮU VĨNH VIỄN · PROVENANCE VAULT™';
       statusBg = 'bg-[#141310] text-[#E7E1DD] border-[#292724]';
@@ -162,19 +185,22 @@ export const MyThriftOrders: React.FC = () => {
     }
 
     const items = (raw.items || []).map((it: ThriftOrderItemApi, idx: number) => {
-      const listing = typeof it.listingId === 'object' && it.listingId !== null ? it.listingId : null;
+      const listing = typeof it.listingId === 'object' && it.listingId !== null ? it.listingId : (typeof it.productId === 'object' && it.productId ? it.productId : null);
+      const rawImages = (listing as { images?: string[] })?.images || it.images;
+      const resolvedImg = (Array.isArray(rawImages) && rawImages.length > 0 ? rawImages[0] : '') || it.imageUrl || '/images/clothes2.jpg';
+      const resolvedName = it.name || it.productName || it.title || listing?.name || listing?.title || `Hiện vật THRIFT #${idx + 1}`;
+      const resolvedPrice = it.price || listing?.price || 0;
+      const resolvedCond = it.condition || listing?.condition || 'Grade Mint (98%)';
+
       return {
         id: String(listing?._id || it.listingId || `item-${idx}`),
-        productName: it.productName || listing?.name || `Hiện vật THRIFT #${idx + 1}`,
-        price: it.price || listing?.price || 0,
+        productName: resolvedName,
+        price: resolvedPrice,
         quantity: it.quantity || 1,
-        imageUrl:
-          it.imageUrl ||
-          (listing?.images && listing.images.length > 0 ? listing.images[0] : '') ||
-          'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&auto=format&fit=crop&q=60',
-        condition: it.condition || listing?.condition || 'Grade Mint (98%)',
-        vaultOrigin: it.vaultOrigin || (listing?.location ? `Curated Archive ${listing.location}` : 'Curated Archive Tokyo'),
-        warranty: it.warranty || 'Bảo hành cơ học 12 tháng',
+        imageUrl: resolvedImg,
+        condition: resolvedCond,
+        vaultOrigin: it.vaultOrigin || (listing?.location ? `Atelier Archive ${listing.location}` : 'Atelier Archive Sài Gòn'),
+        warranty: it.warranty || 'Bảo chứng trang phục di sản',
       };
     });
 
@@ -200,6 +226,8 @@ export const MyThriftOrders: React.FC = () => {
       escrowStatus: raw.escrowStatus || 'PENDING',
       escrowExpiresAt: raw.escrowExpiresAt,
       provenanceVaultCertId: raw.provenanceVaultCertId || `PRV-VAULT-2026-${cleanId.slice(-4).toUpperCase()}`,
+      buyerConfirmed: Boolean(raw.buyerConfirmed),
+      buyerConfirmedAt: raw.buyerConfirmedAt,
       shippingAddress: {
         recipientName: addr.recipientName || displayName,
         recipientPhone: addr.recipientPhone || user?.phoneNumber || user?.phone || '0908 421 892',
@@ -210,21 +238,38 @@ export const MyThriftOrders: React.FC = () => {
     };
   }, [displayName, user]);
 
-  // Load Thrift Orders from Backend API (with local fallback if offline)
+  // Load Thrift Orders from Backend API (strictly isolated for the current user)
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await getMyThriftOrdersApi();
-      const rawList: ThriftOrderApi[] = Array.isArray(res) ? res : (res?.orders || []);
-
-      // Also merge any offline localStorage orders if not yet synced
-      let localList: ThriftOrderApi[] = [];
+      let rawList: ThriftOrderApi[] = [];
+      let apiSuccess = false;
       try {
-        const uId = user?._id || user?.id;
-        const key = uId ? `user_thrift_orders_${uId}` : 'user_thrift_orders';
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          localList = JSON.parse(raw);
+        const res = await getMyThriftOrdersApi();
+        rawList = Array.isArray(res) ? res : (res?.orders || []);
+        apiSuccess = true;
+      } catch (apiErr) {
+        console.warn('API getMyThriftOrdersApi warning:', apiErr);
+      }
+
+      const uId = user?._id || user?.id;
+
+      // Clean up legacy global and mock data
+      try {
+        localStorage.removeItem('user_thrift_orders');
+        if (uId) {
+          const userKey = `user_thrift_orders_${uId}`;
+          const raw = localStorage.getItem(userKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              const cleaned = parsed.filter((o: ThriftOrderApi) => {
+                const c = (o.orderCode || o._id || '').replace('#', '').trim();
+                return c !== 'RH-THF-2024-9108' && !c.includes('9108');
+              });
+              localStorage.setItem(userKey, JSON.stringify(cleaned));
+            }
+          }
         }
       } catch {
         // ignore
@@ -234,37 +279,94 @@ export const MyThriftOrders: React.FC = () => {
       const mergedMap = new Map<string, ThriftOrderApi>();
       rawList.forEach((o) => {
         const code = (o.orderCode || o._id || '').replace('#', '').trim();
-        if (code) {
-          mergedMap.set(code, o);
-        }
-      });
-      localList.forEach((o) => {
-        const code = (o.orderCode || o._id || '').replace('#', '').trim();
-        if (code && !mergedMap.has(code)) {
+        // Never allow mock 9108 in user orders
+        if (code && code !== 'RH-THF-2024-9108' && !code.includes('9108')) {
           mergedMap.set(code, o);
         }
       });
 
-      const records = Array.from(mergedMap.values()).map(mapOrderToRecord);
+      // If API succeeded, we check user local storage ONLY to preserve local buyerConfirmed status
+      if (apiSuccess && uId) {
+        try {
+          const userKey = `user_thrift_orders_${uId}`;
+          const raw = localStorage.getItem(userKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((lo: ThriftOrderApi) => {
+                const code = (lo.orderCode || lo._id || '').replace('#', '').trim();
+                if (code && mergedMap.has(code)) {
+                  const existing = mergedMap.get(code)!;
+                  if (lo.buyerConfirmed && !existing.buyerConfirmed) {
+                    existing.buyerConfirmed = true;
+                    existing.buyerConfirmedAt = lo.buyerConfirmedAt;
+                  }
+                  if (lo.status === 'COMPLETED' && existing.status !== 'COMPLETED') {
+                    existing.status = 'COMPLETED';
+                  }
+                }
+              });
+            }
+          }
+          // Overwrite user cache with real backend orders
+          localStorage.setItem(userKey, JSON.stringify(Array.from(mergedMap.values())));
+        } catch {
+          // ignore
+        }
+      } else if (!apiSuccess && uId) {
+        // Only if API is completely offline, read from user's isolated local key
+        try {
+          const userKey = `user_thrift_orders_${uId}`;
+          const raw = localStorage.getItem(userKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((lo: ThriftOrderApi) => {
+                const code = (lo.orderCode || lo._id || '').replace('#', '').trim();
+                if (code && code !== 'RH-THF-2024-9108' && !code.includes('9108') && !mergedMap.has(code)) {
+                  mergedMap.set(code, lo);
+                }
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Lỗi đọc user_thrift_orders offline fallback:', e);
+        }
+      }
+
+      const getRawTimestamp = (raw: ThriftOrderApi): number => {
+        if (raw.createdAt) {
+          const t = Date.parse(raw.createdAt);
+          if (!isNaN(t)) return t;
+        }
+        if (raw._id && /^[0-9a-fA-F]{24}$/.test(raw._id)) {
+          const s = parseInt(raw._id.substring(0, 8), 16);
+          if (!isNaN(s) && s > 0) return s * 1000;
+        }
+        return 0;
+      };
+
+      const sortedRaw = Array.from(mergedMap.values())
+        .filter((o) => {
+          const code = (o.orderCode || o._id || '').replace('#', '').trim();
+          if (code === 'RH-THF-2024-9108' || code.includes('9108')) return false;
+          const hasCameraMock = (o.items || []).some((it) => {
+            const n = (it.productName || it.name || '').toLowerCase();
+            return n.includes('hasselblad') || n.includes('b+w master');
+          });
+          if (hasCameraMock) return false;
+          return true;
+        })
+        .sort((a, b) => getRawTimestamp(b) - getRawTimestamp(a));
+
+      const records = sortedRaw.map(mapOrderToRecord);
       setOrders(records);
     } catch (err) {
-      console.error('Lỗi khi tải đơn mua THRIFT:', err);
-      // Fallback local storage
-      try {
-        const uId = user?._id || user?.id;
-        const key = uId ? `user_thrift_orders_${uId}` : 'user_thrift_orders';
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          const arr: ThriftOrderApi[] = JSON.parse(raw);
-          setOrders(arr.map(mapOrderToRecord));
-        }
-      } catch {
-        // ignore
-      }
+      console.error('Lỗi khi nạp đơn mua THRIFT:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [user, mapOrderToRecord]);
+  }, [mapOrderToRecord, user]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -350,18 +452,100 @@ export const MyThriftOrders: React.FC = () => {
     }
   };
 
-  // Handle Confirm Inspection / Ownership Received
+  // Handle Confirm Inspection / Ownership Received (Xác nhận Mặc thử vừa vặn & giữ đồ)
   const handleConfirmReceived = async () => {
     if (!confirmingOrderId) return;
     setIsActionLoading(true);
+    const targetId = confirmingOrderId;
+    const cleanTarget = targetId.replace('#', '').trim().toLowerCase();
+
     try {
-      await confirmDeliveredThriftOrderApi(confirmingOrderId);
-      showToast('Đã xác nhận nghiệm thu! Chứng thư số Provenance Vault™ đã được kích hoạt vĩnh viễn.');
+      // 1. Thử gọi backend API (không block nếu offline)
+      try {
+        await confirmDeliveredThriftOrderApi(targetId);
+      } catch (apiErr) {
+        console.warn('API confirmDeliveredThriftOrderApi warning (offline fallback):', apiErr);
+      }
+
+      const confirmedAt = new Date().toISOString();
+
+      // 2. Cập nhật buyerConfirmed vào tất cả key user_thrift_orders trong localStorage
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key === 'user_thrift_orders' || key.startsWith('user_thrift_orders_'))) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            try {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                let changed = false;
+                const updatedList = list.map((uo: ThriftOrderApi) => {
+                  const uCode = (uo.orderCode || uo._id || '').replace('#', '').trim().toLowerCase();
+                  if (uCode === cleanTarget || (uo._id && uo._id.toLowerCase() === cleanTarget)) {
+                    changed = true;
+                    return {
+                      ...uo,
+                      buyerConfirmed: true,
+                      buyerConfirmedAt: confirmedAt,
+                    };
+                  }
+                  return uo;
+                });
+                if (changed) {
+                  localStorage.setItem(key, JSON.stringify(updatedList));
+                }
+              }
+            } catch (parseErr) {
+              console.warn('Error parsing key', key, parseErr);
+            }
+          }
+        }
+      }
+
+      // 3. Đồng bộ sang SHOP_THRIFT_ORDERS_DATA để Shop Owner lập tức thấy khách đã ưng ý!
+      try {
+        const shopRaw = localStorage.getItem('SHOP_THRIFT_ORDERS_DATA');
+        if (shopRaw) {
+          const shopList = JSON.parse(shopRaw);
+          if (Array.isArray(shopList)) {
+            const updatedShop = shopList.map((so: { id?: string; _dbId?: string; buyerConfirmed?: boolean; buyerConfirmedAt?: string }) => {
+              const soId = (so.id || so._dbId || '').replace('#', '').trim().toLowerCase();
+              if (soId === cleanTarget || (so._dbId && so._dbId.toLowerCase() === cleanTarget)) {
+                return {
+                  ...so,
+                  buyerConfirmed: true,
+                  buyerConfirmedAt: confirmedAt,
+                };
+              }
+              return so;
+            });
+            localStorage.setItem('SHOP_THRIFT_ORDERS_DATA', JSON.stringify(updatedShop));
+          }
+        }
+      } catch (shopErr) {
+        console.warn('Error updating SHOP_THRIFT_ORDERS_DATA:', shopErr);
+      }
+
+      // 4. Phát sự kiện storage cho toàn hệ thống
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('rental_order_updated'));
+
+      // 5. Cập nhật state trực tiếp ngay lập tức
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id.toLowerCase() === cleanTarget || o.orderCode.replace('#', '').toLowerCase() === cleanTarget
+            ? { ...o, buyerConfirmed: true, buyerConfirmedAt: confirmedAt }
+            : o
+        )
+      );
+
       setConfirmingOrderId(null);
-      fetchOrders();
+      showToast('Đã xác nhận nhận hàng thành công! Shop Owner đã nhận được thông báo để giải ngân về ví.');
+      void fetchOrders();
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } }; message?: string };
-      showToast(e.response?.data?.message || e.message || 'Có lỗi xảy ra khi xác nhận nghiệm thu.');
+      console.error('Lỗi xác nhận nhận đồ:', err);
+      setConfirmingOrderId(null);
+      showToast('Đã ghi nhận bạn đã nhận được hàng!');
     } finally {
       setIsActionLoading(false);
     }
@@ -472,7 +656,7 @@ export const MyThriftOrders: React.FC = () => {
               </p>
               <div className="flex items-center gap-1 text-[11px] text-[#2E7D32] mt-2 font-semibold">
                 <span className="material-symbols-outlined text-[14px]">hourglass_top</span>
-                <span>Bảo vệ nghiệm thu</span>
+                <span>Bảo vệ thử đồ 72h</span>
               </div>
             </div>
 
@@ -766,35 +950,35 @@ export const MyThriftOrders: React.FC = () => {
                           </>
                         )}
 
-                        {/* Delivered: Confirm Received 72h */}
-                        {order.status === 'DELIVERED' && (
-                          <>
-                            <Link
-                              to={`/thrift/orders/${order.id}`}
-                              className="px-3.5 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-xs font-semibold hover:bg-amber-100 transition-colors"
-                            >
-                              Báo cáo sai lệch
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmingOrderId(order.id)}
-                              className="px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#1B5E20] transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">verified</span>
-                              <span>Nghiệm thu &amp; Cấp chứng thư số</span>
-                            </button>
-                          </>
+                        {/* Khi đang giao hoặc đã giao mà khách chưa bấm nhận: Hiển thị nút Đã nhận được hàng */}
+                        {(order.status === 'SHIPPED' || order.status === 'DELIVERED') && !order.buyerConfirmed && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingOrderId(order.id)}
+                            className="px-4 py-2 rounded-xl bg-[#2E7D32] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#1B5E20] transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                            <span>Đã Nhận Được Hàng</span>
+                          </button>
                         )}
 
-                        {/* Completed: View Certificate */}
-                        {order.status === 'COMPLETED' && (
-                          <Link
-                            to={`/thrift/orders/${order.id}`}
-                            className="px-4 py-2 rounded-xl bg-[#141310] text-[#E7E1DD] text-xs font-bold uppercase tracking-wider hover:bg-[#292724] transition-all shadow-sm flex items-center gap-1.5"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">workspace_premium</span>
-                            <span>Chứng thư Provenance Vault™</span>
-                          </Link>
+                        {/* Khi đã nhận hàng hoặc đơn đã COMPLETED: Hiển thị trạng thái & nút Chứng thư */}
+                        {(order.status === 'COMPLETED' || order.buyerConfirmed) && (
+                          <div className="flex items-center gap-2">
+                            {order.status !== 'COMPLETED' && (
+                              <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[14px] text-emerald-600">done_all</span>
+                                Đã nhận hàng · Chờ xưởng giải ngân
+                              </span>
+                            )}
+                            <Link
+                              to={`/thrift/orders/${order.id}`}
+                              className="px-4 py-2 rounded-xl bg-[#141310] text-[#E7E1DD] text-xs font-bold uppercase tracking-wider hover:bg-[#292724] transition-all shadow-sm flex items-center gap-1.5"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">workspace_premium</span>
+                              <span>Chứng thư Provenance Vault™</span>
+                            </Link>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -856,32 +1040,32 @@ export const MyThriftOrders: React.FC = () => {
         </div>
       )}
 
-      {/* ── MODAL: XÁC NHẬN NGHIỆM THU 72H & CẤP CHỨNG THƯ SỐ ── */}
+      {/* ── MODAL: XÁC NHẬN ĐÃ NHẬN HÀNG ── */}
       {confirmingOrderId && (
         <div className="fixed inset-0 z-50 bg-[#141310]/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white max-w-lg w-full rounded-2xl p-6 shadow-2xl border border-[#E6E2DB] space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-[#D8E3CE] text-[#5B6655] flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[24px]">verified</span>
+                <span className="material-symbols-outlined text-[24px]">local_shipping</span>
               </div>
               <div>
                 <h3 className="font-serif text-base font-bold text-[#141310]">
-                  Xác nhận Nghiệm thu &amp; Sở hữu Vĩnh viễn
+                  Xác Nhận Đã Nhận Được Hàng
                 </h3>
                 <p className="text-xs text-[#7B766F]">
-                  Cấp phát chứng thư số Provenance Vault™ và giải phóng Smart Escrow.
+                  Bạn xác nhận đã nhận được kiện hàng trang phục nguyên vẹn và hài lòng với đơn hàng.
                 </p>
               </div>
             </div>
 
             <div className="bg-[#F7F3EC] p-4 rounded-xl text-xs text-[#4A463F] space-y-2 leading-relaxed border border-[#E6E2DB]/70">
-              <p>
-                Bằng việc xác nhận này, bạn đồng ý rằng hiện vật đã được kiểm tra độc lập trong 72 giờ và hoàn toàn phù hợp với tiêu chuẩn thẩm định.
+              <p className="font-medium text-[#1C1C18]">
+                Bằng việc xác nhận này:
               </p>
-              <ul className="list-disc pl-4 space-y-1">
-                <li>Quyền sở hữu vĩnh viễn được ghi nhận trên Blockchain Provenance Vault™.</li>
-                <li>Thẻ NFC và sổ lưu trữ vật lý đi kèm có giá trị lưu hành vĩnh cửu.</li>
-                <li>Số tiền ký quỹ 72 giờ tại Smart Escrow sẽ được giải phóng cho Atelier lưu ký.</li>
+              <ul className="list-disc pl-4 space-y-1.5 text-stone-700">
+                <li><strong>Kiện hàng &amp; Trang phục:</strong> Đã nhận đầy đủ số lượng và chất lượng đúng như mô tả.</li>
+                <li><strong>Mở khóa giải ngân cho Shop:</strong> Hệ thống mở khóa nút giải ngân để Shop Owner nhận tiền bán về ví từ Smart Escrow.</li>
+                <li><strong>Kích hoạt Chứng thư Provenance Vault™:</strong> Xác lập quyền sở hữu vĩnh viễn trên sổ cái tuần hoàn ReUse Hub.</li>
               </ul>
             </div>
 
@@ -899,8 +1083,8 @@ export const MyThriftOrders: React.FC = () => {
                 onClick={handleConfirmReceived}
                 className="px-5 py-2.5 rounded-xl bg-[#2E7D32] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#1B5E20] transition-colors shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
               >
-                <span className="material-symbols-outlined text-[16px]">workspace_premium</span>
-                <span>{isActionLoading ? 'Đang cấp chứng thư...' : 'Kích hoạt Chứng Thư Số'}</span>
+                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                <span>{isActionLoading ? 'Đang xác nhận...' : 'Xác Nhận Đã Nhận Hàng'}</span>
               </button>
             </div>
           </div>

@@ -162,9 +162,13 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
     getMyRentalOrdersApi().then((res) => {
       if (!isMounted) return;
       if (Array.isArray(res)) {
-        const active = res.filter((o) =>
-          ['PAID', 'RENTING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(o.status || '')
-        );
+        const active = res.filter((o) => {
+          const rId = typeof o.renterId === 'object' && o.renterId !== null
+            ? (o.renterId as { _id?: string })._id
+            : String(o.renterId || '');
+          if (rId && rId !== String(uId)) return false;
+          return ['PAID', 'RENTING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(o.status || '');
+        });
         setApiRentCount(active.length);
       }
     }).catch(() => {});
@@ -186,9 +190,10 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
       if (rRaw) {
         const arr = JSON.parse(rRaw);
         if (Array.isArray(arr)) {
-          const active = arr.filter((o: { status?: string }) =>
-            ['PAID', 'RENTING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(o.status || '')
-          );
+          const active = arr.filter((o: { status?: string; renterId?: string }) => {
+            if (o.renterId && String(o.renterId) !== String(uId)) return false;
+            return ['PAID', 'RENTING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING', 'DELIVERED'].includes(o.status || '');
+          });
           rCount = active.length;
         }
       }
@@ -198,7 +203,9 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
       if (tRaw) {
         const arr = JSON.parse(tRaw);
         if (Array.isArray(arr)) {
-          const valid = arr.filter((o: { status?: string }) => o.status !== 'CANCELLED');
+          const valid = arr.filter((o: { status?: string; orderCode?: string; _id?: string }) =>
+            o.status !== 'CANCELLED' && !((o.orderCode || o._id || '').includes('9108'))
+          );
           tCount = valid.length;
         }
       }

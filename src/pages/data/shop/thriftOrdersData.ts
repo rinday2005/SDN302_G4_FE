@@ -12,6 +12,7 @@ export interface ShippingInfo {
   trackingCode: string; // Ví dụ: VTP-88492019-VN
   dispatchedAt?: string;
   notes?: string;
+  sealCode?: string; // Mã số niêm phong sáp / chì Atelier
 }
 
 export type ThriftOrderStatus =
@@ -24,6 +25,7 @@ export type ThriftOrderStatus =
 
 export interface ThriftOrder {
   id: string; // Ví dụ: #TO-2024-9102
+  _dbId?: string; // MongoDB ObjectId
   createdAt: string;
   buyer: {
     name: string;
@@ -40,6 +42,9 @@ export interface ThriftOrder {
   };
   status: ThriftOrderStatus;
   shippingInfo?: ShippingInfo;
+  buyerConfirmed?: boolean;
+  buyerConfirmedAt?: string;
+  rawCreatedAt?: number | string;
 }
 
 export const SHOP_THRIFT_ORDERS_STORAGE_KEY = 'SHOP_THRIFT_ORDERS_DATA';
@@ -58,34 +63,34 @@ export const INITIAL_MOCK_THRIFT_ORDERS: ThriftOrder[] = [
     listings: [
       {
         id: 'lst-9108-1',
-        title: 'Hasselblad 907X 50C + Kit Lens XCD 45mm f/4 P (Ex-Rental Archive Mint-)',
-        serialNumber: '#HB-907-88201',
-        grade: 'GRADE 1 · MINT- 98.0%',
-        price: 122000000,
+        title: 'Áo Khoác Da Vintage Atelier Heritage 1994 (Vintage Distressed Leather Bomber)',
+        serialNumber: '#LTH-JKT-1994-08',
+        grade: 'GRADE 1 · MINT- 98.0% (Size L Âu)',
+        price: 14500000,
         imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDYydmGRqY4zwFl781ea4H-ntPqYHI_6xcrVyjWxCmxmDMhdScxJ-jTrrdZeaBpTDqzSKihBOsPQiF3iwrC9S_22R4LhhlVrG_c4doE9wA6FnhYV7h_DgDfsXrZhjoWLak0-5b39FTRXZ7u5jmOjKdeEjUFklU4H5kr-U1PitmXTfH9jl9s4-HAP-9acQReix8gt4_BiRR-tnrNGef093mRvkIXSFFrcM4VIv1oyQim',
+          'https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&auto=format&fit=crop&q=60',
       },
       {
         id: 'lst-9108-2',
-        title: 'B+W Master MRC Nano 77mm Protection Filter (Archival Sealed)',
-        serialNumber: 'SEALED VAULT',
-        grade: 'GRADE 1 · NEW SEALED 100%',
-        price: 1850000,
+        title: 'Đầm Dạ Hội Lụa Tơ Tằm Cung Đình Thêu Tay (Hand-Embroidered Mulberry Silk Gown)',
+        serialNumber: '#SLK-GWN-8820',
+        grade: 'GRADE 1 · PRISTINE 99.0% (Size M)',
+        price: 8850000,
         imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBnHK414_PsQYKWyRV6pWbc25iMmw6GF3xCb6r8BoI2m--Y-IwY_SCsquLCYJp7_i2EAMJb6I8OByX5gkrfx13ezEENKo5cW_oE-DKEPNl7H6KZI0_MZfXjEG0QMkwByfw27DB0JUwsoIwYKW0CylXTuZDJ7YqyUwkPKNMDsX38g2iFVBQvzLyeC3wlAoU3iV8UAnJSX3L8ywPzLcbAUWjWkVenvcQ-Gmzt_iiCqngc',
+          'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=60',
       },
     ],
     pricing: {
-      subtotal: 123850000,
+      subtotal: 23350000,
       shippingFee: 150000,
-      totalAmount: 124000000,
+      totalAmount: 23500000,
     },
     status: 'PAID',
     shippingInfo: {
-      carrier: 'Insured Nanuk Crate Courier',
-      trackingCode: '#VN-883910-TH',
+      carrier: 'Viettel Post Chuyên Dụng Nanuk',
+      trackingCode: '#NNK-883910-TH',
       dispatchedAt: '20/11/2024 · 14:35',
-      notes: 'Bưu tá White-Glove kiểm soát rung chấn G-Force. Thùng kín 22°C, 45% RH.',
+      notes: 'Vali bọc chì Nanuk chống ẩm và giữ phom dáng. Thẻ seal sáp di sản #SEAL-ATELIER-9108.',
     },
   },
   {
@@ -101,29 +106,34 @@ export const INITIAL_MOCK_THRIFT_ORDERS: ThriftOrder[] = [
     listings: [
       {
         id: 'lst-9102-1',
-        title: 'Hasselblad 907X 50C Kit Medium Format',
-        serialNumber: 'HB-907-2023-A',
-        grade: 'Grade A+ Mint 98%',
-        price: 122000000,
+        title: 'Áo Măng Tô Dạ Cashmere Dáng Dài (Atelier Tailored Double-Breasted Cashmere Trench Coat)',
+        serialNumber: 'CSH-TRN-902',
+        grade: 'Grade A+ Mint 98% (Size XL)',
+        price: 16200000,
         imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuAAXcZM2VN08rOtSf-LcHxvy9EiHYPdG5PJZXiBxSxMS0U24w17nrrfEd4tUFxPMIokFM89LeY5mo1PMo3ICSXNx6UDNzNFjfDqAeGwvNdEbz2R8imW8JbSA_MRLu3cAJGStojkxqD1DvW6_jfVUEe74QBczPr-BYPS_2mQo2iznSVEM90vIl8rcrn07JTzvM4nc7qVK8FCkU9L-1hEHZRn3WGAxj0o2-cKojKtmVT9',
+          'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=800&auto=format&fit=crop&q=60',
       },
       {
         id: 'lst-9102-2',
-        title: 'Carl Zeiss Sonnar T* 150mm f/4 Prime Lens',
-        serialNumber: 'CZ-SON-150-88',
-        grade: 'Optics Clear 95%',
-        price: 18500000,
+        title: 'Quần Tây May Đo Thủ Công Xếp Ly (Bespoke Pleated Wool Trousers - Florence Cut)',
+        serialNumber: 'WOL-TRS-441',
+        grade: 'Vải Len Super 130s · 96% (Size 32)',
+        price: 3800000,
         imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDvYsHc7yJYhYGZzTgllIScX5UmrHggJCMHoY-ppqxgej0v-dQzrZuTyrQVu5JcfyMsLcvUSBHoCIp_bblaLbOK6xXZQDWTFk6V_3v1TQC4oSdOpmPkCc4OfAmPBnyUTDht4BXEHeV4RkNVvvDi5xIWbImn8IOGFTxAsTtpbg72it1pKklrLEcCjbxEDfM4QO79K3Uj11n-UCyU4kXi6ouHmOYtAyGnWCVrjgtsbKUV',
+          'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=800&auto=format&fit=crop&q=60',
       },
     ],
     pricing: {
-      subtotal: 140500000,
-      shippingFee: 250000,
-      totalAmount: 140750000,
+      subtotal: 20000000,
+      shippingFee: 200000,
+      totalAmount: 20200000,
     },
     status: 'PAID',
+    shippingInfo: {
+      carrier: 'Viettel Post Chuyên Dụng Nanuk',
+      trackingCode: 'NNK-910200-VN',
+      notes: 'Đang trong khâu Atelier thẩm định sợi vải và ủi dưỡng phom trong buồng Ozone.',
+    },
   },
   {
     id: '#TO-2024-9088',
@@ -138,77 +148,43 @@ export const INITIAL_MOCK_THRIFT_ORDERS: ThriftOrder[] = [
     listings: [
       {
         id: 'lst-9088-1',
-        title: 'Canon EOS R6 Mark II Body (Ex-Rental)',
-        serialNumber: 'CAN-R6M2-9901',
-        grade: 'Shutter 4.2k • 96%',
-        price: 42000000,
+        title: 'Áo Khoác Denim Vintage Selvedge 14oz (Japanese Indigo Selvedge Denim Jacket - Type II)',
+        serialNumber: 'DNM-JKT-14OZ',
+        grade: 'Vải Kojima Chàm Cổ Điển · 97% (Size M)',
+        price: 5600000,
         imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuCeGZZpwWtm5yYCHHbO2zp3U09FphEgkrkckGxVguTtbEeRz_evwu3hGI2n3TJLuo9xsYQd-httAHxL_HszM5D5XRTWng5KqG6z-z7-65HfW6PLEibE3iEQGlWx9CAa5IldvqXmnLW77rd-dbl9u7MEC7aWlK7Aghlj7qOL5BAMZqEtTWbRzmXNXsRRVS0KPRoFQ8Dp0Iy-R-nDyCiha2jq2ajd-9nf5jVh4biJN2aM',
+          'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=800&auto=format&fit=crop&q=60',
       },
       {
         id: 'lst-9088-2',
-        title: 'Canon Lens RF 24-70mm f/2.8L IS USM',
-        serialNumber: 'RF-2470-L-0432',
-        grade: 'Kèm Hood Gốc • 98%',
-        price: 38000000,
+        title: 'Khăn Choàng Tơ Tằm Dệt Tay Họa Tiết Cổ Điển (Hand-Woven Silk Twill Heritage Scarf)',
+        serialNumber: 'SLK-SCF-019',
+        grade: 'Lụa Tơ Tằm Nguyên Chất 100% · Brand New 100%',
+        price: 2400000,
         imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuDXF9LrtEbzDhn4DvZfXlpXMHnuTPttlEdLOsooGuCHLXjFOs4awvrMFsyGZ-cd5wIJxf2vOpDjFM6gaIoJSXRdhzHLPFg0docjeilrVDYuxCDp_R5F9LU9FXPzqEto6qv5mlOtLE9Srl9xBBPbFleyoInYi56RA5seoOVYaQa_mUSMT23IqxDXIyg7FAxuLEitRXJaccXmrYsWyqzH3-cMNFq2pWdGFGf2fSAH2dR6',
+          'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?w=800&auto=format&fit=crop&q=60',
       },
       {
         id: 'lst-9088-3',
-        title: 'Bộ Đèn Aputure 600d Pro Cinematic Set',
-        serialNumber: 'AP-600D-PRO-11',
-        grade: 'Valy Chống Sốc • 94%',
-        price: 28500000,
+        title: 'Thắt Lưng Da Bò Thuộc Thảo Mộc Khóa Đồng Đúc (Full-Grain Vegetable Tanned Leather Belt)',
+        serialNumber: 'LTH-BLT-TUSC',
+        grade: 'Da Bò Tuscany Ý · Mint 99%',
+        price: 1850000,
         imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuCCwm-PPzHwNAlTUP3EEdsGOxUeapMzMT64uvxv1rkkA-hk2dEn9SO6AgqWKzY2Ddoz8yfId-dFmoE_CB7_mTMXd7PkiGDO8D7_FL0TBJDE0vVshqz4JHSTsRLSRGe7w0GlT2Z2izMg_8kTVfLRgNRVZG3_6N2n4pFuORZg5X1m2AgS7nGGOOluPRjTTxpvxyFDgSvktBS0Jb-rCF4n39VU2SDuRxBveGg2dDOFpBMz',
+          'https://images.unsplash.com/photo-1624222247344-550fb60583dc?w=800&auto=format&fit=crop&q=60',
       },
     ],
     pricing: {
-      subtotal: 108500000,
-      shippingFee: 350000,
-      totalAmount: 108850000,
+      subtotal: 9850000,
+      shippingFee: 150000,
+      totalAmount: 10000000,
     },
     status: 'SHIPPED',
     shippingInfo: {
       carrier: 'Viettel Post Chuyên Dụng Nanuk',
       trackingCode: 'VTP-88492019-VN',
       dispatchedAt: '20/11/2024 16:30',
-      notes: 'Niêm phong chì số #SEAL-88201. Đã kèm biên bản bàn giao có chữ ký xưởng.',
-    },
-  },
-  {
-    id: '#TO-2024-8991',
-    createdAt: '01/11/2024 10:20',
-    buyer: {
-      name: 'Marcus Vance',
-      phone: '0988 ••• 192',
-      email: 'marcus.v@analog.io',
-      shippingAddress: 'Villa 14, Đường Nguyễn Văn Hưởng, Phường Thảo Điền, TP. Thủ Đức, TP. HCM',
-      kycTier: 'Sound & Analog Collector',
-    },
-    listings: [
-      {
-        id: 'lst-8991-1',
-        title: 'Teenage Engineering OP-1 Field Synthesizer',
-        serialNumber: 'TE-OP1-FIELD-019',
-        grade: 'Full Box • Like New 99%',
-        price: 32000000,
-        imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuAM2kp3BGW8EVPFzNCH3lCEmPz507I9TBbG6DxwDwVFpsg1H52Qjj7rtUIufnx4TjM5cz_GuYdGg0a2fL5n15JJKLryFHBBF_loqLevF3FpqN8CI2Q3zn7RMlAxK6o_g_r7F7vbscnhK3MAEcI287hZEiTut32GA095PVoQ9-7bjoE5ZcTXAgdjlMa_OuklTCTLpckxdKgWUCbmMUSTqkXOhEMZeJ_sciAvrLyMB54r',
-      },
-    ],
-    pricing: {
-      subtotal: 32000000,
-      shippingFee: 120000,
-      totalAmount: 32120000,
-    },
-    status: 'COMPLETED',
-    shippingInfo: {
-      carrier: 'Giao Hàng Tiết Kiệm (GHTK)',
-      trackingCode: 'GHTK-99210-VN',
-      dispatchedAt: '02/11/2024 11:15',
-      notes: 'Đã giao thành công cho Marcus Vance ngày 05/11/2024. Đã tất toán Escrow 100%.',
+      notes: 'Niêm phong chì sáp số #SEAL-CLOTHES-88201. Đóng vali Nanuk chống nhăn nếp gấp.',
     },
   },
   {
@@ -224,25 +200,59 @@ export const INITIAL_MOCK_THRIFT_ORDERS: ThriftOrder[] = [
     listings: [
       {
         id: 'lst-8845-1',
-        title: 'Kính lọc CPL B+W 007 Master MRC Nano 77mm',
-        serialNumber: 'BW-CPL-77-991',
-        grade: 'Chính Hãng Đức • 99%',
-        price: 2850000,
+        title: 'Áo Blazer Dạ Tweed Phom Suông Cổ Điển (Vintage Scottish Tweed Oversized Blazer)',
+        serialNumber: 'TWD-BLZ-SCOT',
+        grade: 'Harris Tweed Scotland · Like New 99% (Size S/M)',
+        price: 7800000,
         imageUrl:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuD901cWe4zBrqfoHm4xXfdXZxQzufSJGcH04Fn9KCKXNKFTcQF2qXksH8wIxbht1Qgmu3UbKEJcQ0XAn_0YTXxfR2KLy_u7AkVQfsQPVkPB7BFajDT5yPis2fudlmirT7YKBb339tZaLcFZS3iBVg34wWepngTsXjuI9IvSPdHq6Z_JYFYLEUnMxKXGiRrHM4NPsJO6UbLf4FrA38eWDQ0nLHzdrgMUmJ3eS6WuQHzn',
+          'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=60',
       },
     ],
     pricing: {
-      subtotal: 2850000,
-      shippingFee: 50000,
-      totalAmount: 2900000,
+      subtotal: 7800000,
+      shippingFee: 80000,
+      totalAmount: 7880000,
     },
     status: 'DELIVERED',
     shippingInfo: {
       carrier: 'Hỏa Tốc Nội Thành Nanuk Courier',
-      trackingCode: 'NOW-88192-HCM',
+      trackingCode: 'NNK-88192-HCM',
       dispatchedAt: '18/11/2024 09:30',
-      notes: 'Bàn giao trực tiếp tại sảnh căn hộ có bảo vệ ký nhận.',
+      notes: 'Đã giao tới tay khách hàng. Đang trong 72 giờ đối kiểm sợi vải và phom dáng.',
+    },
+  },
+  {
+    id: '#TO-2024-8991',
+    createdAt: '01/11/2024 10:20',
+    buyer: {
+      name: 'Marcus Vance',
+      phone: '0988 ••• 192',
+      email: 'marcus.v@analog.io',
+      shippingAddress: 'Villa 14, Đường Nguyễn Văn Hưởng, Phường Thảo Điền, TP. Thủ Đức, TP. HCM',
+      kycTier: 'Heritage Fashion Collector',
+    },
+    listings: [
+      {
+        id: 'lst-8991-1',
+        title: 'Áo Trench Coat Burberry Cổ Điển Lót Kẻ Nova Check (Heritage Archive Gabardine Trench Coat)',
+        serialNumber: 'BBY-TRN-1988-V',
+        grade: 'Full Tag • Tuyển Chọn Cổ Điển 98% (Size 50)',
+        price: 24500000,
+        imageUrl:
+          'https://images.unsplash.com/photo-1544441893-675973e31985?w=800&auto=format&fit=crop&q=60',
+      },
+    ],
+    pricing: {
+      subtotal: 24500000,
+      shippingFee: 150000,
+      totalAmount: 24650000,
+    },
+    status: 'COMPLETED',
+    shippingInfo: {
+      carrier: 'Viettel Post Chuyên Dụng Nanuk',
+      trackingCode: 'VTP-99210-VN',
+      dispatchedAt: '02/11/2024 11:15',
+      notes: 'Đã nghiệm thu thành công. Smart Escrow đã hoàn tất giải ngân tiền về ví xưởng Atelier.',
     },
   },
 ];
