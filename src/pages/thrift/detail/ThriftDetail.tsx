@@ -2,7 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
+import { useToast } from '../../../context/ToastContext';
 import { getPublicThriftListingByIdApi } from '../../../services/thrift.api';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 import {
   getThriftProductDetail,
   THRIFT_RELATED_PRODUCTS,
@@ -16,6 +18,7 @@ export const ThriftDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isWishlisted, toggleWishlist, addToCart } = useCartWishlist();
+  const toast = useToast();
 
   const baseProduct: ThriftProductDetail = useMemo(() => getThriftProductDetail(id), [id]);
   const [dbProduct, setDbProduct] = useState<Partial<ThriftProductDetail> | null>(null);
@@ -37,7 +40,7 @@ export const ThriftDetail: React.FC = () => {
             sourceType: data.sourceType,
             conditionLabel: data.condition || 'Rất tốt (95%)',
             location: data.location || 'Đà Nẵng',
-            mainImage: data.images && data.images.length > 0 ? data.images[0] : undefined,
+            mainImage: data.images && data.images.length > 0 ? normalizeImageUrl(data.images[0]) : undefined,
           });
           if (data.size) {
             setSelectedSize(data.size);
@@ -117,10 +120,16 @@ export const ThriftDetail: React.FC = () => {
       quantity: 1,
       size: showSizeSelector ? selectedSize : undefined,
     });
+    toast.success(`Đã thêm "${product.title}" vào giỏ hàng!`);
   };
 
   const handleWishlist = () => {
-    toggleWishlist(product.id, 'THRIFT');
+    const isNow = toggleWishlist(product.id, 'THRIFT');
+    if (isNow) {
+      toast.success('Đã lưu sản phẩm vào Danh sách yêu thích!');
+    } else {
+      toast.info('Đã xóa sản phẩm khỏi Danh sách yêu thích.');
+    }
   };
 
   const handleChat = () =>

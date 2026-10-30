@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { UserSidebar } from '../../../components/layout/UserSidebar';
@@ -8,8 +8,12 @@ import {
   confirmDeliveredThriftOrderApi,
   type ThriftOrderApi,
   type ThriftOrderItemApi,
+  type ThriftShippingAddressApi,
 } from '../../../services/thriftOrder.api';
 import { redirectToVnPayGateway } from '../../../services/payment.api';
+import { OrdersListSkeleton } from '../../../components/common/Skeleton';
+import { EmptyState } from '../../../components/common/EmptyState';
+import { useToast } from '../../../context/ToastContext';
 
 export interface ThriftOrderRecord {
   id: string;
@@ -87,7 +91,7 @@ export const MyThriftOrders: React.FC = () => {
   const [sortOption, setSortOption] = useState('Mới nhất trước');
   const [isLoading, setIsLoading] = useState(true);
   const [orders, setOrders] = useState<ThriftOrderRecord[]>([]);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toast = useToast();
 
   // Modals
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
@@ -96,12 +100,11 @@ export const MyThriftOrders: React.FC = () => {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   // Show Toast Helper
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
-  };
+  const { success: showSuccessToast } = toast;
+  const hasShownPaymentToast = useRef(false);
+  const showToast = useCallback((msg: string) => {
+    showSuccessToast(msg);
+  }, [showSuccessToast]);
 
   // Format currency
   const formatCurrency = (val: number | string) => {
@@ -204,7 +207,7 @@ export const MyThriftOrders: React.FC = () => {
       };
     });
 
-    const addr = raw.shippingAddress || {};
+    const addr: Partial<ThriftShippingAddressApi> = raw.shippingAddress || {};
     const fullAddr = [addr.detail, addr.ward, addr.district, addr.province].filter(Boolean).join(', ') ||
       '48 Bạch Đằng, Tầng 4 Archive Suite, Phường Hải Châu 1, Quận Hải Châu, TP. Đà Nẵng, Việt Nam';
 
@@ -385,11 +388,11 @@ export const MyThriftOrders: React.FC = () => {
 
   // Auto show banner if returning from VNPay
   useEffect(() => {
-    if (paymentSuccessParam) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (paymentSuccessParam && !hasShownPaymentToast.current) {
+      hasShownPaymentToast.current = true;
       showToast(`Giao dịch thanh toán đơn THRIFT ${paymentSuccessParam} thành công! Ký quỹ Smart Escrow 72H đã kích hoạt.`);
     }
-  }, [paymentSuccessParam]);
+  }, [paymentSuccessParam, showToast]);
 
   // Top Metrics Calculation
   const metrics = useMemo(() => {
@@ -569,20 +572,6 @@ export const MyThriftOrders: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#FBF9F5] text-[#1C1C18] flex flex-col font-sans selection:bg-[#D8E3CE] selection:text-[#5B6655]">
 
-      {/* ── TOAST NOTIFICATION ── */}
-      {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 bg-[#141310] text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 border border-[#31302C] animate-slide-in">
-          <span className="material-symbols-outlined text-[#8FBC8F] text-[20px]">verified</span>
-          <p className="text-xs font-semibold">{toastMessage}</p>
-          <button
-            type="button"
-            onClick={() => setToastMessage(null)}
-            className="text-stone-400 hover:text-white ml-2 text-sm"
-          >
-            ✕
-          </button>
-        </div>
-      )}
 
       {/* ── MAIN LAYOUT WITH USERSIDEBAR ── */}
       <div className="w-full max-w-[1520px] mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col lg:flex-row gap-8">
@@ -785,33 +774,39 @@ export const MyThriftOrders: React.FC = () => {
 
           {/* ── ORDERS LIST SECTION ── */}
           {isLoading ? (
-            <div className="bg-white rounded-2xl p-12 text-center border border-[#E6E2DB] space-y-4">
-              <span className="w-9 h-9 border-3 border-[#141310] border-t-transparent rounded-full animate-spin inline-block" />
-              <p className="text-xs font-semibold text-[#7B766F]">
-                Đang đối soát sổ lệnh THRIFT từ Provenance Vault™...
-              </p>
-            </div>
+            <OrdersListSkeleton count={3} />
           ) : filteredOrders.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center border border-[#E6E2DB] space-y-4">
-              <div className="w-16 h-16 rounded-full bg-[#F7F3EC] text-[#7B766F] flex items-center justify-center mx-auto">
-                <span className="material-symbols-outlined text-3xl">inventory_2</span>
-              </div>
-              <h3 className="font-serif text-lg font-bold text-[#141310]">
-                Chưa có đơn mua THRIFT nào trong mục này
-              </h3>
-              <p className="text-xs text-[#7B766F] max-w-md mx-auto">
-                {searchQuery
+            <EmptyState
+              type="orders"
+              badge="SỔ LỆNH THRIFT TRỐNG"
+              title="Chưa có đơn mua THRIFT nào trong mục này"
+              description={
+                searchQuery
                   ? `Không tìm thấy đơn hàng nào khớp với từ khóa "${searchQuery}".`
-                  : 'Khám phá các hiện vật độc bản 1-of-1 tuyển chọn và trải nghiệm thanh toán bảo chứng Provenance Vault™.'}
-              </p>
-              <Link
-                to="/thrift"
-                className="inline-block mt-2 px-5 py-2.5 rounded-xl bg-[#141310] text-[#E7E1DD] text-xs font-bold uppercase tracking-wider hover:bg-[#292724]"
-              >
-                Khám phá Hiện vật THRIFT
-              </Link>
-            </div>
+                  : 'Khám phá các hiện vật độc bản 1-of-1 tuyển chọn và trải nghiệm thanh toán bảo chứng Provenance Vault™.'
+              }
+              primaryAction={{
+                label: 'Khám phá Hiện vật THRIFT',
+                href: '/thrift',
+                icon: 'inventory_2',
+                variant: 'primary',
+              }}
+              secondaryAction={
+                activeTab !== 'ALL' || searchQuery
+                  ? {
+                      label: 'Xóa bộ lọc tìm kiếm',
+                      onClick: () => {
+                        setActiveTab('ALL');
+                        setSearchQuery('');
+                      },
+                      icon: 'filter_alt_off',
+                      variant: 'secondary',
+                    }
+                  : undefined
+              }
+            />
           ) : (
+
             <div className="flex flex-col gap-5">
               {filteredOrders.map((order) => (
                 <article

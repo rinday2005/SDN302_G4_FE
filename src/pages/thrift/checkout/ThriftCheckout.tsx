@@ -12,6 +12,7 @@ import {
   updateThriftOrderStatusApi,
   type ThriftOrderApi,
 } from '../../../services/thriftOrder.api';
+import { useToast } from '../../../context/ToastContext';
 
 export const ThriftCheckout: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
@@ -19,6 +20,7 @@ export const ThriftCheckout: React.FC = () => {
   const location = useLocation();
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const toast = useToast();
 
   const { cart, removeFromCart } = useCartWishlist();
 
@@ -188,12 +190,11 @@ export const ThriftCheckout: React.FC = () => {
   const [isVnPayModalOpen, setIsVnPayModalOpen] = useState(false);
   const [isSimulatingSuccess, setIsSimulatingSuccess] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<ThriftOrderApi | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    toast.info(msg);
   };
+
 
   const LEGACY_SLUG_TO_OBJECT_ID: Record<string, string> = {
     'vintage-leather-jacket': '6ad273b0f22df3063ffd9985',
@@ -965,22 +966,8 @@ export const ThriftCheckout: React.FC = () => {
         </div>
       </main>
 
-      {/* ── TOAST NOTIFICATION ── */}
-      {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 bg-[#141310] text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 border border-[#31302C] animate-slide-in">
-          <span className="material-symbols-outlined text-[#8FBC8F] text-[20px]">verified</span>
-          <p className="text-xs font-semibold">{toastMessage}</p>
-          <button
-            type="button"
-            onClick={() => setToastMessage(null)}
-            className="text-stone-400 hover:text-white ml-2 text-sm"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
       {/* ── MODAL GIẢ LẬP CỔNG VNPAY (THEO GIAO DIỆN MẪU) ── */}
+
       {isVnPayModalOpen && (
         <div
           className="fixed inset-0 z-50 bg-[#141310]/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"

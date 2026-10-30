@@ -16,8 +16,9 @@ import {
   findEarliestAvailableRentalRange,
   recordBookedDates,
 } from '../../data/rent/rentOrderDetailData';
-import { getUserProfileAddress } from '../../../utils/address';
 import { resolveWishlistProduct } from '../../../services/wishlistProductResolver';
+import { getUserProfileAddress } from '../../../utils/address';
+import { useToast } from '../../../context/ToastContext';
 
 export const RentCheckout: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
@@ -25,6 +26,7 @@ export const RentCheckout: React.FC = () => {
   const location = useLocation();
   const auth = useContext(AuthContext);
   const user = auth?.user;
+  const toastSystem = useToast();
 
   const { cart, removeFromCart } = useCartWishlist();
 
@@ -425,29 +427,14 @@ export const RentCheckout: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStep, setSubmitStep] = useState('');
 
-  // In-app Toast Feedback State
-  const [toast, setToast] = useState<{
-    show: boolean;
-    message: string;
-    icon: string;
-    type?: 'success' | 'info' | 'error' | 'warning';
-  }>({
-    show: false,
-    message: '',
-    icon: 'check_circle',
-    type: 'success',
-  });
-
   const showToast = (
     message: string,
-    icon = 'check_circle',
+    _icon = 'check_circle',
     type: 'success' | 'info' | 'error' | 'warning' = 'success'
   ) => {
-    setToast({ show: true, message, icon, type });
-    setTimeout(() => {
-      setToast((prev) => ({ ...prev, show: false }));
-    }, 4000);
+    toastSystem.showToast(type, message);
   };
+
 
   // Handle Order Placement & Direct VNPay Sandbox Redirect
   const handleProcessCheckout = async () => {
@@ -1526,33 +1513,9 @@ export const RentCheckout: React.FC = () => {
           </div>
         </div>
       )}
-      {/* In-app Toast Notification */}
-      <div
-        className={`fixed bottom-6 right-6 z-50 transform transition-all duration-300 pointer-events-none px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm font-medium ${
-          toast.show ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-12 opacity-0 scale-95'
-        } ${
-          toast.type === 'error'
-            ? 'bg-rose-950 text-rose-100 border border-rose-800/80'
-            : toast.type === 'warning'
-            ? 'bg-amber-950 text-amber-100 border border-amber-800/80'
-            : 'bg-[#141310] text-[#FBF9F6] border border-stone-800'
-        }`}
-      >
-        <span
-          className={`material-symbols-outlined text-[20px] ${
-            toast.type === 'error'
-              ? 'text-rose-400'
-              : toast.type === 'warning'
-              ? 'text-amber-400'
-              : 'text-emerald-400'
-          }`}
-        >
-          {toast.icon}
-        </span>
-        <span>{toast.message}</span>
-      </div>
     </div>
   );
+
 };
 
 export default RentCheckout;

@@ -14,9 +14,11 @@ import {
   RENT_CONDITION_OPTIONS,
   RENT_LOCATION_OPTIONS,
   RENT_HOW_IT_WORKS_STEPS,
-  type FilterOption,
 } from '../../data/rent/marketplaceData';
-import type { Product, SortKey } from '../../data/rent/marketplaceData';
+import type { Product, SortKey, FilterOption } from '../../data/rent/marketplaceData';
+import { useToast } from '../../../context/ToastContext';
+import { MarketplaceGridSkeleton } from '../../../components/common/Skeleton';
+import { EmptyState } from '../../../components/common/EmptyState';
 // ─── ProductCard ───────────────────────────────────────────────────────────────
 // ─── ProductCard ───────────────────────────────────────────────────────────────
 const ProductCard: React.FC<{
@@ -25,6 +27,7 @@ const ProductCard: React.FC<{
 }> = ({ product }) => {
   const navigate = useNavigate();
   const { isWishlisted, toggleWishlist, addToCart } = useCartWishlist();
+  const toast = useToast();
   const {
     id, title, categoryLabel, price, rating, reviewCount,
     conditionLabel, location, deposit, available, href, image,
@@ -50,7 +53,15 @@ const ProductCard: React.FC<{
       gradeBadge: conditionLabel,
       quantity: 1,
     });
+    toast.success(`Đã thêm "${title}" vào giỏ hàng!`);
   };
+
+  const handleToggleWishlist = () => {
+    const wasSaved = isWishlisted(id);
+    toggleWishlist(id, 'RENT');
+    toast.info(wasSaved ? `Đã bỏ lưu "${title}"` : `Đã thêm "${title}" vào yêu thích`);
+  };
+
 
   // Condition pill format matching screenshot: "Như mới (99%)", "Grade Mint (98%)", "Đã qua sử dụng (90%)"
   const formattedCondition = useMemo(() => {
@@ -80,7 +91,7 @@ const ProductCard: React.FC<{
         {/* Wishlist Button top-right */}
         <button
           type="button"
-          onClick={() => toggleWishlist(id)}
+          onClick={handleToggleWishlist}
           className={`absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center shadow-xs transition-transform active:scale-90 cursor-pointer ${
             isSaved
               ? 'bg-[#1C1A18] text-rose-400'
@@ -209,6 +220,7 @@ const RentMarketplace: React.FC = () => {
   const navigate = useNavigate();
   const [dbProducts, setDbProducts] = useState<Product[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>(RENT_CATEGORY_OPTIONS);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Fetch dynamic categories from DB with fallback
   useEffect(() => {
@@ -282,11 +294,15 @@ const RentMarketplace: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Could not load products from API:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
     return () => {
       isMounted = false;
     };
   }, []);
+
 
   const [searchParams] = useSearchParams();
   const urlCategory = searchParams.get('category');
@@ -762,33 +778,30 @@ const RentMarketplace: React.FC = () => {
       </section>
       {/* ── PRODUCT GRID ── */}
       <section className="w-full px-6 lg:px-12 pb-16 max-w-7xl mx-auto">
-        {visibleProducts.length > 0 ? (
+        {isLoading ? (
+          <MarketplaceGridSkeleton count={8} />
+        ) : visibleProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {paginatedProducts.map((p) => (
               <ProductCard key={p.id} product={p} onRequireAuth={handleRequireAuth} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 bg-[#F7F5F0] border border-dashed border-[#E6E2DC] rounded-2xl mb-12">
-            <svg className="w-12 h-12 mx-auto text-[#79716B] mb-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" x2="16.65" y1="21" y2="16.65"></line>
-            </svg>
-            <h3 className="text-lg text-[#1C1A18] font-semibold mb-1">
-              Không tìm thấy sản phẩm RENT phù hợp.
-            </h3>
-            <p className="text-xs text-[#79716B] mb-4">
-              Vui lòng điều chỉnh lại từ khóa, bộ lọc giá hoặc danh mục sản phẩm.
-            </p>
-            <button
-              type="button"
-              onClick={resetAll}
-              className="px-4 py-2 bg-[#1C1A18] text-white text-xs rounded-lg font-medium hover:bg-stone-800 transition-colors cursor-pointer"
-            >
-              Xóa bộ lọc
-            </button>
-          </div>
+          <EmptyState
+            type="search"
+            badge="KHO THIẾT BỊ RENT"
+            title="Không tìm thấy sản phẩm RENT phù hợp"
+            description="Vui lòng điều chỉnh lại từ khóa, bộ lọc khoảng giá hoặc danh mục sản phẩm để tiếp tục tìm kiếm."
+            primaryAction={{
+              label: 'Xóa bộ lọc tìm kiếm',
+              onClick: resetAll,
+              icon: 'filter_alt_off',
+              variant: 'primary',
+            }}
+            className="my-8"
+          />
         )}
+
         <div className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-[#E8E4DC]/80 text-xs text-[#5E5A53]">
           <div>
             Hiển thị{' '}

@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useToast } from '../../context/ToastContext';
 
 export const PaymentFailed: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const toast = useToast();
+  const hasShownToast = useRef(false);
 
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
@@ -17,6 +20,13 @@ export const PaymentFailed: React.FC = () => {
     (responseCode === '24'
       ? 'Giao dịch bị hủy bởi người dùng trên cổng thanh toán VNPay Sandbox.'
       : 'Giao dịch thanh toán chưa thể hoàn tất. Vui lòng kiểm tra lại tài khoản hoặc phương thức.');
+
+  useEffect(() => {
+    if (!hasShownToast.current) {
+      hasShownToast.current = true;
+      toast.error(errorMessage);
+    }
+  }, [toast, errorMessage]);
 
   return (
     <div className="min-h-screen bg-[#FBF9F5] text-[#1E1E1E] font-sans antialiased flex flex-col justify-between">

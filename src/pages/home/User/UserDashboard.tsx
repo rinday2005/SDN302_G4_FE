@@ -11,6 +11,7 @@ import {
 } from '../../data/home/userDashboardData';
 import { resolveWishlistProduct, type ResolvedWishlistProduct } from '../../../services/wishlistProductResolver';
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
+import { DashboardSkeleton } from '../../../components/common/Skeleton';
 
 export const UserDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -24,9 +25,8 @@ export const UserDashboard: React.FC = () => {
 
   // ── Load Real Rental Orders & Thrift Orders ──
   const [activeRentals, setActiveRentals] = useState<RentalOrderApi[]>([]);
-
-  // 1. Real Thrift Orders from Backend API & LocalStorage
   const [thriftOrders, setThriftOrders] = useState<ThriftOrderApi[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -148,7 +148,10 @@ export const UserDashboard: React.FC = () => {
       // Do not clear user orders cache so past orders remain visible seamlessly
 
       if (!uId) {
-        if (isMounted) setActiveRentals([]);
+        if (isMounted) {
+          setActiveRentals([]);
+          setIsLoading(false);
+        }
         return;
       }
 
@@ -282,6 +285,7 @@ export const UserDashboard: React.FC = () => {
         )
       );
       setActiveRentals(active);
+      setIsLoading(false);
     };
 
     loadUserRentals();
@@ -290,6 +294,7 @@ export const UserDashboard: React.FC = () => {
       isMounted = false;
     };
   }, [user]);
+
 
   // Dynamic computed active rental (if any)
   const activeRentalData = useMemo(() => {
@@ -562,11 +567,16 @@ export const UserDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* 1. WELCOME SECTION & IMPACT STATEMENT */}
-          <section
-            data-reveal
-            className="rounded-3xl bg-white border border-[#E8E4DC]/80 p-6 sm:p-8 relative overflow-hidden shadow-2xs"
-          >
+          {isLoading ? (
+            <DashboardSkeleton />
+          ) : (
+            <>
+              {/* 1. WELCOME SECTION & IMPACT STATEMENT */}
+              <section
+                data-reveal
+                className="rounded-3xl bg-white border border-[#E8E4DC]/80 p-6 sm:p-8 relative overflow-hidden shadow-2xs"
+              >
+
             <div className="max-w-2xl space-y-3 relative z-10">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F6F3EE] border border-[#E8E4DC] text-[#1C1A18] text-xs font-semibold">
                 <span className="w-2 h-2 rounded-full bg-[#5E6D5B]" />
@@ -1292,7 +1302,10 @@ export const UserDashboard: React.FC = () => {
               </Link>
             </div>
           </section>
+            </>
+          )}
         </main>
+
       </div>
     </div>
   );

@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useCartWishlist } from '../../context/CartWishlistContext';
 import { UserSidebar } from '../../components/layout/UserSidebar';
 import { resolveWishlistProduct, type ResolvedWishlistProduct } from '../../services/wishlistProductResolver';
+import { useToast } from '../../context/ToastContext';
+import { EmptyState } from '../../components/common/EmptyState';
 
 export const Wishlist: React.FC = () => {
   const { wishlist, removeFromWishlist, clearWishlist, addToCart } = useCartWishlist();
@@ -36,8 +38,7 @@ export const Wishlist: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ALL' | 'RENT' | 'THRIFT'>('ALL');
   // Sort: 'latest' | 'available' | 'price-asc' | 'price-desc'
   const [sortOption, setSortOption] = useState<string>('latest');
-  // Temporary toast feedback
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toast = useToast();
 
   // ── Resolve genuine products from wishlist IDs (NO mock fake data) ──
   const resolvedItems = useMemo(() => {
@@ -95,40 +96,25 @@ export const Wishlist: React.FC = () => {
       gradeBadge: item.gradeBadge,
       quantity: 1,
     });
-    setToastMessage(`Đã thêm "${item.title}" vào giỏ hàng tuần hoàn!`);
-    setTimeout(() => setToastMessage(null), 3000);
+    toast.success(`Đã thêm "${item.title}" vào giỏ hàng tuần hoàn!`);
   };
 
   const handleRemove = (id: string, title: string) => {
     removeFromWishlist(id);
-    setToastMessage(`Đã xóa "${title}" khỏi mục yêu thích.`);
-    setTimeout(() => setToastMessage(null), 3000);
+    toast.info(`Đã xóa "${title}" khỏi mục yêu thích.`);
   };
 
   const handleClearAll = () => {
     if (window.confirm('Bạn có chắc muốn xóa tất cả sản phẩm khỏi danh sách yêu thích?')) {
       clearWishlist();
-      setToastMessage('Đã làm trống toàn bộ danh sách yêu thích.');
-      setTimeout(() => setToastMessage(null), 3000);
+      toast.info('Đã làm trống toàn bộ danh sách yêu thích.');
     }
   };
 
+
   return (
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1C1A18] text-white px-5 py-3 rounded-xl shadow-lg border border-white/20 flex items-center gap-3 animate-fade-in text-xs font-semibold">
-          <span className="material-symbols-outlined text-[#3A6843] text-[20px]">check_circle</span>
-          <span>{toastMessage}</span>
-          <button
-            type="button"
-            onClick={() => setToastMessage(null)}
-            className="ml-2 text-stone-400 hover:text-white cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+
 
       {/* ── MAIN WORKSPACE CONTAINER WITH PERSISTENT SIDEBAR ── */}
       <div className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 flex gap-8 items-start">
@@ -431,75 +417,51 @@ export const Wishlist: React.FC = () => {
               </div>
             ) : (
               /* 4. ELEGANT EMPTY STATE PREVIEW (NO FAKE DATA) */
-              <section className="my-6">
-                <div className="bg-white rounded-3xl p-10 sm:p-14 text-center max-w-2xl mx-auto shadow-2xs border border-[#E8E4DC]">
-                  {/* Minimalist Editorial SVG Illustration */}
-                  <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-[#F5F3F0] flex items-center justify-center text-[#76726B]/50">
-                    <svg className="w-10 h-10 stroke-current fill-none" strokeWidth="1.5" viewBox="0 0 48 48">
-                      <path
-                        d="M24 39.5l-2.18-1.98C14.08 30.5 9 25.88 9 20.12 9 15.42 12.7 11.72 17.4 11.72c2.66 0 5.21 1.24 6.6 3.19 1.39-1.95 3.94-3.19 6.6-3.19C35.3 11.72 39 15.42 39 20.12c0 5.76-5.08 10.38-12.82 17.42L24 39.5z"
-                        strokeDasharray="2 3"
-                      />
-                      <circle cx="24" cy="24" fill="currentColor" opacity="0.4" r="3" />
-                    </svg>
-                  </div>
-
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#F5F3F0] rounded-full mb-3 border border-[#E8E4DC]">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#76726B]">
-                      LƯU TRỮ ĐANG TRỐNG
-                    </span>
-                  </div>
-
-                  <h2 className="font-serif text-2xl font-bold text-[#1C1A18] mb-2 tracking-tight">
-                    {activeTab === 'RENT'
-                      ? 'Chưa có thiết bị RENT nào trong yêu thích'
-                      : activeTab === 'THRIFT'
-                      ? 'Chưa có món đồ THRIFT nào trong yêu thích'
-                      : 'Danh sách yêu thích của bạn đang trống'}
-                  </h2>
-
-                  <p className="text-xs sm:text-sm text-[#76726B] max-w-md mx-auto mb-7 leading-relaxed">
-                    Bạn chưa lưu sản phẩm nào vào danh mục theo dõi. Hãy khám phá kho thiết bị công nghệ cao để thuê theo dịp, hoặc săn tìm các món đồ thời trang archival độc bản trường tồn cùng thời gian.
-                  </p>
-
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                    <Link
-                      to="/rent"
-                      className="w-full sm:w-auto px-5 py-2.5 bg-[#1C1A18] text-white text-xs font-semibold rounded-xl hover:bg-black transition-all flex items-center justify-center gap-2 shadow-2xs"
-                    >
-                      <span className="material-symbols-outlined text-[17px]">autorenew</span>
-                      <span>Khám phá đồ RENT</span>
-                    </Link>
-
-                    <Link
-                      to="/thrift"
-                      className="w-full sm:w-auto px-5 py-2.5 bg-[#F5F3F0] text-[#1C1A18] text-xs font-semibold rounded-xl hover:bg-[#EAE8E5] border border-[#E8E4DC] transition-all flex items-center justify-center gap-2"
-                    >
-                      <span className="material-symbols-outlined text-[17px]">archive</span>
-                      <span>Săn đồ độc bản THRIFT</span>
-                    </Link>
-                  </div>
-
-                  {/* Recommendation Micro-bar */}
-                  <div className="mt-10 pt-6 border-t border-[#E8E4DC]/70 flex flex-wrap items-center justify-center gap-4 text-[#76726B] text-[10px] uppercase font-bold tracking-wider">
-                    <span className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[#3A6843] text-[15px]">verified</span>
-                      Kiểm định 100% trước xuất kho
-                    </span>
-                    <span className="w-1 h-1 rounded-full bg-[#CCC5BC]" />
-                    <span className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[#3A6843] text-[15px]">shield</span>
-                      Bảo chứng ký quỹ minh bạch
-                    </span>
-                    <span className="w-1 h-1 rounded-full bg-[#CCC5BC]" />
-                    <span className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[#3A6843] text-[15px]">eco</span>
-                      Giảm thiểu 100% rác thải điện tử
-                    </span>
-                  </div>
+              <EmptyState
+                type="wishlist"
+                badge="LƯU TRỮ ĐANG TRỐNG"
+                title={
+                  activeTab === 'RENT'
+                    ? 'Chưa có thiết bị RENT nào trong yêu thích'
+                    : activeTab === 'THRIFT'
+                    ? 'Chưa có món đồ THRIFT nào trong yêu thích'
+                    : 'Danh sách yêu thích của bạn đang trống'
+                }
+                description="Bạn chưa lưu sản phẩm nào vào danh mục theo dõi. Hãy khám phá kho thiết bị công nghệ cao để thuê theo dịp, hoặc săn tìm các món đồ thời trang archival độc bản trường tồn cùng thời gian."
+                primaryAction={{
+                  label: 'Khám phá đồ RENT',
+                  href: '/rent',
+                  icon: 'autorenew',
+                  variant: 'primary',
+                }}
+                secondaryAction={{
+                  label: 'Săn đồ độc bản THRIFT',
+                  href: '/thrift',
+                  icon: 'archive',
+                  variant: 'secondary',
+                }}
+                className="my-6 max-w-2xl mx-auto"
+              >
+                {/* Recommendation Micro-bar */}
+                <div className="pt-6 border-t border-[#E8E4DC]/70 flex flex-wrap items-center justify-center gap-4 text-[#76726B] text-[10px] uppercase font-bold tracking-wider">
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[#3A6843] text-[15px]">verified</span>
+                    Kiểm định 100% trước xuất kho
+                  </span>
+                  <span className="w-1 h-1 rounded-full bg-[#CCC5BC]" />
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[#3A6843] text-[15px]">shield</span>
+                    Bảo chứng ký quỹ minh bạch
+                  </span>
+                  <span className="w-1 h-1 rounded-full bg-[#CCC5BC]" />
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[#3A6843] text-[15px]">eco</span>
+                    Giảm thiểu 100% rác thải điện tử
+                  </span>
                 </div>
-              </section>
+              </EmptyState>
             )}
+
 
             {/* 5. EDITORIAL CIRCULARITY FOOTER BANNER */}
             <section className="mt-12 bg-white border border-[#E8E4DC] rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-2xs">
