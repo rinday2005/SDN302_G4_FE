@@ -44,7 +44,9 @@ import ChatPage from "./pages/chat/ChatPage";
 
 // Các trang chức năng của Shop Owner
 import { CreateRentProduct } from "./pages/rent/shop/CreateRentProduct";
+import { EditRentProduct } from "./pages/rent/shop/EditRentProduct";
 import { ManageRentProducts } from "./pages/rent/shop/ManageRentProducts";
+import { RentProductDetail as ShopRentProductDetail } from "./pages/rent/shop/RentProductDetail";
 import { ShopOrders } from "./pages/rent/shop/ShopOrders";
 import { InventoryDashboard } from "./pages/rent/shop/InventoryDashboard";
 import { RentInventoryDetail } from "./pages/rent/shop/RentInventoryDetail";
@@ -220,6 +222,8 @@ const App = () => {
               {/* Quản lý danh sách sản phẩm RENT */}
               <Route path="/shop/rent/products" element={<ManageRentProducts />} />
               <Route path="/shop/rent-products" element={<ManageRentProducts />} />
+              <Route path="/shop/rent/products/:id" element={<ShopRentProductDetail />} />
+              <Route path="/shop/rent/product/:id" element={<ShopRentProductDetail />} />
 
               {/* Kho hiện vật cá thể & Thẩm định */}
               <Route path="/shop/rent/inventory" element={<InventoryDashboard />} />
@@ -228,6 +232,7 @@ const App = () => {
               {/* Chuyển đổi RENT sang THRIFT */}
               <Route path="/shop/rent/convert/:id" element={<ConvertToThrift />} />
               <Route path="/shop/rent/convert-to-thrift/:id" element={<ConvertToThrift />} />
+              <Route path="/shop/rent/convert-thrift/:id" element={<ConvertToThrift />} />
 
               {/* Quản lý đơn hàng thuê RENT của Shop */}
               <Route path="/shop/orders" element={<ShopOrders />} />
@@ -238,15 +243,17 @@ const App = () => {
               {/* CRUD Sản phẩm cho thuê RENT */}
               <Route path="/shop/rent/create" element={<CreateRentProduct />} />
               <Route path="/shop/rent/create-product" element={<CreateRentProduct />} />
-              <Route path="/shop/rent/products/:id/edit" element={<CreateRentProduct />} />
-              <Route path="/shop/rent/edit/:id" element={<CreateRentProduct />} />
+              <Route path="/shop/rent/products/:id/edit" element={<EditRentProduct />} />
+              <Route path="/shop/rent/edit/:id" element={<EditRentProduct />} />
 
               {/* Quản lý bài đăng thanh lý THRIFT */}
               <Route path="/shop/thrift/listings" element={<ShopThriftListings />} />
               <Route path="/shop/thrift-listings" element={<ShopThriftListings />} />
               <Route path="/shop/thrift/listings/create" element={<CreateThriftListing />} />
               <Route path="/shop/thrift/create" element={<CreateThriftListing />} />
+              <Route path="/shop/thrift/listings/:id" element={<EditThriftListing />} />
               <Route path="/shop/thrift/listings/:id/edit" element={<EditThriftListing />} />
+              <Route path="/shop/thrift/edit/:id" element={<EditThriftListing />} />
               <Route path="/shop/thrift/listings/:id/view" element={<ShopThriftListingDetail />} />
               <Route path="/shop/thrift/:id" element={<EditThriftListing />} />
 

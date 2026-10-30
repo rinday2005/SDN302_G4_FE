@@ -172,7 +172,15 @@ export const ThriftCheckout: React.FC = () => {
     return itemizedList.reduce((sum, item) => sum + item.totalItemPrice, 0);
   }, [itemizedList]);
 
-  const grandTotal = itemsSubtotal + THRIFT_SHIPPING_FEE;
+  const shippingFee = useMemo(() => {
+    const passedFee = (location.state as { shippingFee?: number } | null)?.shippingFee;
+    if (typeof passedFee === 'number' && passedFee >= 0) {
+      return passedFee;
+    }
+    return THRIFT_SHIPPING_FEE;
+  }, [location.state]);
+
+  const grandTotal = itemsSubtotal + shippingFee;
 
   // Session Order Code
   const orderSessionCode = '#TRF-2026-9048';
@@ -241,6 +249,7 @@ export const ThriftCheckout: React.FC = () => {
         district: 'Hải Châu',
         ward: 'Hải Châu 1',
       },
+      shippingFee,
       paymentMethod: 'VNPAY',
     };
 
@@ -291,7 +300,7 @@ export const ThriftCheckout: React.FC = () => {
           })),
           pricing: {
             subtotal: itemsSubtotal,
-            shippingFee: THRIFT_SHIPPING_FEE,
+            shippingFee,
             totalAmount: grandTotal,
           },
           status: 'PAID',
@@ -356,7 +365,7 @@ export const ThriftCheckout: React.FC = () => {
           district: 'Hải Châu',
           ward: 'Hải Châu 1',
         },
-        shippingFee: THRIFT_SHIPPING_FEE,
+        shippingFee,
       });
     } catch (error: unknown) {
       console.error('Error redirecting to VNPay:', error);
@@ -471,7 +480,7 @@ export const ThriftCheckout: React.FC = () => {
               Thanh toán Đơn mua THRIFT
             </h1>
             <p className="text-xs sm:text-sm text-[#4A463F] max-w-2xl mt-1.5 leading-relaxed">
-              Thủ tục xác lập quyền sở hữu vĩnh viễn các hiện vật tuyển chọn độc bản, bảo hiểm vận chuyển bọc thép và cấp phát chứng thư xuất xứ số kèm niêm phong vật lý.
+              Thủ tục xác lập quyền sở hữu vĩnh viễn các hiện vật tuyển chọn độc bản, bảo hiểm vận chuyển niêm phong và cấp phát chứng thư xuất xứ số kèm niêm phong vật lý.
             </p>
           </div>
 
@@ -657,7 +666,7 @@ export const ThriftCheckout: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-[#141310]">
-                        Bưu tá bảo hiểm bọc thép White-Glove Insured Secondhand Courier
+                        Vận chuyển bảo hiểm niêm phong Atelier Express Courier
                       </h3>
                       <p className="text-xs text-[#7B766F] mt-1 leading-relaxed">
                         Gộp chung toàn bộ {itemizedList.length} hiện vật trong vali đệm bảo vệ phom dáng, niêm phong thẻ sáp Atelier, định vị thời gian thực và bàn giao tận tay kèm hướng dẫn mặc thử.
@@ -676,7 +685,7 @@ export const ThriftCheckout: React.FC = () => {
                   </div>
                   <div className="text-right shrink-0 sm:pl-4 self-end sm:self-center">
                     <span className="font-serif font-bold text-base text-[#141310]">
-                      {formatCurrency(THRIFT_SHIPPING_FEE)}
+                      {formatCurrency(shippingFee)}
                     </span>
                     <p className="text-[10px] text-[#7B766F] uppercase font-semibold">
                       Phí gộp toàn đơn
@@ -776,7 +785,7 @@ export const ThriftCheckout: React.FC = () => {
                       Tổng tiền hiện vật ({itemizedList.length} món)
                     </p>
                     <p className="text-[11px] text-[#7B766F] truncate max-w-[210px]">
-                      {itemizedList.map((i) => i.title.split(' ')[0]).join(' + ')}
+                      {itemizedList.map((i) => i.title).join(', ')}
                     </p>
                   </div>
                   <span className="font-bold text-[#141310] font-mono text-sm">
@@ -786,11 +795,11 @@ export const ThriftCheckout: React.FC = () => {
 
                 <div className="flex justify-between items-center pt-1 border-t border-[#F1EDE6]">
                   <div>
-                    <p className="font-medium text-[#1C1C18]">Vận chuyển bảo chứng bọc thép</p>
+                    <p className="font-medium text-[#1C1C18]">Vận chuyển bảo hiểm niêm phong</p>
                     <p className="text-[11px] text-[#7B766F]">Áp dụng trọn gói cho toàn bộ đơn hàng</p>
                   </div>
                   <span className="font-bold text-[#141310] font-mono">
-                    {formatCurrency(THRIFT_SHIPPING_FEE)}
+                    {formatCurrency(shippingFee)}
                   </span>
                 </div>
 

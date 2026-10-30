@@ -83,7 +83,48 @@ export const getPublicRentProductDetailApi = async (
   }
 };
 
+export const getShopRentProductsApi = async (): Promise<RentalProductApi[]> => {
+  try {
+    const res = await api.get("/rent/products/shop/mine");
+    const payload = res.data?.data || res.data;
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+    return [];
+  } catch (error) {
+    console.warn("Could not fetch shop rent products from backend:", error);
+    return [];
+  }
+};
+
+export const createRentProductApi = async (
+  data: Partial<RentalProductApi>
+): Promise<RentalProductApi> => {
+  const res = await api.post("/rent/products", data);
+  return res.data?.data || res.data;
+};
+
+export const updateRentProductApi = async (
+  id: string,
+  data: Partial<RentalProductApi>
+): Promise<RentalProductApi> => {
+  const res = await api.put(`/rent/products/${id}`, data);
+  return res.data?.data || res.data;
+};
+
+export const deleteRentProductApi = async (
+  id: string
+): Promise<{ success: boolean; message?: string }> => {
+  const res = await api.delete(`/rent/products/${id}`);
+  return res.data;
+};
+
 export default {
   getPublicRentProductsApi,
   getPublicRentProductDetailApi,
+  getShopRentProductsApi,
+  createRentProductApi,
+  updateRentProductApi,
+  deleteRentProductApi,
 };
+

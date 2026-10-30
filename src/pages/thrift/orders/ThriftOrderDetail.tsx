@@ -310,10 +310,10 @@ export const ThriftOrderDetail: React.FC = () => {
         createdAt: dateStr,
         items,
         itemsSubtotal: raw.itemsSubtotal || items.reduce((s, i) => s + i.itemTotal, 0),
-        shippingFee: raw.shippingFee || 250000,
-        totalAmount: raw.totalAmount || (raw.itemsSubtotal || 0) + (raw.shippingFee || 250000),
+        shippingFee: typeof raw.shippingFee === 'number' ? raw.shippingFee : 30000,
+        totalAmount: raw.totalAmount || (raw.itemsSubtotal || 0) + (typeof raw.shippingFee === 'number' ? raw.shippingFee : 30000),
         trackingCode: raw.trackingCode || `#VN-9021-HN-EXP`,
-        courierName: raw.courierName || 'Viettel Armored Transit',
+        courierName: raw.courierName || 'Vận chuyển bảo hiểm niêm phong Atelier Express Courier',
         escrowStatus: raw.escrowStatus || (rawStatus === 'DELIVERED' ? 'HELD_72H' : 'PENDING'),
         escrowExpiresAt: raw.escrowExpiresAt,
         provenanceVaultCertId: raw.provenanceVaultCertId || `#PV-${cleanId.slice(-4).toUpperCase() || '2481'}-DE`,
@@ -1047,7 +1047,7 @@ export const ThriftOrderDetail: React.FC = () => {
                     <span className="text-xs font-bold text-brand-charcoal mt-3">Vận chuyển Nanuk</span>
                     <span className="text-[10px] text-brand-muted font-mono mt-0.5">Bước 04</span>
                     <span className="text-[9px] text-brand-charcoal font-semibold mt-1 bg-brand-sand px-1.5 py-0.5 rounded">
-                      Bọc thép Airway
+                      Niêm phong Airway
                     </span>
                   </div>
 
@@ -1434,7 +1434,7 @@ export const ThriftOrderDetail: React.FC = () => {
 
                     <div className="flex justify-between items-center text-brand-muted">
                       <span className="flex items-center gap-1">
-                        Bưu tá bọc thép bảo hiểm 100%
+                        Vận chuyển bảo hiểm niêm phong
                         <span
                           className="material-symbols-outlined text-xs text-brand-sage cursor-help"
                           title="Bảo hiểm mất mát hoặc va đập rơi vỡ trong quá trình di chuyển"
@@ -1541,7 +1541,7 @@ export const ThriftOrderDetail: React.FC = () => {
                       <span className="font-semibold text-brand-charcoal">{order.courierName}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-brand-muted">Mã vận đơn bọc thép:</span>
+                      <span className="text-brand-muted">Mã vận đơn niêm phong:</span>
                       <span className="font-mono font-bold text-brand-charcoal">{order.trackingCode}</span>
                     </div>
 

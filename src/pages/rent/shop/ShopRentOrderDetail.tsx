@@ -298,11 +298,13 @@ export const ShopRentOrderDetail: React.FC = () => {
   const items: DisplayItem[] = useMemo(() => {
     if (order?.items && Array.isArray(order.items) && order.items.length > 0) {
       return order.items.map((it, idx) => {
-        const prod = (it.productId as unknown as { name?: string; images?: string[]; pricePerDay?: number; depositAmount?: number }) || {};
-        const title = it.productName || prod.name || 'Giày Sandal Cao Gót Quai Mảnh Ánh Kim Dự Tiệc';
+        const prod = (it.productId as unknown as { name?: string; productName?: string; title?: string; images?: string[]; pricePerDay?: number; depositAmount?: number }) || {};
+        const itAny = it as { name?: string; title?: string; imageUrl?: string; image?: string; images?: string[] };
+        const title = it.productName || itAny.name || itAny.title || prod.name || prod.productName || prod.title || 'Trang phục thời trang cao cấp';
         const image =
-          (it as { imageUrl?: string; image?: string }).imageUrl ||
-          (it as { image?: string }).image ||
+          itAny.imageUrl ||
+          itAny.image ||
+          (itAny.images && itAny.images[0]) ||
           (prod.images && prod.images[0]) ||
           '/images/partydress4.jpg';
         const pricePerDay = it.pricePerDay || prod.pricePerDay || 210000;

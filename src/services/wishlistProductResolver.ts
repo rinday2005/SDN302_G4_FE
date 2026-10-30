@@ -595,14 +595,14 @@ const MONGO_RENTAL_PRODUCTS: Record<string, Partial<ResolvedWishlistProduct>> = 
     "href": "/thrift/6ad286f6f507857852155c74"
   },
   "6ad286f6f507857852155c75": {
-    "title": "Olympus OM-D E-M10 Mark IV Mirrorless",
-    "description": "Máy ảnh phong cách hoài cổ gọn nhẹ, chống rung 5 trục trong thân máy, cảm biến 20MP.",
-    "category": "Camera",
-    "categoryLabel": "Camera",
+    "title": "Áo Sơ Mi Lụa Tơ Tằm Cổ Điển Atelier Vintage",
+    "description": "Áo sơ mi lụa tơ tằm dệt thủ công hoài cổ sang trọng, phom dáng chuẩn Atelier, nút ngọc trai tinh xảo.",
+    "category": "Quần áo",
+    "categoryLabel": "Áo sơ mi",
     "gradeBadge": "Grade A (95%)",
     "price": 1120000,
     "deposit": 0,
-    "image": "https://images.unsplash.com/photo-1510127034890-ba27508e9f1c?w=800&auto=format&fit=crop&q=60",
+    "image": "https://images.unsplash.com/photo-1598554747436-c9293d6a588f?w=800&auto=format&fit=crop&q=60",
     "location": "Đà Nẵng",
     "mode": "thrift",
     "href": "/thrift/6ad286f6f507857852155c75"

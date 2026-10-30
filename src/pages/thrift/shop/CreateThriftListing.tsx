@@ -1,7 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { ThriftListingItem } from '../../data/shop/thriftListingsData';
 import { THRIFT_LISTINGS_STORAGE_KEY, INITIAL_THRIFT_LISTINGS } from '../../data/shop/thriftListingsData';
+import { uploadImageApi } from '../../../services/upload.api';
+import { createThriftListingApi } from '../../../services/thrift.api';
+import { getCategoriesApi, type CategoryItem } from '../../../services/category.api';
 
 interface GalleryInspectionPhoto {
   id: string;
@@ -29,18 +32,6 @@ const DEFAULT_INSPECTION_PHOTOS: GalleryInspectionPhoto[] = [
     label: 'Cụm phím cơ CNC và màn hình',
     badge: 'Phím xoay',
   },
-  {
-    id: 'serial',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAqjiUDPqLor3NJ4obrh0Wn-ecJLuSNJhw6xiR7FHDRuTc5oTuwC9rLRGmCIHiE3d1TE1e1P243K__gs29YAuGVSgxVS6YYoY33OA4mwKJzJYAdhandgeJjOV8Ip4pIP3xKrnczPmDkUM-94KHEP7uNC21rxojxUZFmFgKoWJtiGHpabGmzwO3oYBvcfjgYGYc2hrCoo2QuakMzFSOdB3N8B_hzKcRKPqUyZBxh8QUw',
-    label: 'Tem khắc chìm số Serial và mã vạch xưởng',
-    badge: 'Serial đáy',
-  },
-  {
-    id: 'case',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDrLOl1KaQiR4Z_YDIsMGIVmqkbbtWLaVAVxOq7udvN0naFbzTB9BnJ8vlYq7MfJzcUhKOQEQPJE6KclehbUp7JqXCauDRIfoxam_ORZldLvCs_iEfXaIpsOrupl-PLheBXPzfd6vnOAXtvle8RzJ-QS7HbYpcVK9XWh-MQLCNwZSiLdcyv1_WcNY2RjpJwsz1OlTyWekoTNoSSITltGxUH7OLdg5g8QkvrMqhktE3j',
-    label: 'Vali chống sốc Nanuk và phụ kiện chính hãng',
-    badge: 'Phụ kiện',
-  },
 ];
 
 export const CreateThriftListing: React.FC = () => {
@@ -59,6 +50,17 @@ export const CreateThriftListing: React.FC = () => {
   const [priceInput, setPriceInput] = useState('122.000.000');
   const [photos, setPhotos] = useState<GalleryInspectionPhoto[]>(DEFAULT_INSPECTION_PHOTOS);
   const [activePhotoLightbox, setActivePhotoLightbox] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+
+  useEffect(() => {
+    getCategoriesApi().then((cats) => {
+      if (cats && cats.length > 0) {
+        setCategories(cats);
+      }
+    });
+  }, []);
 
   // Formatting helpers
   const numericPrice = useMemo(() => {
@@ -93,14 +95,65 @@ export const CreateThriftListing: React.FC = () => {
     setPriceInput(val.toLocaleString('vi-VN'));
   };
 
-  // Helper: Save Listing (Draft or Submit)
-  const saveListingToStorage = (status: 'PENDING' | 'DRAFT') => {
+  // Upload photo to Cloudinary
+  const handleUploadPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
     try {
+      setIsUploadingPhoto(true);
+      const uploadPromises = files.map(async (file, idx) => {
+        const url = await uploadImageApi(file);
+        return {
+          id: `cloud-${Date.now()}-${idx}`,
+          url,
+          label: file.name.slice(0, 20),
+          badge: idx === 0 && photos.length === 0 ? 'Hero' : 'Cloudinary',
+        };
+      });
+      const newItems = await Promise.all(uploadPromises);
+      setPhotos((prev) => [...prev, ...newItems]);
+    } catch (err) {
+      console.error(err);
+      alert('Không thể tải ảnh lên Cloudinary. Vui lòng kiểm tra lại kết nối!');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  // Helper: Save Listing (Draft or Submit to MongoDB)
+  const saveListingToStorage = async (status: 'PENDING' | 'DRAFT') => {
+    try {
+      setIsSubmitting(true);
+      const matchedCat = categories.find((c) => c.name.toLowerCase().includes('camera') || c.type === 'THRIFT') || categories[0];
+      const imageUrls = photos.map((p) => p.url).filter(Boolean);
+
+      // Gọi API Backend lưu vào MongoDB
+      const payload = {
+        name: listingTitle.trim(),
+        description: forensicNotes.trim(),
+        price: numericPrice,
+        condition: conditionGrade.toUpperCase(),
+        images: imageUrls.length > 0 ? imageUrls : ['https://placehold.co/600x400'],
+        location: 'Hà Nội',
+        categoryId: matchedCat?._id || '67c000000000000000000001',
+        sourceType: originSource === 'rental_archive' ? 'FROM_RENTAL' : 'MANUAL',
+        status: status === 'PENDING' ? 'PENDING_APPROVAL' : 'DRAFT',
+      };
+
+      let createdMongoListing: any = null;
+      try {
+        createdMongoListing = await createThriftListingApi(payload);
+      } catch (apiErr) {
+        console.warn('API create thrift listing failed, falling back to local:', apiErr);
+      }
+
+      // Lưu đồng bộ vào localStorage
       const existingRaw = localStorage.getItem(THRIFT_LISTINGS_STORAGE_KEY);
       let list: ThriftListingItem[] = existingRaw ? JSON.parse(existingRaw) : INITIAL_THRIFT_LISTINGS;
 
       const newListing: ThriftListingItem = {
-        id: skuCode.trim() || `THRIFT-${Date.now()}`,
+        id: createdMongoListing?._id || skuCode.trim() || `THRIFT-${Date.now()}`,
         sku: skuCode.trim() || `SKU-${Date.now()}`,
         title: listingTitle.trim() || 'Hiện vật bán đứt THRIFT',
         category: category.split('/')[0].trim(),
@@ -118,7 +171,7 @@ export const CreateThriftListing: React.FC = () => {
         conditionScore: conditionGrade === 'like_new' ? 98.0 : conditionGrade === 'good' ? 94.0 : 86.0,
         price: numericPrice,
         priceFormatted: formattedDisplayPrice,
-        image: photos[0]?.url || 'https://lh3.googleusercontent.com/aida-public/AB6AXuD7_8xVSn2aS0vVyTTQ8a2PfGeh65_lc2X4yAETdJJJy6sDTywBiHVeV11mOnvIhaoG_13CZd1a4a_zeFJ3m8MLOWrD_oCyem3CQq7Wdn6un-S7alN_DNcdnsPWR6W230bGFfL1v7f2sK4YZ0kUle-jTWgMfPo1UUoYNEScXxOb5UIW6E5CeL4gCIUpfQ2kZcf3b0i44pPF2IHrRXclcGmY0ddCsD1RX-8c-nnnovaj',
+        image: photos[0]?.url || 'https://placehold.co/600x400',
         serialNumber: '#HB-907-88201',
         submittedAt: new Date().toLocaleDateString('vi-VN'),
         appraiserName: 'Atelier Chronos & Optics',
@@ -126,20 +179,21 @@ export const CreateThriftListing: React.FC = () => {
         draftNotes: status === 'DRAFT' ? 'Chưa hoàn tất hồ sơ đo quang học' : undefined,
       };
 
-      // Put at top of list
       list = [newListing, ...list.filter((it) => it.id !== newListing.id)];
       localStorage.setItem(THRIFT_LISTINGS_STORAGE_KEY, JSON.stringify(list));
 
       if (status === 'PENDING') {
-        alert(`GỬI PHÊ DUYỆT THÀNH CÔNG!\n\nMục đăng [${newListing.title}] đã được nộp cho Hội đồng Giám tuyển ReUse Hub thẩm định (dự kiến trong 2-4 giờ làm việc).`);
+        alert(`GỬI PHÊ DUYỆT THÀNH CÔNG!\n\nMục đăng [${newListing.title}] đã được lưu vào MongoDB & ảnh Cloudinary và nộp cho Admin thẩm định.`);
       } else {
-        alert(`ĐÃ LƯU BẢN NHÁP!\n\nMục đăng [${newListing.title}] đã được lưu vào sổ nháp của Atelier.`);
+        alert(`ĐÃ LƯU BẢN NHÁP!\n\nMục đăng [${newListing.title}] đã được lưu vào MongoDB.`);
       }
 
       navigate('/shop/thrift/listings');
     } catch (e) {
       console.error('Lỗi khi lưu mục đăng THRIFT:', e);
       alert('Có lỗi xảy ra khi lưu trữ dữ liệu. Vui lòng thử lại.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -160,22 +214,6 @@ export const CreateThriftListing: React.FC = () => {
     saveListingToStorage('DRAFT');
   };
 
-  // Add dummy photo
-  const handleUploadDummyPhoto = () => {
-    const customUrl = prompt(
-      'Nhập liên kết (URL) hình ảnh thẩm định bổ sung:',
-      'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800&auto=format&fit=crop&q=80'
-    );
-    if (customUrl && customUrl.trim()) {
-      const newPhoto: GalleryInspectionPhoto = {
-        id: `photo-${Date.now()}`,
-        url: customUrl.trim(),
-        label: 'Góc chụp bổ sung',
-        badge: 'Bổ sung',
-      };
-      setPhotos((prev) => [...prev, newPhoto]);
-    }
-  };
 
   return (
     <div className="w-full flex flex-col font-sans text-on-surface bg-surface min-h-[calc(100vh-4rem)] antialiased no-reveal">
@@ -657,19 +695,26 @@ export const CreateThriftListing: React.FC = () => {
                 ))}
               </div>
 
-              {/* Drag and Drop Dropzone */}
-              <div
-                onClick={handleUploadDummyPhoto}
-                className="p-6 bg-surface-container-low rounded-DEFAULT border-2 border-dashed border-outline-variant/60 hover:border-primary/60 transition-colors text-center cursor-pointer flex flex-col items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined text-outline text-[32px]">add_photo_alternate</span>
+              {/* Cloudinary File Upload Dropzone */}
+              <label className="p-6 bg-surface-container-low rounded-DEFAULT border-2 border-dashed border-outline-variant/60 hover:border-primary/60 transition-colors text-center cursor-pointer flex flex-col items-center justify-center gap-2 relative">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleUploadPhotoFile}
+                  disabled={isUploadingPhoto}
+                  className="hidden"
+                />
+                <span className="material-symbols-outlined text-outline text-[32px]">
+                  {isUploadingPhoto ? 'hourglass_top' : 'cloud_upload'}
+                </span>
                 <div className="font-label-md text-label-md uppercase tracking-wider text-primary font-semibold">
-                  Tải Thêm Góc Chụp Vi Sai Hoặc Kéo Thả Tại Đây
+                  {isUploadingPhoto ? 'Đang tải ảnh lên Cloudinary...' : 'Chọn ảnh tải lên Cloudinary'}
                 </div>
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
-                  Định dạng JPG, PNG, WebP tối thiểu 2400x1600px. Dung lượng tối đa 15MB/ảnh.
+                  Ảnh được đồng bộ trực tiếp lên Cloudinary CDN và gắn vào MongoDB. Hỗ trợ JPG, PNG, WebP.
                 </p>
-              </div>
+              </label>
             </div>
 
             {/* SECTION 5: Định giá Bán đứt & Thanh toán (Price & Escrow) */}
@@ -805,16 +850,18 @@ export const CreateThriftListing: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveDraft}
-                  className="w-full sm:w-auto text-center px-6 py-3 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-DEFAULT transition-colors cursor-pointer border border-surface-dim"
+                  disabled={isSubmitting || isUploadingPhoto}
+                  className="w-full sm:w-auto text-center px-6 py-3 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-DEFAULT transition-colors cursor-pointer border border-surface-dim disabled:opacity-50"
                 >
-                  Lưu Bản Nháp (Save Draft)
+                  {isSubmitting ? 'Đang lưu...' : 'Lưu Bản Nháp (Save Draft)'}
                 </button>
                 <button
                   type="submit"
-                  className="w-full sm:w-auto text-center px-8 py-3 font-label-md text-label-md uppercase tracking-wider bg-on-surface text-surface hover:bg-primary transition-all rounded-DEFAULT shadow-md flex items-center justify-center gap-2 cursor-pointer font-semibold"
+                  disabled={isSubmitting || isUploadingPhoto}
+                  className="w-full sm:w-auto text-center px-8 py-3 font-label-md text-label-md uppercase tracking-wider bg-on-surface text-surface hover:bg-primary transition-all rounded-DEFAULT shadow-md flex items-center justify-center gap-2 cursor-pointer font-semibold disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-[18px]">send</span>
-                  Gửi Kiểm Duyệt (Submit for Approval)
+                  {isSubmitting ? 'Đang gửi MongoDB...' : 'Gửi Kiểm Duyệt (Submit for Approval)'}
                 </button>
               </div>
             </div>

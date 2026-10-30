@@ -252,7 +252,7 @@ const Login = () => {
                       id="email"
                       type="email"
                       autoComplete="email"
-                      placeholder="curator@reusehub.org"
+                      placeholder="shopowner@reuse.vn hoặc admin@reuse.vn"
                       {...register("email")}
                       className={`w-full rounded bg-[#f7f3ec] py-3 pl-10 pr-4 text-sm text-[#1c1c18] outline-none transition-all placeholder:text-[#4a463f]/60 focus:bg-white focus:ring-1 ${errors.email
                         ? "ring-1 ring-[#ba1a1a]"

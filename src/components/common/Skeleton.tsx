@@ -81,20 +81,25 @@ export const ProductCardSkeleton: React.FC = () => {
 /**
  * Grid of Product Skeletons for Marketplace
  */
-export const MarketplaceGridSkeleton: React.FC<{ count?: number }> = ({ count = 8 }) => {
+export const MarketplaceGridSkeleton: React.FC<{ count?: number; showFilterBar?: boolean }> = ({
+  count = 8,
+  showFilterBar = false,
+}) => {
   return (
     <div className="space-y-6">
-      {/* Search / Filter bar skeleton */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white/70 rounded-2xl border border-[#E8E4DC]">
-        <Skeleton className="h-10 w-64 rounded-xl" />
-        <div className="flex gap-2">
-          <Skeleton className="h-10 w-28 rounded-xl" />
-          <Skeleton className="h-10 w-24 rounded-xl" />
+      {/* Optional Search / Filter bar skeleton */}
+      {showFilterBar && (
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white/70 rounded-2xl border border-[#E8E4DC]">
+          <Skeleton className="h-10 w-64 rounded-xl" />
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-28 rounded-xl" />
+            <Skeleton className="h-10 w-24 rounded-xl" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {Array.from({ length: count }).map((_, idx) => (
           <ProductCardSkeleton key={idx} />
         ))}

@@ -64,3 +64,19 @@ export const getShopThriftListingsApi = async (): Promise<ThriftListingItemApi[]
     return [];
   }
 };
+
+export const createThriftListingApi = async (data: Record<string, unknown>): Promise<ThriftListingItemApi> => {
+  const res = await api.post('/thrift/listings', data);
+  return res.data?.data || res.data;
+};
+
+export const updateThriftListingApi = async (id: string, data: Record<string, unknown>): Promise<ThriftListingItemApi> => {
+  const res = await api.put(`/thrift/listings/${id}`, data);
+  return res.data?.data || res.data;
+};
+
+export const deleteThriftListingApi = async (id: string): Promise<{ success: boolean; message?: string }> => {
+  const res = await api.delete(`/thrift/listings/${id}`);
+  return res.data;
+};
+

@@ -78,8 +78,8 @@ const mapApiThriftOrder = (apiOrder: ThriftOrderApi): ThriftOrder => {
     listings: listings.length > 0 ? listings : INITIAL_MOCK_THRIFT_ORDERS[0].listings,
     pricing: {
       subtotal: subtotal || 124000000,
-      shippingFee: apiOrder.shippingFee || 250000,
-      totalAmount: apiOrder.totalAmount || 124250000,
+      shippingFee: typeof apiOrder.shippingFee === 'number' ? apiOrder.shippingFee : 30000,
+      totalAmount: apiOrder.totalAmount || (subtotal + (typeof apiOrder.shippingFee === 'number' ? apiOrder.shippingFee : 30000)),
     },
     status,
     shippingInfo: {
@@ -1249,7 +1249,7 @@ export const ShopThriftOrderDetail: React.FC = () => {
               <div className="flex flex-col gap-2.5 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">
-                    Mã Vận Đơn Bọc Thép:
+                    Mã Vận Đơn Niêm Phong:
                   </span>
                   <div className="flex items-center gap-1">
                     <span className="font-mono text-on-surface font-semibold">
@@ -1547,7 +1547,7 @@ export const ShopThriftOrderDetail: React.FC = () => {
 
             <form onSubmit={handleConfirmDispatch} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-on-surface mb-1">Đơn vị vận chuyển bọc thép:</label>
+                <label className="block font-semibold text-on-surface mb-1">Đơn vị vận chuyển niêm phong:</label>
                 <input
                   type="text"
                   value={dispatchCarrier}

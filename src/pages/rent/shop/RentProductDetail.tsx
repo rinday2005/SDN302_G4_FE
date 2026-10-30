@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useShop } from '../../../context/ShopContext';
 import { mockRentProducts } from '../../data/shop/rentProductsData';
 
 export const RentProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { products } = useShop();
 
-  // Lấy dữ liệu sản phẩm tương ứng hoặc lấy mẫu đầu tiên
-  const product = mockRentProducts.find((p) => p.sku === id) || mockRentProducts[0];
+  // Lấy dữ liệu sản phẩm tương ứng từ MongoDB ShopContext hoặc mock data
+  const matchedProduct = products.find((p) => p.sku === id || (p as any)._id === id);
+  const product = matchedProduct || mockRentProducts.find((p) => p.sku === id) || mockRentProducts[0];
 
   // Danh sách ảnh 4 góc giám định
   const inspectionAngleImages = product.inspectionImages?.length
     ? product.inspectionImages
+    : product.coverImage
+    ? [product.coverImage]
     : [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuB5mewsMdaznDQrFK3uXQ0ihH8fVJyGA-WwquJd7sHBRJcbcASR1h27dY0EvVQTUaE69efi0nc6VSjoejNknSYsRdmO8MUGxl8UfYvNkQwMYFHbcvEBLKUrbsKj7QJfR8VzHSex4ytaneQ6Vfe5TMT_tFbtg-wysYGL3leviHOWD9x2ksGBMixc-9RCj_42X9g8exMpZ2BuvEwG0WbMj1VoX5TIamV0rJ0SdTxOKs8D',
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCT-OQ367RurILCr0jpdGdNGfpHFT-WqdCF6Oq35n4oaSaBpANBBXeAs4ktLCvxqk0koCY36igHYPWdSQrz9Pb7nCNo1TvbiKRKIAtOL5gUxc02M00a1pbYHhl21_ZrBiDepTYB1JxrPmDKbdjRCXiAPYb7OHaPR9nzQFCcxm0d4I19Xl0XpUglbILawc4TSuN7MB6a2WeX7u-picVp1m93K0Nd7KPkzannCN3w92vo',

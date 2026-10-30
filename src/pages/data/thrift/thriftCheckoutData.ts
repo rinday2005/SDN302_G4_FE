@@ -16,18 +16,18 @@ export interface CheckoutThriftItem {
 export const DEFAULT_CHECKOUT_THRIFT_ITEMS: CheckoutThriftItem[] = [
   {
     id: '6ad273b0f22df3063ffd9989',
-    code: '#2481902',
-    title: 'Leica M6 Classic 0.72x Rangefinder Body',
-    category: 'Camera & Vintage Archival',
-    grade: 'Mint- 98%',
+    code: '#ATELIER-COUTURE-01',
+    title: 'Đầm Dạ Hội Lụa Tơ Tằm Thêu Chỉ Vàng Atelier',
+    category: 'Haute Couture Evening Wear',
+    grade: 'Grade Mint 99%',
     image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCqa5m8tKywXH9rvvHuNq4GQKyT_WChAp4Q7GDxx0c-RVS6Ndxhhc-vx5CWdcmb515glJDUT6WSRw8j8m2ScaZABpyUQ-y_fmUUt-QT_GeXKWqAylz8RFHDj1i8EFVDj0vmtYbWomJ0jOx75VhWw41o5Ny380x5gx_ONdBt9tQpXqRcl5cz-6xzm9NL_cGSOvvhpXTj3vMjlWdbL6u-Gi7HTgoW7rLzIqGc0OEO-bCE',
-    price: 68000000,
+      'https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=80',
+    price: 18500000,
     quantity: 1,
-    conditionNote: 'Black Chrome Finish · Chuẩn thẩm định 98% Factory Benchmark · Xuất xứ Wetzlar, CHLB Đức.',
-    specDetails: 'Khung ngắm quang học 0.72x · Kèm nắp đậy body zin và dây đeo da thuộc Leica',
-    warranty: 'Bảo hành cơ học: 12 tháng',
-    vaultOrigin: 'Atelier Silvergrain',
+    conditionNote: 'Thiết kế thủ công Atelier · 100% Lụa tơ tằm dệt tay · Size S/M ôm phom duyên dáng.',
+    specDetails: 'Kèm túi bảo quản lụa kháng ẩm chuyên dụng · Đã khử khuẩn buồng Ozone',
+    warranty: 'Bảo hành đường may & form dáng: 12 tháng',
+    vaultOrigin: 'Atelier Heritage Vault',
   },
   {
     id: '6ad273b0f22df3063ffd998a',
@@ -46,4 +46,4 @@ export const DEFAULT_CHECKOUT_THRIFT_ITEMS: CheckoutThriftItem[] = [
   },
 ];
 
-export const THRIFT_SHIPPING_FEE = 215000;
+export const THRIFT_SHIPPING_FEE = 30000;

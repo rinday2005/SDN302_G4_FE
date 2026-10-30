@@ -117,21 +117,39 @@ export const ManageRentProducts: React.FC = () => {
               {paginatedProducts.map((p) => (
                 <tr key={p.sku} className="hover:bg-[#f7f3ec]/50">
                   <td className="py-4 px-4 flex items-center gap-3">
-                    <img src={p.coverImage} alt={p.name} className="w-12 h-12 object-cover rounded border" />
+                    <Link to={`/shop/rent/products/${p.sku}`} className="shrink-0 hover:opacity-80 transition-opacity">
+                      <img src={p.coverImage} alt={p.name} className="w-12 h-12 object-cover rounded border border-[#ebe8e1]" />
+                    </Link>
                     <div>
-                      <Link to={`/shop/rent/products/${p.sku}`} className="font-semibold text-sm hover:underline block">
+                      <Link to={`/shop/rent/products/${p.sku}`} className="font-semibold text-sm hover:underline block text-[#141310]">
                         {p.name}
                       </Link>
                       <span className="font-mono text-[#7b766f]">SKU: {p.sku}</span>
                     </div>
                   </td>
                   <td className="py-4 px-4">
-                    <div className="font-semibold">{p.pricePerDay.toLocaleString()} ₫/ngày</div>
+                    <div className="font-semibold text-[#141310]">{p.pricePerDay.toLocaleString()} ₫/ngày</div>
                     <div className="text-[#7b766f]">Cọc: {p.deposit.toLocaleString()} ₫</div>
                   </td>
                   <td className="py-4 px-4">
-                    <div className="font-semibold">{p.totalUnits} máy tổng</div>
-                    <div className="text-[#7b766f]">{p.readyUnits} rảnh • {p.rentingUnits} đang thuê</div>
+                    <div className="font-semibold text-xs sm:text-sm text-[#141310]">
+                      Tổng: {p.totalUnits}{' '}
+                      <span className="font-normal text-xs text-[#4a463f]">
+                        (Rảnh: <strong className="text-emerald-700 font-semibold">{p.readyUnits}</strong> | Đang thuê: <strong className="text-amber-700 font-semibold">{p.rentingUnits}</strong>)
+                      </span>
+                    </div>
+                    <div className="w-full bg-[#ebe8e1] h-1.5 rounded-full mt-1.5 overflow-hidden flex max-w-[160px]">
+                      <div
+                        className="bg-emerald-600 h-full"
+                        style={{ width: `${p.totalUnits > 0 ? (p.readyUnits / p.totalUnits) * 100 : 0}%` }}
+                        title={`Sẵn sàng: ${p.readyUnits}`}
+                      />
+                      <div
+                        className="bg-amber-500 h-full"
+                        style={{ width: `${p.totalUnits > 0 ? (p.rentingUnits / p.totalUnits) * 100 : 0}%` }}
+                        title={`Đang thuê: ${p.rentingUnits}`}
+                      />
+                    </div>
                   </td>
                   <td className="py-4 px-4">
                     <span
@@ -143,7 +161,7 @@ export const ManageRentProducts: React.FC = () => {
                           : 'bg-red-100 text-red-900'
                       }`}
                     >
-                      {p.approvalStatus}
+                      {p.approvalStatus === 'APPROVED' ? 'ĐÃ DUYỆT' : p.approvalStatus === 'PENDING' ? 'CHỜ DUYỆT' : p.approvalStatus}
                     </span>
                   </td>
                   <td className="py-4 px-4">
@@ -157,43 +175,60 @@ export const ManageRentProducts: React.FC = () => {
                       {p.isVisible ? 'ĐANG HIỆN' : 'TẠM ẨN'}
                     </button>
                   </td>
-                  <td className="py-4 px-4 text-right space-x-2">
-                    {/* Chức năng [FE-S4-04] Nút Chuyển sang thanh lý đồ cũ (Convert RENT to THRIFT) */}
+                  <td className="py-4 px-4 text-right space-x-2 whitespace-nowrap">
+                    {/* Nút Xem chi tiết trỏ đúng sang trang RentProductDetail */}
+                    <Link
+                      to={`/shop/rent/products/${p.sku}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#141310] hover:bg-[#292724] text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                      title="Xem chi tiết sản phẩm cho thuê"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">visibility</span>
+                      Chi tiết
+                    </Link>
+
+                    {/* Nút Sửa hồ sơ sản phẩm */}
+                    <Link
+                      to={`/shop/rent/edit/${p.sku}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#141310] rounded font-semibold text-[11px] transition-colors"
+                      title="Chỉnh sửa thông tin thiết bị"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">edit</span>
+                      Sửa
+                    </Link>
+
+                    {/* Chức năng Chuyển sang thanh lý đồ cũ (Convert RENT to THRIFT) */}
                     {p.convertedToThrift ? (
                       <Link
                         to={`/shop/rent/convert-thrift/${p.sku}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-secondary text-white rounded font-semibold text-[11px] shadow-xs"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-secondary/80 text-white rounded font-semibold text-[10px] shadow-xs"
                         title="Đã chuyển sang THRIFT (Đang chờ duyệt)"
                       >
-                        <span className="material-symbols-outlined text-[13px]">verified</span>
+                        <span className="material-symbols-outlined text-[12px]">verified</span>
                         Đã sang THRIFT
                       </Link>
                     ) : p.rentingUnits > 0 && p.readyUnits === 0 ? (
                       <span
-                        title="Không thể chuyển: Tất cả máy đang cho thuê (AC 1)"
+                        title="Không thể chuyển: Tất cả máy đang cho thuê"
                         className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-400 rounded font-semibold text-[10px] cursor-not-allowed opacity-60"
                       >
-                        <span className="material-symbols-outlined text-[13px]">lock</span>
+                        <span className="material-symbols-outlined text-[12px]">lock</span>
                         Đang thuê
                       </span>
                     ) : (
                       <Link
                         to={`/shop/rent/convert-thrift/${p.sku}`}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#141310] hover:bg-[#292724] text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-white hover:bg-[#f1ede6] text-[#4a463f] border border-[#ebe8e1] rounded font-semibold text-[10px] shadow-2xs transition-colors"
                         title="Chuyển giao hiện vật sang thanh lý bán đứt THRIFT"
                       >
-                        <span className="material-symbols-outlined text-[13px]">sync_alt</span>
+                        <span className="material-symbols-outlined text-[12px]">sync_alt</span>
                         Chuyển THRIFT
                       </Link>
                     )}
 
-                    <Link to={`/shop/rent/edit/${p.sku}`} className="px-2.5 py-1 bg-[#f1ede6] hover:bg-[#ebe8e1] rounded font-semibold">
-                      Sửa
-                    </Link>
                     <button
                       type="button"
                       onClick={() => handleDelete(p.sku, p.name)}
-                      className="px-2.5 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded font-semibold"
+                      className="px-2 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded font-semibold text-[11px] transition-colors"
                     >
                       Xóa
                     </button>

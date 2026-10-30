@@ -50,9 +50,16 @@ const ProductCard: React.FC<{
       location,
       deposit,
       categoryLabel,
+      gradeBadge: conditionLabel,
       quantity: 1,
     });
     toast.success(`Đã thêm "${title}" vào giỏ hàng!`);
+  };
+
+  const handleToggleWishlist = () => {
+    const wasSaved = isWishlisted(id);
+    toggleWishlist(id, 'RENT');
+    toast.info(wasSaved ? `Đã bỏ lưu "${title}"` : `Đã thêm "${title}" vào yêu thích`);
   };
 
 
@@ -84,7 +91,7 @@ const ProductCard: React.FC<{
         {/* Wishlist Button top-right */}
         <button
           type="button"
-          onClick={() => toggleWishlist(id)}
+          onClick={handleToggleWishlist}
           className={`absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center shadow-xs transition-transform active:scale-90 cursor-pointer ${
             isSaved
               ? 'bg-[#1C1A18] text-rose-400'

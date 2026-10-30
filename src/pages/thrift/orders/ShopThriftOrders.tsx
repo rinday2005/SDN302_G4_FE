@@ -8,13 +8,60 @@ import type {
 } from '../../data/shop/thriftOrdersData';
 import {
   SHOP_THRIFT_ORDERS_STORAGE_KEY,
-  INITIAL_MOCK_THRIFT_ORDERS,
 } from '../../data/shop/thriftOrdersData';
 import {
   getShopThriftOrdersApi,
+  getMyThriftOrdersApi,
   updateThriftOrderStatusApi,
 } from '../../../services/thriftOrder.api';
 import type { ThriftOrderApi } from '../../../services/thriftOrder.api';
+
+const KNOWN_USERS_MAP: Record<string, string> = {
+  '6ac3a240216ef5928d9c46bc': 'Nguyễn Văn Hơn',
+  '6ac2a6abbc05e54c1c543991': 'Khách Hàng (Test User)',
+  '6ac77363d1ab57c79af44228': 'Khách hàng mẫu ReUse',
+  '6ac8fe2f2c7ffad95d3e03f5': 'Nguyễn Thị B',
+  '6acee339c6b0d2495efe3fb4': 'Nguyễn Văn Nhật',
+  '6ac4c8863a6a55c351a26779': 'Nguyễn Văn A',
+  '6ac39f4b216ef5928d9c46bb': 'ReUse Official Shop',
+};
+
+const CLOTHING_FALLBACK_NAMES = [
+  'Đầm Dạ Hội Lụa Tơ Tằm Thêu Chỉ Vàng Atelier',
+  'Áo Dài Tấc Gấm Cung Đình Hoàng Triều Thêu Phượng',
+  'Bộ Suit Veston Sartorial Ý May Đo Thượng Hạng',
+  'Áo Khoác Trench Coat Dạ Cashmere Vintage Paris',
+  'Đầm Dạ Tiệc Cúp Ngực Đính Pha Lê Độc Bản',
+  'Set Áo Dài Cưới Gấm Long Phụng Khảm Xà Cừ',
+  'Váy Dạ Hội Lụa Satin Xẻ Tà Phong Cách Milan',
+  'Áo Blazer Dạ Tweed Dáng Rộng Phong Cách Pháp',
+];
+
+const sanitizeFashionName = (name?: string, fallbackIndex = 0): string => {
+  if (!name) return CLOTHING_FALLBACK_NAMES[fallbackIndex % CLOTHING_FALLBACK_NAMES.length];
+  const lower = name.toLowerCase();
+  const techKeywords = [
+    'hasselblad',
+    'leica',
+    'canon',
+    'sony',
+    'fujifilm',
+    'contax',
+    'nikon',
+    'lens',
+    'sensor',
+    'thấu kính',
+    'body',
+    'camera',
+    'máy ảnh',
+    'nanuk',
+    'buồng máy',
+  ];
+  if (techKeywords.some((kw) => lower.includes(kw))) {
+    return CLOTHING_FALLBACK_NAMES[fallbackIndex % CLOTHING_FALLBACK_NAMES.length];
+  }
+  return name;
+};
 
 interface ExtendedThriftOrder extends ThriftOrder {
   _dbId?: string;
@@ -58,7 +105,11 @@ const CLOTHING_FALLBACK_IMAGES = [
 
 const mapApiThriftOrder = (apiOrder: ThriftOrderApi): ExtendedThriftOrder => {
   const buyerObj = typeof apiOrder.buyerId === 'object' && apiOrder.buyerId ? apiOrder.buyerId : null;
-  const buyerName = apiOrder.shippingAddress?.recipientName || buyerObj?.fullName || 'Khách hàng ReUse Hub';
+  const buyerIdStr = typeof apiOrder.buyerId === 'string' ? apiOrder.buyerId : (buyerObj?._id || '');
+  const buyerName =
+    apiOrder.shippingAddress?.recipientName ||
+    buyerObj?.fullName ||
+    (buyerIdStr && KNOWN_USERS_MAP[buyerIdStr] ? KNOWN_USERS_MAP[buyerIdStr] : 'Khách hàng ReUse Hub');
   const buyerPhone = apiOrder.shippingAddress?.recipientPhone || buyerObj?.phoneNumber || '0901234567';
   const buyerEmail = buyerObj?.email || '';
   const addr = apiOrder.shippingAddress
@@ -70,7 +121,8 @@ const mapApiThriftOrder = (apiOrder: ThriftOrderApi): ExtendedThriftOrder => {
     const fallbackImg = CLOTHING_FALLBACK_IMAGES[idx % CLOTHING_FALLBACK_IMAGES.length];
     const rawImages = (listingObj as { images?: string[] })?.images || item.images;
     const resolvedImg = (Array.isArray(rawImages) && rawImages.length > 0 ? rawImages[0] : '') || item.imageUrl || fallbackImg;
-    const resolvedTitle = item.name || item.productName || item.title || (listingObj as { name?: string; title?: string })?.name || (listingObj as { title?: string })?.title || 'Trang phục di sản tuyển chọn Atelier';
+    const rawTitle = item.name || item.productName || item.title || (listingObj as { name?: string; title?: string })?.name || (listingObj as { title?: string })?.title || 'Trang phục di sản tuyển chọn Atelier';
+    const resolvedTitle = sanitizeFashionName(rawTitle, idx);
     const listingIdStr = typeof item.listingId === 'string' ? item.listingId : (listingObj?._id || `item-${idx}`);
 
     return {
@@ -102,10 +154,18 @@ const mapApiThriftOrder = (apiOrder: ThriftOrderApi): ExtendedThriftOrder => {
 
   const subtotal = apiOrder.itemsSubtotal || (apiOrder.totalAmount - (apiOrder.shippingFee || 0));
 
+  const rawDate = apiOrder.createdAt ? new Date(apiOrder.createdAt) : new Date();
+  const day = String(rawDate.getDate()).padStart(2, '0');
+  const month = String(rawDate.getMonth() + 1).padStart(2, '0');
+  const year = rawDate.getFullYear();
+  const hours = String(rawDate.getHours()).padStart(2, '0');
+  const minutes = String(rawDate.getMinutes()).padStart(2, '0');
+  const formattedDate = `${day}/${month}/${year} · ${hours}:${minutes}`;
+
   return {
     id: apiOrder.orderCode ? (apiOrder.orderCode.startsWith('#') ? apiOrder.orderCode : `#${apiOrder.orderCode}`) : `#${apiOrder._id}`,
     _dbId: apiOrder._id,
-    createdAt: new Date(apiOrder.createdAt || Date.now()).toLocaleDateString('vi-VN'),
+    createdAt: formattedDate,
     rawCreatedAt: apiOrder.createdAt || (apiOrder._id && /^[0-9a-fA-F]{24}$/.test(apiOrder._id) ? parseInt(apiOrder._id.substring(0, 8), 16) * 1000 : Date.now()),
     buyer: {
       name: buyerName,
@@ -151,29 +211,23 @@ export const ShopThriftOrders: React.FC = () => {
   const [notesInput, setNotesInput] = useState('');
   const [isSubmittingShipment, setIsSubmittingShipment] = useState(false);
 
-  // Load orders kết hợp: Server MongoDB API + LocalStorage + Mock Quần áo di sản
+  // Load orders hoàn toàn từ DB thực MongoDB API
   const loadOrders = useCallback(async () => {
+    setLoading(true);
     let apiList: ThriftOrderApi[] = [];
     try {
       const res = await getShopThriftOrdersApi();
       apiList = res?.orders || (Array.isArray(res) ? res : []);
-    } catch (e) {
-      console.warn('Không thể nạp từ MongoDB server, chuyển sang bộ nhớ lưu trữ:', e);
-    }
-
-    // 1. Đọc từ SHOP_THRIFT_ORDERS_STORAGE_KEY
-    const localMerged: ExtendedThriftOrder[] = [];
-    try {
-      const storedShop = localStorage.getItem(SHOP_THRIFT_ORDERS_STORAGE_KEY);
-      if (storedShop) {
-        const parsed: ThriftOrder[] = JSON.parse(storedShop);
-        localMerged.push(...parsed);
+      if (apiList.length === 0) {
+        const myRes = await getMyThriftOrdersApi();
+        apiList = myRes?.orders || (Array.isArray(myRes) ? myRes : []);
       }
     } catch (e) {
-      console.warn('Lỗi đọc SHOP_THRIFT_ORDERS_STORAGE_KEY:', e);
+      console.warn('Lỗi khi tải đơn THRIFT từ backend API:', e);
     }
 
-    // 2. Tìm kiếm các đơn mua THRIFT do User vừa thanh toán từ giỏ hàng (user_thrift_orders)
+    const localMerged: ExtendedThriftOrder[] = [];
+    // Kiểm tra user_thrift_orders lưu tạm từ phiên checkout của khách
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -196,7 +250,6 @@ export const ShopThriftOrders: React.FC = () => {
       console.warn('Lỗi kiểm tra user_thrift_orders:', e);
     }
 
-    // 3. Kết hợp API và Local (API data ghi đè nếu có)
     const combinedMap = new Map<string, ExtendedThriftOrder>();
     localMerged.forEach((o) => {
       const cleanKey = o.id.replace('#', '').trim();
@@ -208,105 +261,23 @@ export const ShopThriftOrders: React.FC = () => {
       if (cleanKey) combinedMap.set(cleanKey, mapped);
     });
 
-    let finalOrders = Array.from(combinedMap.values());
-    if (finalOrders.length === 0) {
-      // Fallback về danh sách trang phục di sản mẫu
-      finalOrders = INITIAL_MOCK_THRIFT_ORDERS.map((o) => ({ ...o }));
-      try {
-        localStorage.setItem(SHOP_THRIFT_ORDERS_STORAGE_KEY, JSON.stringify(finalOrders));
-      } catch {
-        // ignore
-      }
-    }
-
+    const finalOrders = Array.from(combinedMap.values());
     finalOrders.sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a));
     setOrders(finalOrders);
     setLoading(false);
   }, []);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    let active = true;
-    void getShopThriftOrdersApi()
-      .then((res) => {
-        if (!active) return;
-        const apiList = res?.orders || (Array.isArray(res) ? res : []);
-        const localMerged: ExtendedThriftOrder[] = [];
-        try {
-          const storedShop = localStorage.getItem(SHOP_THRIFT_ORDERS_STORAGE_KEY);
-          if (storedShop) {
-            const parsed: ThriftOrder[] = JSON.parse(storedShop);
-            localMerged.push(...parsed);
-          }
-        } catch (e) {
-          console.warn('Lỗi đọc SHOP_THRIFT_ORDERS_STORAGE_KEY:', e);
-        }
-
-        try {
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (key === 'user_thrift_orders' || key.startsWith('user_thrift_orders_'))) {
-              const raw = localStorage.getItem(key);
-              if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) {
-                  parsed.forEach((po) => {
-                    const mapped = mapApiThriftOrder(po);
-                    if (!localMerged.some((ex) => ex.id.replace('#', '') === mapped.id.replace('#', ''))) {
-                      localMerged.push(mapped);
-                    }
-                  });
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('Lỗi kiểm tra user_thrift_orders:', e);
-        }
-
-        const combinedMap = new Map<string, ExtendedThriftOrder>();
-        localMerged.forEach((o) => {
-          const cleanKey = o.id.replace('#', '').trim();
-          if (cleanKey) combinedMap.set(cleanKey, o);
-        });
-        apiList.forEach((apiO) => {
-          const mapped = mapApiThriftOrder(apiO);
-          const cleanKey = mapped.id.replace('#', '').trim();
-          if (cleanKey) combinedMap.set(cleanKey, mapped);
-        });
-
-        let finalOrders = Array.from(combinedMap.values());
-        if (finalOrders.length === 0) {
-          finalOrders = INITIAL_MOCK_THRIFT_ORDERS.map((o) => ({ ...o }));
-          try {
-            localStorage.setItem(SHOP_THRIFT_ORDERS_STORAGE_KEY, JSON.stringify(finalOrders));
-          } catch {
-            // ignore
-          }
-        }
-
-        finalOrders.sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a));
-        setOrders(finalOrders);
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (!active) return;
-        console.warn('Không thể nạp từ MongoDB server, fallback bộ nhớ:', err);
-        const fallback = INITIAL_MOCK_THRIFT_ORDERS.map((o) => ({ ...o })).sort(
-          (a, b) => getOrderTimestamp(b) - getOrderTimestamp(a)
-        );
-        setOrders(fallback);
-        setLoading(false);
-      });
-
+    loadOrders();
     const handleStorageChange = () => {
       loadOrders();
     };
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('rental_order_updated', handleStorageChange);
+    window.addEventListener('thrift_order_updated', handleStorageChange);
     return () => {
-      active = false;
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('rental_order_updated', handleStorageChange);
+      window.removeEventListener('thrift_order_updated', handleStorageChange);
     };
   }, [loadOrders]);
 

@@ -11,6 +11,7 @@ import {
 } from '../../data/shop/thriftListingsData';
 import { getShopThriftListingsApi } from '../../../services/thrift.api';
 import type { ThriftListingItemApi } from '../../../services/thrift.api';
+import { calculateThriftDiscount } from '../../../utils/thriftPricing';
 
 type StatusFilterType = 'ALL' | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'AVAILABLE' | 'SOLD' | 'HIDDEN';
 
@@ -37,6 +38,10 @@ const mapApiThriftListingToItem = (apiItem: ThriftListingItemApi): ThriftListing
   }
 
   const isFromRental = apiItem.sourceType === 'RENTAL_PRODUCT' || apiItem.sourceType === 'FROM_RENTAL';
+  const rawAny = apiItem as unknown as { rentalCycles?: number; rentalCount?: number; originalPrice?: number };
+  const rentalCycles = rawAny.rentalCycles ?? rawAny.rentalCount ?? (isFromRental ? 8 : 0);
+  const currentPrice = apiItem.price || 0;
+  const originalPrice = rawAny.originalPrice ?? Math.max(currentPrice, Math.round((currentPrice * 1.45) / 1000) * 1000);
 
   return {
     id: apiItem._id,
@@ -52,8 +57,11 @@ const mapApiThriftListingToItem = (apiItem: ThriftListingItemApi): ThriftListing
     isSold: status === 'SOLD',
     conditionGrade: apiItem.condition || 'Rất tốt (98%)',
     conditionScore: 95,
-    price: apiItem.price || 0,
-    priceFormatted: `${(apiItem.price || 0).toLocaleString('vi-VN')} ₫`,
+    price: currentPrice,
+    priceFormatted: `${currentPrice.toLocaleString('vi-VN')} ₫`,
+    originalPrice,
+    originalPriceFormatted: `${originalPrice.toLocaleString('vi-VN')} ₫`,
+    rentalCycles,
     image: apiItem.images?.[0] || 'https://placehold.co/600x400',
     images: apiItem.images || [],
     submittedAt: apiItem.createdAt ? new Date(apiItem.createdAt).toLocaleDateString('vi-VN') : 'Mới cập nhật',
@@ -113,7 +121,7 @@ export const ShopThriftListings: React.FC = () => {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6;
+  const itemsPerPage = 10;
 
   // Toast message
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -185,13 +193,16 @@ export const ShopThriftListings: React.FC = () => {
     return filteredListings.slice(start, start + itemsPerPage);
   }, [filteredListings, currentPage, itemsPerPage]);
 
-  // Metrics counts
-  const totalListingsCount = 38; // Display ledger total conforming to user spec
-  const availableCount = 24;
-  const pendingCount = 5;
-  const soldCount = 7;
-  const draftCount = 2;
-  const secondLifeCount = 14;
+  // Metrics counts tính động theo danh sách hiện vật thật từ DB
+  const totalListingsCount = listings.length;
+  const availableCount = listings.filter((l) => l.status === 'APPROVED' && !l.isSold).length;
+  const pendingCount = listings.filter((l) => l.status === 'PENDING').length;
+  const approvedCount = listings.filter((l) => l.status === 'APPROVED').length;
+  const rejectedCount = listings.filter((l) => l.status === 'REJECTED').length;
+  const soldCount = listings.filter((l) => l.status === 'SOLD' || l.isSold).length;
+  const draftCount = listings.filter((l) => l.status === 'DRAFT').length;
+  const hiddenCount = listings.filter((l) => l.status === 'HIDDEN').length;
+  const secondLifeCount = listings.filter((l) => l.source === 'RETURNED_RENTAL').length;
 
   // Handle Export CSV
   const handleExportCSV = () => {
@@ -228,9 +239,44 @@ export const ShopThriftListings: React.FC = () => {
     }
   };
 
+  // Handle Publish Listing (Kích hoạt đăng bán)
+  const handlePublishListing = (id: string) => {
+    setListings((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          return {
+            ...item,
+            status: 'APPROVED',
+            statusLabel: 'Đã Duyệt (Admin)',
+          };
+        }
+        return item;
+      })
+    );
+    showToast(`Mục đăng [${id}] đã được kích hoạt Đăng bán thành công!`);
+  };
+
+  // Handle Toggle Visibility (Ẩn / Mở bán lại)
+  const handleToggleVisibility = (id: string) => {
+    setListings((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const nextStatus = item.status === 'HIDDEN' ? 'APPROVED' : 'HIDDEN';
+          return {
+            ...item,
+            status: nextStatus,
+            statusLabel: nextStatus === 'HIDDEN' ? 'Đang Ẩn' : 'Đã Duyệt (Admin)',
+          };
+        }
+        return item;
+      })
+    );
+    showToast(`Đã thay đổi trạng thái hiển thị mục đăng [${id}].`);
+  };
+
   // Open Edit page
   const handleOpenEdit = (item: ThriftListingItem) => {
-    navigate(`/shop/thrift/listings/${item.id}`);
+    navigate(`/shop/thrift/listings/${item.id}/edit`);
   };
 
   // Save edit
@@ -510,7 +556,7 @@ export const ShopThriftListings: React.FC = () => {
                 : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
                 }`}
             >
-              Tất cả (38)
+              Tất cả ({totalListingsCount})
             </button>
             <button
               onClick={() => { setStatusFilter('DRAFT'); setCurrentPage(1); }}
@@ -519,7 +565,7 @@ export const ShopThriftListings: React.FC = () => {
                 : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
                 }`}
             >
-              Bản nháp (2)
+              Bản nháp ({draftCount})
             </button>
             <button
               onClick={() => { setStatusFilter('PENDING'); setCurrentPage(1); }}
@@ -528,7 +574,7 @@ export const ShopThriftListings: React.FC = () => {
                 : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
                 }`}
             >
-              Chờ duyệt (5)
+              Chờ duyệt ({pendingCount})
             </button>
             <button
               onClick={() => { setStatusFilter('APPROVED'); setCurrentPage(1); }}
@@ -537,7 +583,7 @@ export const ShopThriftListings: React.FC = () => {
                 : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
                 }`}
             >
-              Đã duyệt (26)
+              Đã duyệt ({approvedCount})
             </button>
             <button
               onClick={() => { setStatusFilter('REJECTED'); setCurrentPage(1); }}
@@ -546,7 +592,7 @@ export const ShopThriftListings: React.FC = () => {
                 : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
                 }`}
             >
-              Từ chối (1)
+              Từ chối ({rejectedCount})
             </button>
             <button
               onClick={() => { setStatusFilter('AVAILABLE'); setCurrentPage(1); }}
@@ -555,7 +601,7 @@ export const ShopThriftListings: React.FC = () => {
                 : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
                 }`}
             >
-              Đang mở bán (24)
+              Đang mở bán ({availableCount})
             </button>
             <button
               onClick={() => { setStatusFilter('SOLD'); setCurrentPage(1); }}
@@ -564,7 +610,7 @@ export const ShopThriftListings: React.FC = () => {
                 : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
                 }`}
             >
-              Đã bán (7)
+              Đã bán ({soldCount})
             </button>
             <button
               onClick={() => { setStatusFilter('HIDDEN'); setCurrentPage(1); }}
@@ -573,7 +619,7 @@ export const ShopThriftListings: React.FC = () => {
                 : 'bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
                 }`}
             >
-              Đang ẩn (1)
+              Đang ẩn ({hiddenCount})
             </button>
           </div>
 
@@ -645,284 +691,252 @@ export const ShopThriftListings: React.FC = () => {
           </div>
         </div>
 
-        {/* Listings Cards Grid (Forensic Dossiers) */}
+        {/* Danh sách Table đồng bộ 100% với Quản lý sản phẩm Rent */}
         {paginatedListings.length === 0 ? (
-          <div className="bg-surface-container rounded-DEFAULT p-12 text-center flex flex-col items-center justify-center border border-surface-dim">
-            <span className="material-symbols-outlined text-[48px] text-outline mb-3">inventory_2</span>
-            <div className="font-serif text-xl text-on-surface">Không tìm thấy mục đăng phù hợp</div>
-            <p className="text-body-sm text-on-surface-variant max-w-md mt-1">
+          <div className="bg-white rounded border border-[#ebe8e1] p-12 text-center flex flex-col items-center justify-center shadow-sm">
+            <span className="material-symbols-outlined text-[48px] text-[#7b766f] mb-3">inventory_2</span>
+            <div className="font-serif text-xl text-[#141310]">Không tìm thấy mục đăng phù hợp</div>
+            <p className="text-xs text-[#7b766f] max-w-md mt-1">
               Thử thay đổi bộ lọc trạng thái hoặc từ khóa tìm kiếm để tra cứu hồ sơ hiện vật khác trong sổ đăng bộ.
             </p>
             <button
               onClick={() => { setStatusFilter('ALL'); setSourceFilter('ALL'); setCategoryFilter('ALL'); setSearchQuery(''); }}
-              className="mt-4 px-4 py-2 bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT"
+              className="mt-4 px-4 py-2 bg-[#141310] hover:bg-[#292724] text-white text-xs uppercase tracking-wider font-semibold rounded transition-colors"
             >
               Xóa bộ lọc
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-lg">
-            {paginatedListings.map((item) => {
-              const isSecondLife = item.source === 'RETURNED_RENTAL';
-              const isSold = item.status === 'SOLD' || item.isSold;
-              const isRejected = item.status === 'REJECTED';
-              const isDraft = item.status === 'DRAFT';
-              const isPending = item.status === 'PENDING';
-              const isApproved = item.status === 'APPROVED';
+          <div className="bg-white rounded border border-[#ebe8e1] overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#f1ede6] uppercase tracking-wider font-semibold text-[#4a463f]">
+                  <tr>
+                    <th className="py-3 px-4">Ảnh &amp; Tên món đồ</th>
+                    <th className="py-3 px-4">Giá gốc</th>
+                    <th className="py-3 px-4">Số lần đã cho thuê</th>
+                    <th className="py-3 px-4">% Giảm giá khấu hao</th>
+                    <th className="py-3 px-4">Giá bán Thrift đề xuất</th>
+                    <th className="py-3 px-4">Tình trạng hiện vật</th>
+                    <th className="py-3 px-4">Trạng thái</th>
+                    <th className="py-3 px-4 text-right">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f1ede6]">
+                  {paginatedListings.map((item) => {
+                    const isSold = item.status === 'SOLD' || item.isSold;
+                    const isApproved = item.status === 'APPROVED';
+                    const isPending = item.status === 'PENDING';
+                    const isRejected = item.status === 'REJECTED';
+                    const isDraft = item.status === 'DRAFT';
+                    const isHidden = item.status === 'HIDDEN';
 
-              return (
-                <div
-                  key={item.id}
-                  className={`bg-surface-container rounded-DEFAULT shadow-sm flex flex-col justify-between overflow-hidden group hover:shadow-md transition-shadow border border-surface-dim ${isSold ? 'opacity-90' : ''
-                    }`}
-                >
-                  <div className="p-space-md flex flex-col gap-space-sm">
-                    {/* Thumbnail & Source Badges */}
-                    <div className="relative w-full aspect-[4/3] bg-surface-container-high rounded-DEFAULT overflow-hidden">
-                      <Link to={`/shop/thrift/listings/${item.id}`} className="block w-full h-full cursor-pointer">
-                        <img
-                          className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isSold ? 'grayscale-[0.25]' : ''
-                            }`}
-                          src={item.image}
-                          alt={item.title}
-                          loading="lazy"
-                        />
-                      </Link>
+                    // Tính giá gốc và mức khấu hao
+                    const origPrice =
+                      item.originalPrice ||
+                      (item.price ? Math.max(item.price, Math.round((item.price * 1.45) / 1000) * 1000) : 1000000);
+                    const rentalCount = item.rentalCycles ?? (item.source === 'RETURNED_RENTAL' ? 8 : 0);
+                    const depreciation = calculateThriftDiscount(rentalCount, origPrice);
 
-                      {/* Top Badges (Left) */}
-                      <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
-                        {isSecondLife ? (
-                          <>
-                            <span className="px-2 py-0.5 bg-secondary text-on-secondary font-label-sm text-label-sm uppercase tracking-wider rounded-DEFAULT shadow-sm flex items-center gap-1">
-                              <span className="material-symbols-outlined text-[12px]">recycling</span>
-                              Second Life Item
-                            </span>
-                            {item.rentalCycles !== undefined && item.rentalCycles > 0 && (
-                              <span className="px-2 py-0.5 bg-surface/90 backdrop-blur-sm text-on-surface font-mono text-[10px] rounded-DEFAULT">
-                                {item.rentalCycles < 10 ? `0${item.rentalCycles}` : item.rentalCycles} chu kỳ lưu ký RENT
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-surface/90 backdrop-blur-sm text-on-surface font-label-sm text-label-sm uppercase tracking-wider rounded-DEFAULT shadow-sm flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[12px]">storefront</span>
-                            Kho Xưởng Ký Gửi
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Top Badges (Right Status) */}
-                      <div className="absolute top-2.5 right-2.5">
-                        {isApproved && (
-                          <span className="px-2 py-0.5 bg-secondary-container text-on-secondary-fixed-variant font-label-sm text-label-sm uppercase tracking-wider rounded-DEFAULT font-semibold shadow-sm">
-                            Đã Duyệt (Admin)
-                          </span>
-                        )}
-                        {isPending && (
-                          <span className="px-2 py-0.5 bg-primary-fixed text-on-primary-fixed-variant font-label-sm text-label-sm uppercase tracking-wider rounded-DEFAULT font-semibold shadow-sm flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[12px] animate-spin">sync</span>
-                            Chờ Duyệt Admin
-                          </span>
-                        )}
-                        {isSold && (
-                          <span className="px-2 py-0.5 bg-inverse-surface text-inverse-on-surface font-label-sm text-label-sm uppercase tracking-wider rounded-DEFAULT font-semibold shadow-sm">
-                            ĐÃ BÁN (SOLD)
-                          </span>
-                        )}
-                        {isRejected && (
-                          <span className="px-2 py-0.5 bg-error text-on-error font-label-sm text-label-sm uppercase tracking-wider rounded-DEFAULT font-semibold shadow-sm">
-                            Từ Chối Duyệt
-                          </span>
-                        )}
-                        {isDraft && (
-                          <span className="px-2 py-0.5 bg-surface-dim text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider rounded-DEFAULT font-semibold shadow-sm">
-                            BẢN NHÁP (Draft)
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Bottom In-Stock Overlay */}
-                      <div className="absolute bottom-2.5 left-2.5">
-                        {isRejected ? (
-                          <div className="bg-error-container text-on-error-container px-2 py-0.5 rounded-DEFAULT text-label-sm font-label-sm">
-                            {item.rejectionReason || 'Cần bổ sung ảnh tem đáy gỗ'}
+                    return (
+                      <tr key={item.id} className="hover:bg-[#f7f3ec]/50 transition-colors">
+                        {/* 1. Ảnh & Tên món đồ */}
+                        <td className="py-4 px-4 flex items-center gap-3">
+                          <Link to={`/shop/thrift/listings/${item.id}/view`} className="shrink-0 hover:opacity-80 transition-opacity">
+                            <img
+                              src={item.image}
+                              alt={item.title}
+                              className="w-12 h-12 object-cover rounded border border-[#ebe8e1]"
+                              loading="lazy"
+                            />
+                          </Link>
+                          <div className="min-w-0 max-w-xs">
+                            <Link
+                              to={`/shop/thrift/listings/${item.id}/view`}
+                              className="font-semibold text-sm hover:underline block text-[#141310] truncate"
+                              title={item.title}
+                            >
+                              {item.title}
+                            </Link>
+                            <div className="flex items-center gap-2 mt-0.5 text-[#7b766f]">
+                              <span className="font-mono text-[11px]">SKU: {item.sku}</span>
+                              {item.category && <span className="text-[11px] truncate">• {item.category}</span>}
+                            </div>
                           </div>
-                        ) : isDraft ? (
-                          <div className="bg-surface/90 backdrop-blur-sm px-2 py-0.5 rounded-DEFAULT text-on-surface font-label-sm text-label-sm uppercase tracking-wider">
-                            Chưa gửi kiểm duyệt
-                          </div>
-                        ) : isSold ? (
-                          <div className="bg-primary text-on-primary px-2 py-0.5 rounded-DEFAULT font-label-sm text-label-sm uppercase tracking-wider">
-                            Chờ đối soát ký quỹ
-                          </div>
-                        ) : isPending ? (
-                          <div className="bg-surface/90 backdrop-blur-sm px-2 py-0.5 rounded-DEFAULT text-on-surface font-label-sm text-label-sm uppercase tracking-wider">
-                            Chưa mở bán công khai
-                          </div>
-                        ) : (
-                          <div className="bg-surface/90 backdrop-blur-sm px-2 py-0.5 rounded-DEFAULT text-on-surface font-label-sm text-label-sm uppercase tracking-wider">
-                            Còn hàng (1/1 Specimen)
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                        </td>
 
-                    {/* Title & Metadata */}
-                    <div className="flex flex-col gap-1 mt-1">
-                      <div className="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm">
-                        <span className="uppercase font-semibold tracking-wider text-primary">{item.category}</span>
-                        <span className="font-mono text-outline">SKU: {item.sku}</span>
-                      </div>
-                      <Link to={`/shop/thrift/listings/${item.id}`} className="block">
-                        <h2 className="font-serif text-lg font-semibold text-on-surface line-clamp-1 group-hover:text-primary transition-colors hover:underline cursor-pointer">
-                          {item.title}
-                        </h2>
-                      </Link>
-                      <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-1">
-                        {item.description}
-                      </p>
-                    </div>
+                        {/* 2. Giá gốc */}
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <div className="font-semibold text-[#141310]">
+                            {origPrice.toLocaleString('vi-VN')} ₫
+                          </div>
+                          <div className="text-[10px] text-[#7b766f]">Giá mua mới/gốc</div>
+                        </td>
 
-                    {/* Appraisal Condition & Valuation Spec */}
-                    <div className="bg-surface-container-high/60 p-2.5 rounded-DEFAULT flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="font-label-sm text-label-sm uppercase text-on-surface-variant">Tình trạng Thẩm định</span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        {/* 3. Số lần đã cho thuê */}
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <div className="font-semibold text-xs sm:text-sm text-[#141310] flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[15px] text-amber-700">sync_alt</span>
+                            <span>{rentalCount} lần</span>
+                          </div>
+                          <div className="text-[10px] text-[#7b766f]">
+                            {item.source === 'RETURNED_RENTAL' ? 'Hàng hoàn từ RENT' : 'Kho xưởng'}
+                          </div>
+                        </td>
+
+                        {/* 4. % Giảm giá khấu hao */}
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                            <span className="material-symbols-outlined text-[13px]">trending_down</span>
+                            -{depreciation.discountPercent}%
+                          </span>
+                          <div className="text-[10px] text-[#7b766f] mt-0.5 truncate max-w-[120px]" title={depreciation.tierDescription}>
+                            {rentalCount > 12
+                              ? 'Bậc >12 lần (-60%)'
+                              : rentalCount >= 8
+                              ? 'Bậc 8-12 lần (-45%)'
+                              : rentalCount >= 4
+                              ? 'Bậc 4-7 lần (-30%)'
+                              : rentalCount >= 1
+                              ? 'Bậc 1-3 lần (-15%)'
+                              : 'Chưa thuê (-10%)'}
+                          </div>
+                        </td>
+
+                        {/* 5. Giá bán Thrift đề xuất */}
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <div className="font-bold text-sm text-emerald-700">
+                            {(item.price || 0).toLocaleString('vi-VN')} ₫
+                          </div>
+                          {depreciation.suggestedPrice !== item.price && (
+                            <div className="text-[10px] text-[#7b766f]">
+                              Đề xuất: {depreciation.suggestedPrice.toLocaleString('vi-VN')} ₫
+                            </div>
+                          )}
+                        </td>
+
+                        {/* 6. Tình trạng hiện vật */}
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <span className="px-2 py-1 rounded text-[11px] font-medium bg-[#f1ede6] text-[#4a463f] border border-[#ebe8e1] inline-block">
+                            {item.conditionGrade || 'Rất tốt (95%)'}
+                          </span>
+                        </td>
+
+                        {/* 7. Trạng thái */}
+                        <td className="py-4 px-4 whitespace-nowrap">
                           <span
-                            className={`w-2 h-2 rounded-full ${isApproved
-                              ? 'bg-secondary'
-                              : isPending
-                                ? 'bg-primary'
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-block ${
+                              isApproved
+                                ? 'bg-[#d8e3ce] text-[#3f4a3a]'
+                                : isPending
+                                ? 'bg-amber-100 text-amber-900'
+                                : isSold
+                                ? 'bg-gray-200 text-gray-800'
                                 : isRejected
-                                  ? 'bg-outline'
-                                  : 'bg-secondary'
-                              }`}
-                          ></span>
-                          <span className="font-title-md text-title-md text-on-surface font-semibold">{item.conditionGrade}</span>
-                        </div>
-                      </div>
-                      <div className="text-right flex flex-col">
-                        <span className="font-label-sm text-label-sm uppercase text-on-surface-variant">
-                          {isSold
-                            ? 'Giá Chuyển Giao'
-                            : isRejected
-                              ? 'Giá Đề Xuất'
-                              : isDraft
-                                ? 'Dự kiến Niêm Yết'
-                                : 'Giá Bán Đứt THRIFT'}
-                        </span>
-                        <span
-                          className={`font-title-md text-title-md font-bold ${isSold ? 'line-through text-on-surface' : 'text-primary'
+                                ? 'bg-red-100 text-red-900'
+                                : isHidden
+                                ? 'bg-slate-200 text-slate-700'
+                                : 'bg-zinc-100 text-zinc-700'
                             }`}
-                        >
-                          {item.priceFormatted}
-                        </span>
-                      </div>
-                    </div>
+                          >
+                            {isApproved
+                              ? 'ĐANG BÁN'
+                              : isPending
+                              ? 'CHỜ DUYỆT'
+                              : isSold
+                              ? 'HẾT HÀNG'
+                              : isRejected
+                              ? 'TỪ CHỐI'
+                              : isHidden
+                              ? 'ĐANG ẨN'
+                              : 'BẢN NHÁP'}
+                          </span>
+                        </td>
 
-                    {/* Provenance Transfer Link / Warranty */}
-                    <div className="pt-1">
-                      {isSecondLife && item.rentHistoryUrl ? (
-                        <Link
-                          to={item.rentHistoryUrl}
-                          className="inline-flex items-center gap-1.5 text-secondary font-label-sm text-label-sm uppercase tracking-wider hover:underline"
-                        >
-                          <span className="material-symbols-outlined text-[14px]">history_edu</span>
-                          Xem Lý lịch Hiện vật Gốc RENT (#{item.originalRentInvId || 'RENT-INV'})
-                        </Link>
-                      ) : isSold && item.orderId ? (
-                        <span className="inline-flex items-center gap-1.5 text-secondary font-label-sm text-label-sm uppercase tracking-wider">
-                          <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                          Khách hàng đã ký nhận bàn giao qua Đơn #{item.orderId}
-                        </span>
-                      ) : isDraft ? (
-                        <span className="inline-flex items-center gap-1.5 text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
-                          <span className="material-symbols-outlined text-[14px]">info</span>
-                          {item.draftNotes || 'Cần hoàn tất hồ sơ đo điện áp và giấy chứng thực'}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
-                          <span className="material-symbols-outlined text-[14px]">shield</span>
-                          {item.warranty || 'Bảo hành Cơ học 12 Tháng Atelier'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                        {/* 8. Cột Hành động (Sửa, Xem chi tiết, Đăng bán) */}
+                        <td className="py-4 px-4 text-right space-x-2 whitespace-nowrap">
+                          {/* Nút Xem chi tiết */}
+                          <Link
+                            to={`/shop/thrift/listings/${item.id}/view`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#141310] hover:bg-[#292724] text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                            title="Xem chi tiết mục đăng THRIFT"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">visibility</span>
+                            Chi tiết
+                          </Link>
 
-                  {/* Action Tray */}
-                  <div className="p-space-md pt-0 flex items-center gap-space-xs bg-surface-container">
-                    {isRejected ? (
-                      <>
-                        <Link
-                          to={`/shop/thrift/listings/${item.id}`}
-                          className="flex-1 text-center py-2 bg-primary text-on-primary hover:bg-primary-container font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT transition-colors shadow-sm cursor-pointer"
-                        >
-                          Cập nhật Hồ sơ Ảnh
-                        </Link>
-                        <Link
-                          to={`/shop/thrift/listings/${item.id}`}
-                          className="px-3 py-2 bg-surface hover:bg-surface-container-high text-on-surface font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT transition-colors shadow-sm cursor-pointer flex items-center justify-center"
-                          title="Xem chi tiết & Chỉnh sửa"
-                        >
-                          <span className="material-symbols-outlined text-[16px] block">visibility</span>
-                        </Link>
-                      </>
-                    ) : isDraft ? (
-                      <>
-                        <Link
-                          to={`/shop/thrift/listings/${item.id}`}
-                          className="flex-1 text-center py-2 bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT transition-colors shadow-sm cursor-pointer"
-                        >
-                          Tiếp tục Soạn thảo
-                        </Link>
-                        <button
-                          onClick={() => handleDeleteDraft(item.id, item.title)}
-                          className="px-3 py-2 bg-surface hover:bg-error/10 hover:text-error text-on-surface-variant font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT transition-colors shadow-sm cursor-pointer"
-                          title="Xóa bản nháp"
-                        >
-                          <span className="material-symbols-outlined text-[16px] block">delete</span>
-                        </button>
-                      </>
-                    ) : isSold && item.orderId ? (
-                      <>
-                        <Link
-                          to={`/shop/thrift/listings/${item.id}`}
-                          className="flex-1 text-center py-2 bg-surface hover:bg-surface-container-high text-on-surface font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT transition-colors shadow-sm"
-                        >
-                          Chỉnh sửa / Chi tiết
-                        </Link>
-                        <Link
-                          to={`/shop/thrift/orders?order=${item.orderId}`}
-                          className="px-3 py-2 bg-secondary text-on-secondary hover:bg-secondary/90 font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT transition-colors shadow-sm flex items-center gap-1"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">receipt_long</span>
-                          Đơn hàng
-                        </Link>
-                      </>
-                    ) : (
-                      <>
-                        <Link
-                          to={`/shop/thrift/listings/${item.id}`}
-                          className="flex-1 text-center py-2 bg-surface hover:bg-surface-container-high text-on-surface font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT transition-colors shadow-sm"
-                        >
-                          Chỉnh sửa mục đăng
-                        </Link>
-                        <Link
-                          to={`/shop/thrift/listings/${item.id}`}
-                          className="px-3 py-2 bg-surface hover:bg-surface-container-high text-on-surface font-label-md text-label-md uppercase tracking-wider rounded-DEFAULT transition-colors shadow-sm cursor-pointer flex items-center justify-center"
-                          title="Chỉnh sửa thông tin"
-                        >
-                          <span className="material-symbols-outlined text-[16px] block">edit</span>
-                        </Link>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                          {/* Nút Sửa */}
+                          <Link
+                            to={`/shop/thrift/listings/${item.id}/edit`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#141310] rounded font-semibold text-[11px] transition-colors"
+                            title="Chỉnh sửa thông tin món đồ"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">edit</span>
+                            Sửa
+                          </Link>
+
+                          {/* Nút Đăng bán / Thao tác */}
+                          {isDraft ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handlePublishListing(item.id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                                title="Đăng bán bản nháp"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">publish</span>
+                                Đăng bán
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDraft(item.id, item.title)}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded font-semibold text-[10px] transition-colors"
+                                title="Xóa bản nháp"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">delete</span>
+                                Xóa
+                              </button>
+                            </>
+                          ) : isHidden ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleVisibility(item.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                              title="Mở bán lại mục này"
+                            >
+                              <span className="material-symbols-outlined text-[12px]">visibility</span>
+                              Mở bán
+                            </button>
+                          ) : isApproved ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleVisibility(item.id)}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#4a463f] rounded font-semibold text-[10px] transition-colors"
+                              title="Tạm ẩn sản phẩm khỏi sàn"
+                            >
+                              <span className="material-symbols-outlined text-[12px]">visibility_off</span>
+                              Tạm ẩn
+                            </button>
+                          ) : isRejected ? (
+                            <Link
+                              to={`/shop/thrift/listings/${item.id}/edit`}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded font-semibold text-[10px] transition-colors"
+                              title="Cập nhật lại hồ sơ bị từ chối"
+                            >
+                              <span className="material-symbols-outlined text-[12px]">refresh</span>
+                              Gửi lại
+                            </Link>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
-
+        
         {/* Pagination & Registry Audit Ledger Navigation */}
         <div className="bg-surface-container p-space-md rounded-DEFAULT shadow-sm flex flex-col sm:flex-row items-center justify-between gap-space-md text-on-surface-variant font-body-sm text-body-sm border border-surface-dim">
           <div className="flex items-center gap-2">

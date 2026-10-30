@@ -4,6 +4,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
 import { useToast } from '../../../context/ToastContext';
 import { getPublicThriftListingByIdApi } from '../../../services/thrift.api';
+import { normalizeImageUrl } from '../../../utils/imageUrl';
 import {
   getThriftProductDetail,
   THRIFT_RELATED_PRODUCTS,
@@ -39,7 +40,7 @@ export const ThriftDetail: React.FC = () => {
             sourceType: data.sourceType,
             conditionLabel: data.condition || 'Rất tốt (95%)',
             location: data.location || 'Đà Nẵng',
-            mainImage: data.images && data.images.length > 0 ? data.images[0] : undefined,
+            mainImage: data.images && data.images.length > 0 ? normalizeImageUrl(data.images[0]) : undefined,
           });
           if (data.size) {
             setSelectedSize(data.size);

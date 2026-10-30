@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { getShopProfileApi, updateShopProfileApi } from '../../services/shop.api';
 
 export const ShopOwnerProfile: React.FC = () => {
   // State for Edit Profile Modal
@@ -7,6 +8,7 @@ export const ShopOwnerProfile: React.FC = () => {
   const [isKycModalOpen, setIsKycModalOpen] = useState(false);
   const [lightboxImg, setLightboxImg] = useState<{ src: string; caption: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Close modals on Escape key press
   useEffect(() => {
@@ -21,18 +23,44 @@ export const ShopOwnerProfile: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Form states for Atelier Profile
+  // Form states for Atelier Profile (kết nối DB MongoDB thật)
   const [shopName, setShopName] = useState('Atelier Chronos & Optics Ltd.');
   const [ownerName, setOwnerName] = useState('Vũ Thanh Tùng');
   const [roleTitle, setRoleTitle] = useState('Master Curator & Archival Custodian');
-  const [primaryEmail, setPrimaryEmail] = useState('tung.vu@kyoto-optics.vn');
-  const [secondaryEmail, setSecondaryEmail] = useState('contact@atelier-chronos.vn');
-  const [phoneNumber, setPhoneNumber] = useState('+84 912 345 678');
-  const [addressLine, setAddressLine] = useState('742 Evergreen Terrace, Atelier Suite 4B');
-  const [cityRegion, setCityRegion] = useState('Ho Chi Minh City / Da Nang Vault Node, Vietnam');
+  const [primaryEmail, setPrimaryEmail] = useState('shopowner@reuse.vn');
+  const [secondaryEmail, setSecondaryEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('0901234567');
+  const [addressLine, setAddressLine] = useState('123 Lê Lợi, Phường Bến Nghé, Quận 1');
+  const [cityRegion, setCityRegion] = useState('Ho Chi Minh City, Vietnam');
   const [specialization, setSpecialization] = useState(
-    'Vintage 35mm & Medium Format Optics (Leica M, Hasselblad V-System, Contax Zeiss T*), high-precision horological CLA benchmark servicing, optical collimation, and verified high-value circular rental fleets.'
+    'Xưởng lưu ký & cho thuê trang phục, thiết bị thời trang cao cấp tuần hoàn.'
   );
+
+  // Load thực tế từ MongoDB khi vào trang
+  useEffect(() => {
+    let isMounted = true;
+    getShopProfileApi()
+      .then((data) => {
+        if (!isMounted || !data) return;
+        if (data.shopName) setShopName(data.shopName);
+        if (data.ownerName) setOwnerName(data.ownerName);
+        if (data.email) setPrimaryEmail(data.email);
+        if (data.secondaryEmail) setSecondaryEmail(data.secondaryEmail);
+        if (data.phoneNumber) setPhoneNumber(data.phoneNumber);
+        if (data.address) setAddressLine(data.address);
+        if (data.cityRegion) setCityRegion(data.cityRegion);
+        if (data.roleTitle) setRoleTitle(data.roleTitle);
+        if (data.specialization || data.description) {
+          setSpecialization(data.specialization || data.description || '');
+        }
+      })
+      .catch((err) => {
+        console.warn('Không thể nạp hồ sơ Shop từ DB:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -46,10 +74,34 @@ export const ShopOwnerProfile: React.FC = () => {
     showToast(`Đã sao chép ${label}: ${text}`);
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsEditModalOpen(false);
-    showToast('Hồ sơ xưởng lưu ký đã được cập nhật thành công!');
+    setIsSaving(true);
+    try {
+      const updated = await updateShopProfileApi({
+        shopName,
+        ownerName,
+        phoneNumber,
+        secondaryEmail,
+        businessAddress: addressLine,
+        cityRegion,
+        specialization,
+        description: specialization,
+        roleTitle,
+      });
+      if (updated) {
+        if (updated.shopName) setShopName(updated.shopName);
+        if (updated.ownerName) setOwnerName(updated.ownerName);
+        if (updated.phoneNumber) setPhoneNumber(updated.phoneNumber);
+      }
+      setIsEditModalOpen(false);
+      showToast('Hồ sơ Shop đã được lưu trực tiếp vào MongoDB thành công!');
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Có lỗi khi cập nhật hồ sơ';
+      showToast(`Lỗi: ${errorMsg}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -883,9 +935,11 @@ export const ShopOwnerProfile: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-[#141310] hover:bg-[#292724] text-[#fdf9f2] text-xs font-semibold uppercase tracking-wider transition-colors shadow-sm"
+                  disabled={isSaving}
+                  className="px-6 py-2.5 rounded-xl bg-[#141310] hover:bg-[#292724] text-[#fdf9f2] text-xs font-semibold uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  Lưu Thay Đổi
+                  {isSaving && <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>}
+                  <span>{isSaving ? 'Đang lưu...' : 'Lưu Thay Đổi'}</span>
                 </button>
               </div>
             </form>

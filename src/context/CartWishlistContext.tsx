@@ -363,13 +363,11 @@ const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUs
   );
 
   const toggleWishlist = (id: string, type?: "RENT" | "THRIFT"): boolean => {
-    let nextState = false;
+    const nextState = !wishlist.includes(id);
     setWishlist((prev) => {
       if (prev.includes(id)) {
-        nextState = false;
         return prev.filter((item) => item !== id);
       } else {
-        nextState = true;
         return [...prev, id];
       }
     });

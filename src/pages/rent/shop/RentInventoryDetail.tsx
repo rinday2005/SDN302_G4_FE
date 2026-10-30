@@ -1,15 +1,30 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useShop } from '../../../context/ShopContext';
 import { mockInventoryUnits } from '../../data/shop/inventoryData';
 
 export const RentInventoryDetail: React.FC = () => {
   const { itemId } = useParams<{ itemId: string }>();
+  const { products } = useShop();
 
-  // Tìm kiếm hiện vật từ mock data theo ID, fallback về item đầu tiên
-  const unit =
-    mockInventoryUnits.find((u) => u.id === itemId) ||
-    mockInventoryUnits.find((u) => u.id === 'INV-HB907-01') ||
-    mockInventoryUnits[0];
+  // Tìm kiếm sản phẩm thực tế từ MongoDB
+  const matchedProduct = products.find(
+    (p) => p.sku === itemId || `specimen-${p.sku}` === itemId || itemId?.includes(p.sku)
+  );
+
+  // Tìm kiếm hiện vật từ mock data hoặc sinh từ MongoDB Product
+  const defaultUnit = mockInventoryUnits.find((u) => u.id === itemId) || mockInventoryUnits[0];
+  const unit = matchedProduct
+    ? {
+        ...defaultUnit,
+        id: `INV-${matchedProduct.sku.slice(-6).toUpperCase()}-01`,
+        sku: matchedProduct.sku,
+        productName: matchedProduct.name,
+        category: matchedProduct.category,
+        imageUrl: matchedProduct.coverImage || defaultUnit.imageUrl,
+        conditionGrade: matchedProduct.condition || defaultUnit.conditionGrade,
+      }
+    : defaultUnit;
 
   // State điều khiển mô phỏng trạng thái (ELIGIBLE | RENTING | MAINTENANCE)
   const [specimenState, setSpecimenState] = useState<'ELIGIBLE' | 'RENTING' | 'MAINTENANCE'>('ELIGIBLE');

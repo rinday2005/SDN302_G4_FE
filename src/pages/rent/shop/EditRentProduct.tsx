@@ -29,19 +29,17 @@ export const EditRentProduct: React.FC = () => {
   const [handoverBatteryCheck, setHandoverBatteryCheck] = useState<boolean>(true);
   const [damagePolicy, setDamagePolicy] = useState<string>('');
   const [listingStatus, setListingStatus] = useState<'active' | 'hidden' | 'draft'>('active');
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (currentProduct) {
-      setProdName(currentProduct.name || '');
-      setCategory(currentProduct.category || 'Máy ảnh Medium Format Digital');
-      setBrand(currentProduct.brand || '');
-      // Nếu có setMountSensor, truyền đúng giá trị hoặc xóa nếu không dùng:
-      // setMountSensor(currentProduct.mountSensor || '');
-    }
-  }, [currentProduct]);
+
+  // Logic phân quyền chỉnh sửa theo trạng thái bài viết
+  const isApproved = currentProduct?.approvalStatus === 'APPROVED';
+  const isPending = currentProduct?.approvalStatus === 'PENDING';
+  const [requestCoreEdit, setRequestCoreEdit] = useState<boolean>(false);
+  const isCoreLocked = isApproved && !requestCoreEdit;
+
   // Đổ dữ liệu của sản phẩm vào form khi mở trang
   useEffect(() => {
     if (currentProduct) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProdName(currentProduct.name || '');
       setCategory(currentProduct.category || 'Máy ảnh Medium Format Digital');
       setBrand(currentProduct.brand || '');
@@ -85,15 +83,21 @@ export const EditRentProduct: React.FC = () => {
   }
 
   // Xử lý Lưu Thay Đổi
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const numPrice = Number(pricePerDay.toString().replace(/[^0-9]/g, '')) || 0;
     const numDeposit = Number(deposit.toString().replace(/[^0-9]/g, '')) || 0;
     const numReplacement = Number(replacementValue.toString().replace(/[^0-9]/g, '')) || 0;
 
+    let targetApprovalStatus = currentProduct.approvalStatus;
+    const shouldReapprove = isApproved && requestCoreEdit;
+    if (shouldReapprove) {
+      targetApprovalStatus = 'PENDING';
+    }
+
     // Cập nhật vào ShopContext
-    updateProduct(currentProduct.sku, {
+    await updateProduct(currentProduct.sku, {
       name: prodName,
       category,
       brand,
@@ -106,9 +110,14 @@ export const EditRentProduct: React.FC = () => {
       minDays,
       maxDays,
       isVisible: listingStatus === 'active',
+      approvalStatus: targetApprovalStatus,
     });
 
-    alert('Đã cập nhật thay đổi hồ sơ lưu ký thiết bị thành công!');
+    if (shouldReapprove) {
+      alert('Đã cập nhật thay đổi! Vì bạn đã sửa đổi thông tin cốt lõi (tên, hãng, giá, cọc), bài viết đã được chuyển sang trạng thái CHỜ DUYỆT (PENDING) để Admin thẩm định lại.');
+    } else {
+      alert('Đã cập nhật thay đổi hồ sơ lưu ký thiết bị thành công!');
+    }
     navigate('/shop/rent/products');
   };
 
@@ -234,34 +243,74 @@ export const EditRentProduct: React.FC = () => {
           </div>
         </div>
 
-        {/* Administrative Re-approval Policy Banner */}
-        <div className="bg-[#ebe8e1] rounded-xl p-5 lg:p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-[#dddad3]">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shrink-0 text-[#141310] shadow-sm">
-              <span className="material-symbols-outlined text-[22px]">policy</span>
+        {/* ADMINISTRATIVE STATUS & PERMISSION BANNER */}
+        {isApproved ? (
+          <div className="bg-[#fcf8f2] border-2 border-[#e6d8c3] rounded-xl p-5 lg:p-6 shadow-sm space-y-4">
+            <div className="flex items-start gap-3.5">
+              <span className="material-symbols-outlined text-amber-800 text-[28px] shrink-0 mt-0.5">verified_user</span>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif text-base sm:text-lg text-[#141310] font-semibold">
+                    Sản phẩm ĐÃ ĐƯỢC ADMIN DUYỆT (APPROVED)
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full bg-[#d8e3ce] text-[#2d3829] text-[10px] font-bold tracking-widest uppercase">
+                    ĐANG HOẠT ĐỘNG
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-[#4a463f] leading-relaxed">
+                  Để bảo vệ quyền lợi hợp đồng và giá trị giao dịch của khách thuê, các trường thông tin cốt lõi (<strong>Tên thiết bị, Thương hiệu, Ngàm cảm biến, Ảnh đại diện, Giá thuê ngày, Tiền cọc Escrow</strong>) đang ở chế độ <strong>Khóa an toàn</strong>. Bạn có thể tự do cập nhật trạng thái ẩn/hiện, mô tả chi tiết, phụ kiện kèm theo và thời hạn thuê.
+                </p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <div className="font-semibold text-sm text-[#141310] flex items-center gap-2">
-                <span>Chính sách kiểm định lại quyền lưu ký (Admin Re-Approval Trigger)</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#d8e3ce]/60 text-[#3f4a3a] uppercase tracking-wider font-semibold">
-                  Quy chuẩn xưởng
+
+            <div className="pt-3 border-t border-[#ebe3d5] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="text-xs text-[#576151] font-medium flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px]">info</span>
+                Nếu cần điều chỉnh giá thuê, tiền cọc hoặc tên máy, vui lòng bật chế độ mở khóa:
+              </span>
+              <button
+                type="button"
+                onClick={() => setRequestCoreEdit(!requestCoreEdit)}
+                className={`px-3.5 py-1.5 rounded text-xs font-semibold uppercase tracking-wider transition-all flex items-center gap-1.5 shrink-0 ${
+                  requestCoreEdit
+                    ? 'bg-amber-800 text-white shadow-sm hover:bg-amber-900'
+                    : 'bg-white text-[#141310] border border-[#d5cfc4] hover:bg-[#f1ede6]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">
+                  {requestCoreEdit ? 'lock_open' : 'lock_reset'}
+                </span>
+                <span>{requestCoreEdit ? 'Đang mở khóa cốt lõi (Sẽ chuyển PENDING)' : 'Yêu cầu sửa thông tin cốt lõi'}</span>
+              </button>
+            </div>
+
+            {requestCoreEdit && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs text-amber-900 flex items-center gap-2 animate-fadeIn">
+                <span className="material-symbols-outlined text-amber-700 text-[18px] shrink-0">warning</span>
+                <span>
+                  <strong>Cảnh báo duyệt lại:</strong> Bạn đang mở khóa các trường cốt lõi. Sau khi nhấn <strong>"Lưu thay đổi"</strong>, sản phẩm sẽ tự động chuyển về trạng thái <strong>CHỜ DUYỆT (PENDING)</strong> để Ban quản trị thẩm định lại trước khi tiếp tục cho thuê công khai.
                 </span>
               </div>
-              <p className="text-xs text-[#4a463f] max-w-4xl leading-relaxed">
-                Các thay đổi liên quan đến <strong className="text-[#141310] font-semibold">Biểu phí thuê ngày</strong>,{' '}
-                <strong className="text-[#141310] font-semibold">Tiền cọc Escrow tăng/giảm trên 15%</strong>, hoặc{' '}
-                <strong className="text-[#141310] font-semibold">Hồ sơ ảnh vi thấu kính cảm biến</strong> sẽ tự động đưa sản phẩm vào trạng thái kiểm duyệt nội bộ trong vòng tối đa 04 giờ trước khi phát hành đến cộng đồng thuê.
+            )}
+          </div>
+        ) : isPending ? (
+          <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-5 shadow-sm flex items-start gap-3.5">
+            <span className="material-symbols-outlined text-blue-700 text-[26px] shrink-0">hourglass_top</span>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-blue-950 text-sm sm:text-base">
+                  Sản phẩm ĐANG CHỜ DUYỆT (PENDING)
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold tracking-widest uppercase">
+                  TOÀN QUYỀN CHỈNH SỬA
+                </span>
+              </div>
+              <p className="text-xs text-blue-900 leading-relaxed">
+                Bài đăng chưa được phê duyệt chính thức. Bạn có toàn quyền chỉnh sửa thoải mái tất cả các trường (tên, mô tả, ảnh chụp, số lượng, giá thuê, tiền cọc...) trước khi Admin xét duyệt.
               </p>
             </div>
           </div>
-          <Link
-            to="/how-it-works"
-            className="text-[#576151] hover:text-[#141310] text-xs tracking-wider uppercase whitespace-nowrap inline-flex items-center gap-1 font-semibold"
-          >
-            <span>Biểu chuẩn Atelier</span>
-            <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-          </Link>
-        </div>
+        ) : null}
 
         {/* Form Start */}
         <form id="edit-rent-form" onSubmit={handleSubmit} className="space-y-10">
@@ -290,12 +339,20 @@ export const EditRentProduct: React.FC = () => {
                     <span>Ảnh bìa chính thức (Đã thẩm định 4K)</span>
                   </div>
                   <div className="absolute inset-0 bg-[#141310]/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 rounded bg-white text-[#141310] text-xs font-semibold tracking-wider uppercase shadow-md hover:bg-[#f1ede6] transition-colors"
-                    >
-                      Thay đổi ảnh
-                    </button>
+                    {isCoreLocked ? (
+                      <span className="px-3 py-1.5 rounded bg-gray-200 text-gray-700 text-xs font-semibold tracking-wider uppercase shadow-md flex items-center gap-1 cursor-not-allowed">
+                        <span className="material-symbols-outlined text-[14px]">lock</span>
+                        Ảnh đã khóa
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => alert('Vui lòng chọn ảnh mới từ máy tính của bạn để tải lên Cloudinary.')}
+                        className="px-3 py-1.5 rounded bg-white text-[#141310] text-xs font-semibold tracking-wider uppercase shadow-md hover:bg-[#f1ede6] transition-colors"
+                      >
+                        Thay đổi ảnh
+                      </button>
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-[#7b766f]">Ảnh bìa sẽ được hiển thị trên danh mục duyệt thiết bị toàn sàn và thông báo hợp đồng thuê.</p>
@@ -326,7 +383,13 @@ export const EditRentProduct: React.FC = () => {
                       <div className="text-xs font-semibold text-[#141310] truncate">Cảm biến &amp; Ngàm XCD</div>
                       <div className="flex items-center justify-between text-[#7b766f] text-[10px]">
                         <span>Kiểm tra: 24/10/2024</span>
-                        <button type="button" className="text-[#576151] hover:underline">Sửa</button>
+                        {isCoreLocked ? (
+                          <span className="text-gray-400 text-[10px] flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[12px]">lock</span> Khóa
+                          </span>
+                        ) : (
+                          <button type="button" className="text-[#576151] hover:underline">Sửa</button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -350,7 +413,13 @@ export const EditRentProduct: React.FC = () => {
                       <div className="text-xs font-semibold text-[#141310] truncate">Mặt lưng số CFVII 50C</div>
                       <div className="flex items-center justify-between text-[#7b766f] text-[10px]">
                         <span>Kiểm tra: 24/10/2024</span>
-                        <button type="button" className="text-[#576151] hover:underline">Sửa</button>
+                        {isCoreLocked ? (
+                          <span className="text-gray-400 text-[10px] flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[12px]">lock</span> Khóa
+                          </span>
+                        ) : (
+                          <button type="button" className="text-[#576151] hover:underline">Sửa</button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -374,20 +443,32 @@ export const EditRentProduct: React.FC = () => {
                       <div className="text-xs font-semibold text-[#141310] truncate">Tem Serial &amp; Vali Nanuk</div>
                       <div className="flex items-center justify-between text-[#7b766f] text-[10px]">
                         <span>Kiểm tra: 24/10/2024</span>
-                        <button type="button" className="text-[#576151] hover:underline">Sửa</button>
+                        {isCoreLocked ? (
+                          <span className="text-gray-400 text-[10px] flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[12px]">lock</span> Khóa
+                          </span>
+                        ) : (
+                          <button type="button" className="text-[#576151] hover:underline">Sửa</button>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-lg bg-[#f7f3ec] hover:bg-[#f1ede6] transition-colors flex items-center justify-center text-center cursor-pointer border border-[#ebe8e1]">
+                <div className={`p-4 rounded-lg bg-[#f7f3ec] transition-colors flex items-center justify-center text-center border border-[#ebe8e1] ${
+                  isCoreLocked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#f1ede6] cursor-pointer'
+                }`}>
                   <div className="space-y-1">
                     <div className="flex items-center justify-center gap-2 text-[#141310] text-xs font-semibold uppercase tracking-wider">
-                      <span className="material-symbols-outlined text-[20px]">add_photo_alternate</span>
-                      <span>Tải lên ảnh bổ sung / Cập nhật hiện trạng hao mòn</span>
+                      <span className="material-symbols-outlined text-[20px]">
+                        {isCoreLocked ? 'lock' : 'add_photo_alternate'}
+                      </span>
+                      <span>{isCoreLocked ? 'Hồ sơ ảnh đã khóa an toàn' : 'Tải lên ảnh bổ sung / Cập nhật hiện trạng hao mòn'}</span>
                     </div>
                     <p className="text-[11px] text-[#7b766f]">
-                      Kéo thả tệp RAW hoặc JPEG chất lượng cao (Tối đa 25MB). Ảnh chụp cần tuân thủ góc sáng trung tính chuẩn studio.
+                      {isCoreLocked
+                        ? 'Sản phẩm đã được duyệt. Hãy bật yêu cầu sửa thông tin cốt lõi nếu cần thay đổi ảnh thẩm định.'
+                        : 'Kéo thả tệp RAW hoặc JPEG chất lượng cao (Tối đa 25MB). Ảnh chụp cần tuân thủ góc sáng trung tính chuẩn studio.'}
                     </p>
                   </div>
                 </div>
@@ -406,15 +487,27 @@ export const EditRentProduct: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Item Name */}
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
-                  Tên niêm yết thiết bị <span className="text-[#ba1a1a]">*</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
+                    Tên niêm yết thiết bị <span className="text-[#ba1a1a]">*</span>
+                  </label>
+                  {isCoreLocked && (
+                    <span className="text-[11px] text-amber-800 font-medium flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">lock</span> Đã khóa (Sản phẩm đã duyệt)
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
+                  disabled={isCoreLocked}
                   value={prodName}
                   onChange={(e) => setProdName(e.target.value)}
-                  className="w-full px-4 py-3 rounded bg-[#f7f3ec] text-[#141310] font-semibold text-sm focus:bg-white focus:outline-none border border-transparent focus:border-[#ebe8e1] transition-all"
+                  className={`w-full px-4 py-3 rounded text-sm focus:outline-none transition-all ${
+                    isCoreLocked
+                      ? 'bg-[#ebe8e1] text-[#7b766f] cursor-not-allowed border border-[#dddad3]'
+                      : 'bg-[#f7f3ec] text-[#141310] font-semibold focus:bg-white border border-transparent focus:border-[#ebe8e1]'
+                  }`}
                 />
                 <span className="text-[11px] text-[#7b766f] block">Tên tiêu đề chuẩn hóa bao gồm Thân máy + Ống kính kit kèm theo.</span>
               </div>
@@ -444,28 +537,52 @@ export const EditRentProduct: React.FC = () => {
 
               {/* Brand */}
               <div className="space-y-2">
-                <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
-                  Thương hiệu / Xuất xứ chế tác <span className="text-[#ba1a1a]">*</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
+                    Thương hiệu / Xuất xứ chế tác <span className="text-[#ba1a1a]">*</span>
+                  </label>
+                  {isCoreLocked && (
+                    <span className="text-[11px] text-amber-800 font-medium flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">lock</span> Khóa
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
+                  disabled={isCoreLocked}
                   value={brand}
                   onChange={(e) => setBrand(e.target.value)}
-                  className="w-full px-4 py-3 rounded bg-[#f7f3ec] text-[#141310] text-sm focus:bg-white focus:outline-none border border-transparent focus:border-[#ebe8e1] transition-all"
+                  className={`w-full px-4 py-3 rounded text-sm focus:outline-none transition-all ${
+                    isCoreLocked
+                      ? 'bg-[#ebe8e1] text-[#7b766f] cursor-not-allowed border border-[#dddad3]'
+                      : 'bg-[#f7f3ec] text-[#141310] focus:bg-white border border-transparent focus:border-[#ebe8e1]'
+                  }`}
                 />
               </div>
 
               {/* Mount & Sensor */}
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
-                  Hệ quang học &amp; Cấu hình Cảm biến
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
+                    Hệ quang học &amp; Cấu hình Cảm biến
+                  </label>
+                  {isCoreLocked && (
+                    <span className="text-[11px] text-amber-800 font-medium flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">lock</span> Khóa
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
+                  disabled={isCoreLocked}
                   value={mountSensor}
                   onChange={(e) => setMountSensor(e.target.value)}
-                  className="w-full px-4 py-3 rounded bg-[#f7f3ec] text-[#141310] text-sm focus:bg-white focus:outline-none border border-transparent focus:border-[#ebe8e1] transition-all"
+                  className={`w-full px-4 py-3 rounded text-sm focus:outline-none transition-all ${
+                    isCoreLocked
+                      ? 'bg-[#ebe8e1] text-[#7b766f] cursor-not-allowed border border-[#dddad3]'
+                      : 'bg-[#f7f3ec] text-[#141310] focus:bg-white border border-transparent focus:border-[#ebe8e1]'
+                  }`}
                 />
               </div>
 
@@ -516,20 +633,31 @@ export const EditRentProduct: React.FC = () => {
                   <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
                     Giá thuê / Ngày <span className="text-[#ba1a1a]">*</span>
                   </label>
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-[#ebe8e1] text-[#141310]">VND / 24 Giờ</span>
+                  {isCoreLocked ? (
+                    <span className="text-[10px] font-semibold text-amber-800 flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[13px]">lock</span> Khóa
+                    </span>
+                  ) : (
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-[#ebe8e1] text-[#141310]">VND / 24 Giờ</span>
+                  )}
                 </div>
                 <div className="relative">
                   <input
                     type="text"
                     required
+                    disabled={isCoreLocked}
                     value={pricePerDay}
                     onChange={(e) => setPricePerDay(e.target.value)}
-                    className="w-full px-4 py-3 rounded bg-white text-[#141310] font-serif text-xl font-bold focus:outline-none border border-[#ebe8e1]"
+                    className={`w-full px-4 py-3 rounded font-serif text-xl font-bold focus:outline-none transition-all ${
+                      isCoreLocked
+                        ? 'bg-[#ebe8e1] text-[#7b766f] cursor-not-allowed border border-[#dddad3]'
+                        : 'bg-white text-[#141310] border border-[#ebe8e1]'
+                    }`}
                   />
                 </div>
                 <p className="text-[11px] text-[#7b766f] flex items-center gap-1.5 pt-1">
                   <span className="material-symbols-outlined text-[15px] text-[#576151]">update</span>
-                  <span>Cập nhật giá sẽ áp dụng cho đơn đặt mới sau 5 phút.</span>
+                  <span>{isCoreLocked ? 'Cần mở khóa để sửa giá thuê.' : 'Cập nhật giá sẽ áp dụng cho đơn đặt mới sau 5 phút.'}</span>
                 </p>
               </div>
 
@@ -539,20 +667,31 @@ export const EditRentProduct: React.FC = () => {
                   <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
                     Ký quỹ Escrow <span className="text-[#ba1a1a]">*</span>
                   </label>
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-[#d8e3ce] text-[#151e11] font-semibold">Tạm giữ an toàn</span>
+                  {isCoreLocked ? (
+                    <span className="text-[10px] font-semibold text-amber-800 flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[13px]">lock</span> Khóa
+                    </span>
+                  ) : (
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-[#d8e3ce] text-[#151e11] font-semibold">Tạm giữ an toàn</span>
+                  )}
                 </div>
                 <div className="relative">
                   <input
                     type="text"
                     required
+                    disabled={isCoreLocked}
                     value={deposit}
                     onChange={(e) => setDeposit(e.target.value)}
-                    className="w-full px-4 py-3 rounded bg-white text-[#141310] font-serif text-xl font-bold focus:outline-none border border-[#ebe8e1]"
+                    className={`w-full px-4 py-3 rounded font-serif text-xl font-bold focus:outline-none transition-all ${
+                      isCoreLocked
+                        ? 'bg-[#ebe8e1] text-[#7b766f] cursor-not-allowed border border-[#dddad3]'
+                        : 'bg-white text-[#141310] border border-[#ebe8e1]'
+                    }`}
                   />
                 </div>
                 <p className="text-[11px] text-[#7b766f] flex items-center gap-1.5 pt-1">
                   <span className="material-symbols-outlined text-[15px] text-[#ba1a1a]">warning</span>
-                  <span>Thay đổi &gt;15% cần Admin thẩm định lại.</span>
+                  <span>{isCoreLocked ? 'Tiền cọc bị khóa bảo vệ an toàn.' : 'Thay đổi >15% cần Admin thẩm định lại.'}</span>
                 </p>
               </div>
 
@@ -560,14 +699,25 @@ export const EditRentProduct: React.FC = () => {
               <div className="space-y-2 bg-[#f7f3ec] p-4 rounded-lg border border-[#ebe8e1]">
                 <div className="flex items-center justify-between">
                   <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">Định mức bồi hoàn</label>
-                  <span className="text-[11px] px-2 py-0.5 rounded bg-[#ebe8e1] text-[#7b766f]">Bảo hiểm thân máy</span>
+                  {isCoreLocked ? (
+                    <span className="text-[10px] font-semibold text-amber-800 flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[13px]">lock</span> Khóa
+                    </span>
+                  ) : (
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-[#ebe8e1] text-[#7b766f]">Bảo hiểm thân máy</span>
+                  )}
                 </div>
                 <div className="relative">
                   <input
                     type="text"
+                    disabled={isCoreLocked}
                     value={replacementValue}
                     onChange={(e) => setReplacementValue(e.target.value)}
-                    className="w-full px-4 py-3 rounded bg-white text-[#141310] font-serif text-xl font-bold focus:outline-none border border-[#ebe8e1]"
+                    className={`w-full px-4 py-3 rounded font-serif text-xl font-bold focus:outline-none transition-all ${
+                      isCoreLocked
+                        ? 'bg-[#ebe8e1] text-[#7b766f] cursor-not-allowed border border-[#dddad3]'
+                        : 'bg-white text-[#141310] border border-[#ebe8e1]'
+                    }`}
                   />
                 </div>
                 <p className="text-[11px] text-[#7b766f] flex items-center gap-1.5 pt-1">

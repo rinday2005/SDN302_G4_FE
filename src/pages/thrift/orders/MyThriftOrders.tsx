@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
 import { UserSidebar } from '../../../components/layout/UserSidebar';
@@ -100,9 +100,11 @@ export const MyThriftOrders: React.FC = () => {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   // Show Toast Helper
+  const { success: showSuccessToast } = toast;
+  const hasShownPaymentToast = useRef(false);
   const showToast = useCallback((msg: string) => {
-    toast.success(msg);
-  }, [toast]);
+    showSuccessToast(msg);
+  }, [showSuccessToast]);
 
   // Format currency
   const formatCurrency = (val: number | string) => {
@@ -220,10 +222,10 @@ export const MyThriftOrders: React.FC = () => {
       statusDescription,
       items,
       itemsSubtotal: raw.itemsSubtotal || items.reduce((s, i) => s + i.price * i.quantity, 0),
-      shippingFee: raw.shippingFee || 215000,
+      shippingFee: typeof raw.shippingFee === 'number' ? raw.shippingFee : 30000,
       totalAmount: raw.totalAmount || 0,
       trackingCode: raw.trackingCode || `WG-${rawCode.replace('#', '')}`,
-      courierName: raw.courierName || 'Bưu tá bảo hiểm bọc thép White-Glove Insured Secondhand Courier',
+      courierName: raw.courierName || 'Vận chuyển bảo hiểm niêm phong Atelier Express Courier',
       escrowStatus: raw.escrowStatus || 'PENDING',
       escrowExpiresAt: raw.escrowExpiresAt,
       provenanceVaultCertId: raw.provenanceVaultCertId || `PRV-VAULT-2026-${cleanId.slice(-4).toUpperCase()}`,
@@ -386,7 +388,8 @@ export const MyThriftOrders: React.FC = () => {
 
   // Auto show banner if returning from VNPay
   useEffect(() => {
-    if (paymentSuccessParam) {
+    if (paymentSuccessParam && !hasShownPaymentToast.current) {
+      hasShownPaymentToast.current = true;
       showToast(`Giao dịch thanh toán đơn THRIFT ${paymentSuccessParam} thành công! Ký quỹ Smart Escrow 72H đã kích hoạt.`);
     }
   }, [paymentSuccessParam, showToast]);
@@ -590,7 +593,7 @@ export const MyThriftOrders: React.FC = () => {
                 Đơn mua THRIFT của tôi
               </h1>
               <p className="text-xs sm:text-sm text-[#7B766F] mt-1">
-                Theo dõi quy trình lưu ký, vận chuyển bọc thép White-Glove, cơ chế ký quỹ 72 giờ và cấp phát chứng thư số độc bản.
+                Theo dõi quy trình lưu ký, vận chuyển bảo hiểm niêm phong, cơ chế ký quỹ 72 giờ và cấp phát chứng thư số độc bản.
               </p>
             </div>
 
@@ -622,7 +625,7 @@ export const MyThriftOrders: React.FC = () => {
 
             <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E6E2DB] shadow-xs flex flex-col justify-between">
               <span className="text-[10px] uppercase font-bold text-[#7B766F] tracking-wider">
-                Đang giao bọc thép
+                Đang vận chuyển niêm phong
               </span>
               <p className="font-serif text-xl sm:text-2xl font-bold text-[#245778] mt-2">
                 {metrics.inTransit} <span className="text-xs font-sans font-normal text-stone-500">kiện</span>

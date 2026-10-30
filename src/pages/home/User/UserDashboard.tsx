@@ -148,7 +148,10 @@ export const UserDashboard: React.FC = () => {
       // Do not clear user orders cache so past orders remain visible seamlessly
 
       if (!uId) {
-        if (isMounted) setActiveRentals([]);
+        if (isMounted) {
+          setActiveRentals([]);
+          setIsLoading(false);
+        }
         return;
       }
 

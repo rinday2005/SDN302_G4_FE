@@ -31,15 +31,20 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const requestUrl = error.config?.url || "";
     const isLoginRequest =
-      error.config?.url === "/auth/login";
+      requestUrl.includes("/auth/login") ||
+      requestUrl.includes("/login");
 
-    // Nếu token hết hạn / không hợp lệ ở các API khác login
+    // Nếu token hết hạn / không hợp lệ ở các API khác và hiện tại chưa ở trang login
     if (
       error.response?.status === 401 &&
-      !isLoginRequest
+      !isLoginRequest &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/login")
     ) {
       localStorage.removeItem("token");
+      localStorage.removeItem("accessToken");
       localStorage.removeItem("user");
 
       window.location.href = "/login";

@@ -8,6 +8,11 @@ import {
   getInitialThriftDataForUnit,
   AVAILABLE_CONVERT_SPECIMENS,
 } from '../../data/shop/thriftConvertData';
+import {
+  calculateThriftDiscount,
+  parseVndPrice,
+  formatVndPrice,
+} from '../../../utils/thriftPricing';
 
 const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   const navigate = useNavigate();
@@ -934,6 +939,82 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 </select>
               </div>
             </div>
+
+            {/* Box Gợi ý định giá khấu hao tự động dựa trên số lần thuê */}
+            {(() => {
+              const origPriceNum = parseVndPrice(formData.originalPrice || formData.price || 0) || 10000000;
+              const rentalCount = formData.cycleCount || 0;
+              const depResult = calculateThriftDiscount(rentalCount, origPriceNum);
+
+              const handleApplySuggested = (customPct?: number) => {
+                const pct = customPct !== undefined ? customPct : depResult.discountPercent;
+                const calculated = Math.max(0, Math.round((origPriceNum * (1 - pct / 100)) / 1000) * 1000);
+                const formatted = formatVndPrice(calculated);
+                handleInputChange('price', formatted);
+                handleInputChange('depreciationText', `Khấu hao -${pct}% dựa trên ${rentalCount} lần thuê thành công`);
+                showToast(`Đã áp dụng mức khấu hao -${pct}%: Giá bán THRIFT ${formatted}`);
+              };
+
+              return (
+                <div className="p-4 bg-surface rounded-xl border border-secondary/30 shadow-xs flex flex-col gap-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-secondary text-[20px]">calculate</span>
+                      <span className="font-semibold text-xs uppercase tracking-wider text-on-surface">
+                        Gợi ý định giá Thrift theo số lần cho thuê (Khấu hao tự động)
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono px-2.5 py-0.5 rounded bg-secondary/10 text-secondary font-bold">
+                      {rentalCount} lần thuê thành công
+                    </span>
+                  </div>
+
+                  {/* Bảng bậc thang khấu hao */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                    <div className={`p-2 rounded border transition-all ${rentalCount >= 1 && rentalCount <= 3 ? 'bg-secondary/15 border-secondary font-bold text-secondary ring-1 ring-secondary' : 'bg-surface-container border-outline-variant/30 text-on-surface-variant'}`}>
+                      <div className="text-[10px] uppercase font-semibold">1 - 3 lần thuê</div>
+                      <div className="text-sm font-mono mt-0.5 font-bold">Giảm 15%</div>
+                    </div>
+                    <div className={`p-2 rounded border transition-all ${rentalCount >= 4 && rentalCount <= 7 ? 'bg-secondary/15 border-secondary font-bold text-secondary ring-1 ring-secondary' : 'bg-surface-container border-outline-variant/30 text-on-surface-variant'}`}>
+                      <div className="text-[10px] uppercase font-semibold">4 - 7 lần thuê</div>
+                      <div className="text-sm font-mono mt-0.5 font-bold">Giảm 30%</div>
+                    </div>
+                    <div className={`p-2 rounded border transition-all ${rentalCount >= 8 && rentalCount <= 12 ? 'bg-secondary/15 border-secondary font-bold text-secondary ring-1 ring-secondary' : 'bg-surface-container border-outline-variant/30 text-on-surface-variant'}`}>
+                      <div className="text-[10px] uppercase font-semibold">8 - 12 lần thuê</div>
+                      <div className="text-sm font-mono mt-0.5 font-bold">Giảm 45%</div>
+                    </div>
+                    <div className={`p-2 rounded border transition-all ${rentalCount > 12 ? 'bg-secondary/15 border-secondary font-bold text-secondary ring-1 ring-secondary' : 'bg-surface-container border-outline-variant/30 text-on-surface-variant'}`}>
+                      <div className="text-[10px] uppercase font-semibold">&gt; 12 lần thuê</div>
+                      <div className="text-sm font-mono mt-0.5 font-bold">Giảm 60%</div>
+                    </div>
+                  </div>
+
+                  {/* Chi tiết công thức & Giá đề xuất */}
+                  <div className="bg-[#f7f3ec] p-3 rounded-lg border border-[#ebe8e1] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="text-xs text-[#4a463f] space-y-1">
+                      <div>
+                        Giá gốc: <strong className="text-[#141310] font-mono">{formatVndPrice(origPriceNum)}</strong> • Mức giảm theo bậc: <strong className="text-amber-800 font-bold">-{depResult.discountPercent}%</strong>
+                      </div>
+                      <div className="text-[11px] text-[#7b766f]">
+                        Công thức: {formatVndPrice(origPriceNum)} × (1 - {depResult.discountPercent}%) = <span className="text-emerald-700 font-bold font-mono text-xs">{formatVndPrice(depResult.suggestedPrice)}</span>
+                      </div>
+                    </div>
+
+                    {!isAlreadyConverted && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplySuggested(depResult.discountPercent)}
+                        className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-semibold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                        title="Điền giá đề xuất vào form"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">price_check</span>
+                        <span>Áp dụng gợi ý: {formatVndPrice(depResult.suggestedPrice)}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Field 4: Price */}
             <div className="flex flex-col gap-1">

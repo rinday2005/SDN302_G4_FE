@@ -101,6 +101,7 @@ export interface CreateThriftOrderDto {
     quantity?: number;
   }>;
   shippingAddress?: Partial<ThriftShippingAddressApi>;
+  shippingFee?: number;
   note?: string;
   paymentMethod?: string;
 }

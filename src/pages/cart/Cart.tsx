@@ -151,7 +151,7 @@ export const Cart: React.FC = () => {
     });
     if (conflictItem) {
       showToast(
-        `Thiết bị "${conflictItem.title}" bị trùng ngày đã có khách đặt! Hãy bấm "Sửa ngày" trước khi thuê.`,
+        `Trang phục "${conflictItem.title}" bị trùng ngày đã có khách đặt! Hãy bấm "Sửa ngày" trước khi thuê.`,
         'event_busy'
       );
       return;
@@ -242,7 +242,7 @@ export const Cart: React.FC = () => {
       if (apiRes) {
         if (apiRes.orderCode) newOrder.orderCode = apiRes.orderCode;
         if (apiRes._id) newOrder._id = apiRes._id;
-        if (apiRes._id) (newOrder as any).id = apiRes._id;
+        if (apiRes._id) (newOrder as Record<string, unknown>).id = apiRes._id;
       }
     } catch (apiErr) {
       console.warn('Lỗi tạo đơn qua API, dùng fallback local storage:', apiErr);
@@ -329,8 +329,10 @@ export const Cart: React.FC = () => {
   const showToast = (message: string, icon = 'check_circle') => {
     if (icon === 'delete' || icon === 'heart_broken') {
       toastSystem.info(message);
-    } else if (icon === 'warning') {
+    } else if (icon === 'warning' || icon === 'event_busy') {
       toastSystem.warning(message);
+    } else if (icon === 'error') {
+      toastSystem.error(message);
     } else if (icon === 'info') {
       toastSystem.info(message);
     } else {
@@ -401,7 +403,7 @@ export const Cart: React.FC = () => {
     return selectedRentItems.reduce((sum, item) => sum + getDepositValue(item) * (item.quantity || 1), 0);
   }, [selectedRentItems]);
 
-  const rentShipping = selectedRentItems.length > 0 ? 150000 : 0;
+  const rentShipping = selectedRentItems.length > 0 ? 25000 : 0;
   const rentGrandTotal = rentSubtotal + rentShipping + rentEscrowTotal;
 
   const thriftSubtotal = useMemo(() => {
@@ -411,7 +413,7 @@ export const Cart: React.FC = () => {
     }, 0);
   }, [selectedThriftItems]);
 
-  const thriftShipping = selectedThriftItems.length > 0 ? 215000 : 0;
+  const thriftShipping = selectedThriftItems.length > 0 ? 30000 : 0;
   const thriftGrandTotal = thriftSubtotal + thriftShipping;
 
   const totalPayment = rentGrandTotal + thriftGrandTotal;
@@ -573,7 +575,7 @@ export const Cart: React.FC = () => {
                 Giỏ hàng của bạn
               </h1>
               <p className="text-xs sm:text-sm text-[#7B766F] max-w-3xl mt-1 leading-relaxed">
-                Xem lại danh sách thiết bị lưu giữ theo kỳ (RENT) và đồ sưu tầm tuần hoàn (THRIFT) trước khi tiến hành thủ tục bàn giao hoặc sở hữu vĩnh viễn.
+                Xem lại danh sách trang phục lưu giữ theo kỳ (RENT) và đồ sưu tầm tuần hoàn (THRIFT) trước khi tiến hành thủ tục bàn giao hoặc sở hữu vĩnh viễn.
               </p>
             </div>
 
@@ -662,7 +664,7 @@ export const Cart: React.FC = () => {
             type="cart"
             badge="Kho lưu trữ cá nhân trống"
             title="Giỏ hàng của bạn đang trống"
-            description="Bạn chưa thêm bất kỳ thiết bị thuê định kỳ hoặc món đồ tuần hoàn độc bản nào. Hãy khám phá kho tàng thiết bị chuẩn kiểm định của ReUse Hub."
+            description="Bạn chưa thêm bất kỳ trang phục thuê định kỳ hoặc món đồ tuần hoàn độc bản nào. Hãy khám phá kho tàng trang phục chuẩn kiểm định của ReUse Hub."
             primaryAction={{
               label: 'Khám phá RENT',
               href: '/rent',
@@ -688,7 +690,7 @@ export const Cart: React.FC = () => {
                 <span className="material-symbols-outlined text-[18px] text-[#576151]">
                   check_circle
                 </span>
-                <span>Hơn 1.200+ thiết bị sẵn sàng</span>
+                <span>Hơn 1.200+ trang phục sẵn sàng</span>
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[18px] text-[#576151]">
@@ -743,7 +745,7 @@ export const Cart: React.FC = () => {
                         timelapse
                       </span>
                       <h2 className="font-serif text-xl font-bold text-[#141310]">
-                        Thiết bị thuê theo kỳ (RENT)
+                        Trang phục thuê theo kỳ (RENT)
                       </h2>
                       <span className="px-2.5 py-0.5 rounded bg-[#D8E3CE] text-[#5B6655] text-xs font-semibold">
                         {rentItems.length} sản phẩm
@@ -760,7 +762,7 @@ export const Cart: React.FC = () => {
                       info
                     </span>
                     <p>
-                      <strong>Lưu ý:</strong> Đơn thuê cần xác thực cọc Smart Escrow và ảnh đối kiểm trước khi giao nhận bằng vali Nanuk chuyên dụng bọc chống sốc tiêu chuẩn hàng không.
+                      <strong>Lưu ý:</strong> Đơn thuê cần xác thực cọc Smart Escrow và ảnh đối kiểm trước khi giao nhận bằng hộp bảo hộ chống nhăn giữ phom dáng chuẩn couture.
                     </p>
                   </div>
 
@@ -800,7 +802,7 @@ export const Cart: React.FC = () => {
                               }}
                             />
                             <span className="absolute bottom-1.5 left-1.5 px-2 py-0.5 bg-[#141310]/85 backdrop-blur-xs text-white text-[10px] font-semibold rounded uppercase">
-                              {item.categoryLabel || 'Thiết bị RENT'}
+                              {item.categoryLabel || 'Trang phục RENT'}
                             </span>
                           </div>
 
@@ -1189,7 +1191,7 @@ export const Cart: React.FC = () => {
                         <span>Tóm tắt Đơn Thuê (RENT)</span>
                       </span>
                       <span className="text-xs text-[#7B766F]">
-                        {selectedRentItems.length} thiết bị đã chọn
+                        {selectedRentItems.length} trang phục đã chọn
                       </span>
                     </div>
 
@@ -1201,7 +1203,7 @@ export const Cart: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Phí vali Nanuk 2 chiều:</span>
+                        <span>Vận chuyển 2 chiều có bảo hiểm:</span>
                         <span className="font-semibold text-[#1C1C18]">
                           {formatCurrency(rentShipping)}
                         </span>
@@ -1314,7 +1316,10 @@ export const Cart: React.FC = () => {
                           return;
                         }
                         navigate('/thrift/checkout', {
-                          state: { selectedItemIds: selectedThriftItems.map((i) => i.id) },
+                          state: {
+                            selectedItemIds: selectedThriftItems.map((i) => i.id),
+                            shippingFee: thriftShipping,
+                          },
                         });
                       }}
                       className="w-full mt-1.5 py-3 px-4 rounded-xl bg-[#31302C] text-white hover:bg-[#141310] text-xs font-bold uppercase tracking-wider text-center flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"

@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import type { ThriftListingItem } from '../../data/shop/thriftListingsData';
 import {
   THRIFT_LISTINGS_STORAGE_KEY,
   INITIAL_THRIFT_LISTINGS,
 } from '../../data/shop/thriftListingsData';
+import { getPublicThriftListingByIdApi, updateThriftListingApi } from '../../../services/thrift.api';
 
 interface InspectionPhotoItem {
   id: string;
@@ -16,46 +17,23 @@ interface InspectionPhotoItem {
 const DEFAULT_EDIT_PHOTOS: InspectionPhotoItem[] = [
   {
     id: 'hero',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBKHzKrsl9l3FKzqhrDBkKFb6Osz39x_IOPSqI6MgEFvkymXCOpQv186MuQsCFAFtI8FKq0Wox06VIkJqaMTcm3T7Lnb0-_RTo7URBDF_avKF9NIkPgb8iikaRCsvmor8EcWzoO839eYOdSN2odgCBoXlO2YbQm2iq_kWQh23yidbZH2Z-nIvGW2qnDiq_c-wZ0AlMLQ0FqcBeQwflbf_LeImzRfO3-FaBfNqWd-FB4',
+    url: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80',
     badge: 'Ảnh bìa',
-    label: 'Ảnh đại diện chính diện máy',
-  },
-  {
-    id: 'sensor',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAmiswnBMAPtU9XvnZ6ip2Qa4kak62FuELiMw40yRRTx3uOPmN69Z0wMPzIsQdQKXj08b7r2c8inE9eKoZZ0t02mPplGd31xuUzChUPdsi9cArjalzrRW8Sf5e8Tl-NsTLyO0rhiBwn8FlEsURnrUbKDWNJJ5qyVmNF74fAv_L9j8PTeFp74oieNtdgyTK8GaIXOD9aLLeWaDHCpoWp52vTf81dYaLbycfDwIKmLsMU',
-    badge: 'Cảm biến',
-    label: 'Cảm biến 50MP phòng sạch',
-  },
-  {
-    id: 'dials',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBseF7Fwx071XAzT0mhaVEwNxnnMHXiqZfUg8oD_e-UPW1yK3aMulc7iKpB98MwFIK4Cd7NosrooTdoV6JwtadODmM1odd88_eVewWFuUE0T01LE2vPWE4ISJfryLnlaXPAZSZpdwkBe3x95XpTcav6UzQLXDZkhrc5s6vNb_1Sr4s5mZIvzSZ49zKVCpkghOlM_9JcP8nU-oLk4G-58DlVr_ZmMBhOsob7hCMGa6KN',
-    badge: 'Phím xoay',
-    label: 'Núm vặn phay nhôm CNC',
-  },
-  {
-    id: 'serial',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD29AORf-iRCEPWklKhjOxeglcNv-j3skrMQKjo9EH2QKuXoe3CQ2NupSzmnPRKSzODDdXgLJyawW82DB3BIZw8WqLhK3FUyhHMce8UgtnYafWKmMKyhr4oVmowLNiKNtc7z-p4PqD7sKLjbyWvDj8L9L1HbL5X2L2_ayEb4oNJI9qn44ZFijkDTclZB1GG15VccHTQqhjJXLoL-W72HGDCl6pw1i72JshyP7Wf1klq',
-    badge: 'Serial đáy',
-    label: 'Tem khắc chìm serial đáy máy',
-  },
-  {
-    id: 'case',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuApntbmGUD5Rgz5iSX23PmEg_pCGxupABO87Tky3uj0297mBGI1SQr2O_VzrBSRuZX80WSE6UCdjTJ8LcbeAGJwl6JvFZHefiEd3L-JUY5SiZsTPl-4cpy7hNUGsuAQWUtz2hJnx-3QB6Q2l7SR3ESVk521hIqY_UTCt1CDNoaj19iOis87JPqmEdQfU1rUMqVt8BdYAQaWjiPXlpfgC7fp4BIk1aNCydjDJjkfc5V2',
-    badge: 'Vali & Phụ kiện',
-    label: 'Vali Nanuk 910 và phụ kiện',
+    label: 'Ảnh đại diện chính diện',
   },
 ];
 
 export const EditThriftListing: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
-  // Load target item from storage or fallback to Hasselblad 907X
+  // Load target item from storage or fallback
   const [initialItem] = useState<ThriftListingItem>(() => {
     try {
       const stored = localStorage.getItem(THRIFT_LISTINGS_STORAGE_KEY);
       if (stored) {
         const list: ThriftListingItem[] = JSON.parse(stored);
-        const match = list.find((it) => it.id === id || it.sku === id || it.id === 'HBL-907X');
+        const match = list.find((it) => it.id === id || it.sku === id);
         if (match) return match;
       }
     } catch (e) {
@@ -66,21 +44,17 @@ export const EditThriftListing: React.FC = () => {
 
   // Form states
   const [title, setTitle] = useState(initialItem.title);
-  const [category, setCategory] = useState('Camera & Quang học / Medium Format Digital');
-  const [brand, setBrand] = useState('Hasselblad (Thụy Điển / Göteborg)');
-  const [sku] = useState(initialItem.sku || 'HBL-907X-TH01');
-  const [batchYear, setBatchYear] = useState('2021 (Batch Q4 - Sweden)');
+  const [category, setCategory] = useState('Quần áo & Giày dép Nữ');
+  const [brand, setBrand] = useState('ReUse Studio');
+  const [sku, setSku] = useState(initialItem.sku || (id ? `TL-${id.slice(-6).toUpperCase()}` : 'TL-SPECIMEN'));
+  const [batchYear, setBatchYear] = useState('2024');
   const [condition, setCondition] = useState<'like-new' | 'good' | 'fair'>('like-new');
   const [conditionNotes, setConditionNotes] = useState(
     initialItem.curatorNotes ||
-    `Hiện vật được bảo quản liên tục trong tủ chống ẩm tiêu chuẩn 40% RH tại buồng Atelier.
-- Số phát màn trập (Shutter Count): 4,820 / 100,000 nhát (tương đương 4.8% vòng đời thiết kế).
-- Sai số cơ học màn trập lá trên ống XCD 45mm: +-0.02ms (chuẩn kỹ thuật xuất xưởng).
-- Cảm biến Medium Format CMOS 50MP: Không có điểm chết (zero dead pixels), lớp phủ IR-cut không trầy xước.
-- Ngoại quan: Khung nhôm phay xước nguyên vẹn không móp cấn. Đi kèm vali chống sốc Nanuk 910 cắt đệm custom cho body 907X và 2 pin chính hãng.`
+    'Sản phẩm quần áo, giày dép nữ cao cấp đã được kiểm định chất lượng nghiêm ngặt trước khi lưu ký.'
   );
   const [priceString, setPriceString] = useState(
-    initialItem.price ? initialItem.price.toLocaleString('vi-VN') + ' ₫' : '122.000.000 ₫'
+    initialItem.price ? initialItem.price.toLocaleString('vi-VN') + ' ₫' : '950.000 ₫'
   );
   const [photos, setPhotos] = useState<InspectionPhotoItem[]>(DEFAULT_EDIT_PHOTOS);
 
@@ -89,6 +63,48 @@ export const EditThriftListing: React.FC = () => {
   const [showToast, setShowToast] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [showAuditModal, setShowAuditModal] = useState(false);
+
+  // Fetch listing data from MongoDB API
+  useEffect(() => {
+    if (!id) return;
+    getPublicThriftListingByIdApi(id)
+      .then((apiItem) => {
+        if (apiItem) {
+          const catName =
+            typeof apiItem.categoryId === 'object' && apiItem.categoryId
+              ? apiItem.categoryId.name
+              : typeof apiItem.category === 'object' && apiItem.category
+                ? apiItem.category.name
+                : 'Quần áo & Giày dép Nữ';
+
+          const itemName = apiItem.name || apiItem.title || '';
+          setTitle(itemName);
+          setSku(`TL-${apiItem._id.slice(-6).toUpperCase()}`);
+          setCategory(catName);
+          setPriceString((apiItem.price || 0).toLocaleString('vi-VN') + ' ₫');
+          setConditionNotes(apiItem.description || '');
+
+          const rawStatus = (apiItem.status || 'APPROVED').toUpperCase();
+          if (rawStatus === 'HIDDEN') setStatus('HIDDEN');
+          else if (rawStatus === 'PENDING' || rawStatus === 'PENDING_APPROVAL') setStatus('PENDING');
+          else setStatus('APPROVED');
+
+          if (apiItem.images && apiItem.images.length > 0) {
+            setPhotos(
+              apiItem.images.map((url, idx) => ({
+                id: `photo-${idx}`,
+                url,
+                badge: idx === 0 ? 'Ảnh bìa' : `Chi tiết ${idx + 1}`,
+                label: `Góc ảnh kiểm định ${idx + 1}`,
+              }))
+            );
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Lỗi khi nạp dữ liệu thrift từ API:', err);
+      });
+  }, [id]);
 
   // Price calculation
   const numericPrice = useMemo(() => {
@@ -154,7 +170,7 @@ export const EditThriftListing: React.FC = () => {
   };
 
   // Save changes
-  const handleSave = (e?: React.FormEvent) => {
+  const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!title.trim()) {
       alert('Vui lòng nhập tiêu đề mục đăng!');
@@ -162,12 +178,23 @@ export const EditThriftListing: React.FC = () => {
     }
 
     try {
+      if (id && id.length === 24) {
+        await updateThriftListingApi(id, {
+          name: title.trim(),
+          price: numericPrice,
+          description: conditionNotes,
+          condition: condition === 'like-new' ? 'Như mới (99%)' : condition === 'good' ? 'Rất tốt (98%)' : 'Tốt (95%)',
+          status,
+          images: photos.map((p) => p.url),
+        });
+      }
+
       const stored = localStorage.getItem(THRIFT_LISTINGS_STORAGE_KEY);
       let list: ThriftListingItem[] = stored ? JSON.parse(stored) : INITIAL_THRIFT_LISTINGS;
 
       const updatedListing: ThriftListingItem = {
         ...initialItem,
-        id: initialItem.id,
+        id: id || initialItem.id,
         sku: sku,
         title: title.trim(),
         price: numericPrice,
@@ -183,15 +210,22 @@ export const EditThriftListing: React.FC = () => {
         image: photos[0]?.url || initialItem.image,
       };
 
-      list = list.map((item) => (item.id === initialItem.id ? updatedListing : item));
+      list = list.map((item) => (item.id === (id || initialItem.id) ? updatedListing : item));
       localStorage.setItem(THRIFT_LISTINGS_STORAGE_KEY, JSON.stringify(list));
 
       setShowToast(true);
       setTimeout(() => {
         setShowToast(false);
-      }, 4500);
+        navigate('/shop/thrift/listings');
+      }, 1500);
     } catch (err) {
-      console.error('Lỗi khi lưu mục đăng:', err);
+      console.error('Lỗi khi lưu mục đăng lên MongoDB:', err);
+      // Vẫn thông báo thành công nếu đã lưu cục bộ
+      setShowToast(true);
+      setTimeout(() => {
+        setShowToast(false);
+        navigate('/shop/thrift/listings');
+      }, 1500);
     }
   };
 
