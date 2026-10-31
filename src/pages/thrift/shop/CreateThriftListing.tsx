@@ -217,7 +217,7 @@ export const CreateThriftListing: React.FC = () => {
         sku: skuCode.trim() || `TH-CLO-${Date.now().toString().slice(-6)}`,
         title: listingTitle.trim(),
         category: matchedCat?.name || category,
-        categoryKey: 'cameras', // Key mapping mặc định
+        categoryKey: 'clothing',
         description: forensicNotes.trim(),
         source: originSource === 'rental_archive' ? 'RETURNED_RENTAL' : 'SHOP_INVENTORY',
         sourceLabel: originSource === 'rental_archive' ? 'Second Life Item (Từ Kho RENT)' : 'Kho Xưởng Ký Gửi',
