@@ -10,6 +10,7 @@ import {
   type ThriftOrderItemApi,
 } from '../../../services/thriftOrder.api';
 import { redirectToVnPayGateway } from '../../../services/payment.api';
+import { ReviewModal } from '../../../components/review/ReviewModal';
 
 export interface ThriftOrderRecord {
   id: string;
@@ -94,6 +95,9 @@ export const MyThriftOrders: React.FC = () => {
   const [cancelReasonText, setCancelReasonText] = useState('');
   const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
+
+  // Review modal state [FE-S5-03]
+  const [reviewOrder, setReviewOrder] = useState<ThriftOrderRecord | null>(null);
 
   // Show Toast Helper
   const showToast = (msg: string) => {
@@ -962,9 +966,17 @@ export const MyThriftOrders: React.FC = () => {
                           </button>
                         )}
 
-                        {/* Khi đã nhận hàng hoặc đơn đã COMPLETED: Hiển thị trạng thái & nút Chứng thư */}
-                        {(order.status === 'COMPLETED' || order.buyerConfirmed) && (
-                          <div className="flex items-center gap-2">
+                        {/* Khi đã nhận hàng hoặc đơn đã COMPLETED: Hiển thị nút Đánh giá, trạng thái & nút Chứng thư */}
+                        {(order.status === 'COMPLETED' || order.buyerConfirmed || order.status === 'DELIVERED') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setReviewOrder(order)}
+                              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 text-xs font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>hotel_class</span>
+                              <span>Đánh giá sản phẩm</span>
+                            </button>
                             {order.status !== 'COMPLETED' && (
                               <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center gap-1">
                                 <span className="material-symbols-outlined text-[14px] text-emerald-600">done_all</span>
@@ -1089,6 +1101,23 @@ export const MyThriftOrders: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── MODAL ĐÁNH GIÁ SẢN PHẨM THRIFT [FE-S5-03] ── */}
+      {reviewOrder && (
+        <ReviewModal
+          isOpen={Boolean(reviewOrder)}
+          onClose={() => setReviewOrder(null)}
+          orderId={reviewOrder.id}
+          orderCode={reviewOrder.orderCode}
+          orderType="THRIFT"
+          orderItems={reviewOrder.items.map((it) => ({
+            productId: it.id,
+            title: it.productName,
+            image: it.imageUrl,
+            price: it.price,
+          }))}
+        />
       )}
     </div>
   );
