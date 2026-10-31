@@ -18,6 +18,7 @@ import type { RentProductDetailData } from '../../data/rent/rentOrderDetailData'
 import { getPublicRentProductDetailApi } from '../../../services/rentProduct.api';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { getUserProfileAddress, calculateDynamicShippingFee, normalizeShopBranch } from '../../../utils/address';
+import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
 
 type TabKey = 'desc' | 'terms' | 'audit' | 'deposit' | 'shipping';
 
@@ -908,6 +909,16 @@ export const RentProductDetail: React.FC = () => {
             ))}
           </div>
         </section>
+
+        {/* 4.5. ĐÁNH GIÁ & NHẬN XÉT SẢN PHẨM TỪ DB / USER THỰC TẾ */}
+        <ProductReviewsSection
+          productId={product.id}
+          productTitle={product.title}
+          productImage={product.images[0]?.src}
+          productMode="rent"
+          initialRating={product.rating}
+          initialCount={product.reviewCount}
+        />
 
         {/* 5. SẢN PHẨM LIÊN QUAN ("CÓ THỂ BẠN CŨNG THÍCH") */}
         <section className="space-y-6 pt-2">

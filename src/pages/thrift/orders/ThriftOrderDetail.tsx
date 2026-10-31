@@ -14,6 +14,7 @@ import {
 } from '../../../services/thriftOrder.api';
 import { redirectToVnPayGateway } from '../../../services/payment.api';
 import { resolveCleanAddress } from '../../../utils/address';
+import { ReviewModal } from '../../../components/review/ReviewModal';
 
 interface ThriftItemDetail {
   id: string;
@@ -904,6 +905,16 @@ export const ThriftOrderDetail: React.FC = () => {
                       </p>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsReviewModalOpen(true)}
+                    className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      hotel_class
+                    </span>
+                    <span>Đánh giá sản phẩm</span>
+                  </button>
                 </div>
               </section>
             )}
@@ -924,17 +935,29 @@ export const ThriftOrderDetail: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedNfcItem(order.items[0] || null);
-                      setIsNfcModalOpen(true);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-[#E7C890] hover:bg-[#F2D7A5] text-brand-charcoal text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer self-start md:self-center"
-                  >
-                    <span className="material-symbols-outlined text-sm">nfc</span>
-                    Xem Chứng thư NFC
-                  </button>
+                  <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setIsReviewModalOpen(true)}
+                      className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        hotel_class
+                      </span>
+                      <span>Đánh giá sản phẩm</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedNfcItem(order.items[0] || null);
+                        setIsNfcModalOpen(true);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-[#E7C890] hover:bg-[#F2D7A5] text-brand-charcoal text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">nfc</span>
+                      <span>Xem Chứng thư NFC</span>
+                    </button>
+                  </div>
                 </div>
               </section>
             )}
@@ -2003,6 +2026,23 @@ export const ThriftOrderDetail: React.FC = () => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* ── MODAL ĐÁNH GIÁ SẢN PHẨM THRIFT [FE-S5-03] ── */}
+            {order && (
+              <ReviewModal
+                isOpen={isReviewModalOpen}
+                onClose={() => setIsReviewModalOpen(false)}
+                orderId={order.id}
+                orderCode={order.orderCode}
+                orderType="THRIFT"
+                orderItems={order.items.map((it) => ({
+                  productId: it.id,
+                  title: it.productName,
+                  image: it.imageUrl,
+                  price: it.price,
+                }))}
+              />
             )}
           </div>
         </main>
