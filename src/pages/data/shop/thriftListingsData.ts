@@ -13,7 +13,7 @@ export interface ThriftListingItem {
   sku: string;
   title: string;
   category: string;
-  categoryKey: 'cameras' | 'audio' | 'furniture' | 'horology';
+  categoryKey?: 'clothing' | 'fashion' | 'cameras' | 'audio' | 'furniture' | 'horology' | string;
   description: string;
   source: ThriftListingSource;
   sourceLabel: string;
