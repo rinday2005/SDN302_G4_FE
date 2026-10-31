@@ -105,7 +105,7 @@ export interface ShopRevenueData {
  * Lấy thông tin Shop Profile thực tế từ MongoDB
  */
 export const getShopProfileApi = async (): Promise<ShopProfileData> => {
-  const response = await api.get<{ success: boolean; data: ShopProfileData }>("/api/shop/profile");
+  const response = await api.get<{ success: boolean; data: ShopProfileData }>("/shop/profile");
   return response.data.data;
 };
 
@@ -117,7 +117,7 @@ export const updateShopProfileApi = async (
   payload: UpdateShopProfilePayload
 ): Promise<ShopProfileData> => {
   const response = await api.put<{ success: boolean; data: ShopProfileData }>(
-    "/api/shop/profile",
+    "/shop/profile",
     payload
   );
   return response.data.data;
@@ -131,7 +131,7 @@ export const getShopRevenueApi = async (params?: {
   startDate?: string;
   endDate?: string;
 }): Promise<ShopRevenueData> => {
-  const response = await api.get<{ success: boolean; data: ShopRevenueData }>("/api/shop/revenue", {
+  const response = await api.get<{ success: boolean; data: ShopRevenueData }>("/shop/revenue", {
     params,
   });
   return response.data.data;
