@@ -65,12 +65,16 @@ const ProfileContent: React.FC = () => {
   });
 
   const [fullName, setFullName] = useState<string>(() => {
-    return initialSaved?.fullName || auth?.user?.fullName || '';
+    return initialSaved?.fullName || auth?.user?.fullName || 'Phạm Thùy Dương';
   });
 
   const [phone, setPhone] = useState<string>(() => {
-    return initialSaved?.phone || auth?.user?.phoneNumber || auth?.user?.phone || '';
+    return initialSaved?.phone || auth?.user?.phoneNumber || auth?.user?.phone || '0901234567';
   });
+
+  const [fullNameError, setFullNameError] = useState<string>('');
+  const [phoneError, setPhoneError] = useState<string>('');
+  const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
 
   const [deliveryNote, setDeliveryNote] = useState<string>(() => {
     return initialSaved?.deliveryNote || 'Vui lòng gọi trước 30 phút, kiểm tra niêm phong thùng bảo quản Nanuk';
@@ -371,20 +375,58 @@ const ProfileContent: React.FC = () => {
   // Handle Account & Delivery form submit (Persist to MongoDB and localStorage)
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ── Client-side Validation Chặt Chẽ Trước Khi Gửi Request ──
+    let hasError = false;
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      setFullNameError('Họ và tên không được để trống');
+      hasError = true;
+    } else if (trimmedName.length < 2 || trimmedName.length > 70) {
+      setFullNameError('Họ và tên phải có độ dài từ 2 đến 70 ký tự');
+      hasError = true;
+    } else if (/[<>{}[\]\\/]/.test(trimmedName)) {
+      setFullNameError('Họ và tên chứa ký tự đặc biệt không hợp lệ');
+      hasError = true;
+    } else {
+      setFullNameError('');
+    }
+
+    const trimmedPhone = phone.trim();
+    if (trimmedPhone) {
+      const phoneRegex = /^(0|\+84)(3[2-9]|5[2689]|7[06-9]|8[1-9]|9[0-9])[0-9]{7}$/;
+      if (!phoneRegex.test(trimmedPhone)) {
+        setPhoneError('Số điện thoại không đúng định dạng (Ví dụ: 0901234567 hoặc +84901234567)');
+        hasError = true;
+      } else {
+        setPhoneError('');
+      }
+    } else {
+      setPhoneError('Số điện thoại không được để trống');
+      hasError = true;
+    }
+
+    if (hasError) {
+      setPasswordToastMessage('Vui lòng kiểm tra lại các trường thông tin bị lỗi!');
+      setTimeout(() => setPasswordToastMessage(''), 4000);
+      return;
+    }
+
+    setIsSavingProfile(true);
     try {
       // 1. Send PUT request to Backend API to persist address & profile into MongoDB
       await updateProfileApi({
-        fullName,
-        phoneNumber: phone,
-        phone,
+        fullName: trimmedName,
+        phoneNumber: trimmedPhone,
+        phone: trimmedPhone,
         address,
         avatarUrl,
       });
 
       // 2. Synchronize local storage cache
       const profileData = {
-        fullName,
-        phone,
+        fullName: trimmedName,
+        phone: trimmedPhone,
         address,
         deliveryNote,
         avatarUrl,
@@ -395,24 +437,29 @@ const ProfileContent: React.FC = () => {
       }
 
       if (auth?.user) {
-        const updatedUser = { ...auth.user, fullName, avatarUrl, phoneNumber: phone, address };
+        const updatedUser = { ...auth.user, fullName: trimmedName, avatarUrl, phoneNumber: trimmedPhone, address };
         localStorage.setItem('user', JSON.stringify(updatedUser));
       }
 
       window.dispatchEvent(
         new CustomEvent('profile_updated', {
-          detail: { avatarUrl, fullName },
+          detail: { avatarUrl, fullName: trimmedName },
         })
       );
       window.dispatchEvent(new Event('user_profile_updated'));
-    } catch (err) {
-      console.warn('Backend updateProfileApi notice, falling back to local sync:', err);
-    }
 
-    setShowSaveToast(true);
-    setTimeout(() => {
-      setShowSaveToast(false);
-    }, 4500);
+      setShowSaveToast(true);
+      setTimeout(() => {
+        setShowSaveToast(false);
+      }, 4500);
+    } catch (err: unknown) {
+      console.warn('Backend updateProfileApi notice, falling back to local sync:', err);
+      const errMsg = err instanceof Error ? err.message : 'Có lỗi xảy ra khi lưu';
+      setPasswordToastMessage(`Lỗi cập nhật: ${errMsg}`);
+      setTimeout(() => setPasswordToastMessage(''), 4500);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleCancelForm = () => {
@@ -1158,7 +1205,7 @@ const ProfileContent: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-[#141310]" htmlFor="fullName">
-                      Họ và tên
+                      Họ và tên *
                     </label>
                     <div className="relative">
                       <input
@@ -1167,18 +1214,26 @@ const ProfileContent: React.FC = () => {
                         type="text"
                         required
                         value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-[#F5F3F0] text-[#141310] text-xs font-medium rounded-xl border border-[#E4E2DF] focus:outline-none focus:bg-white focus:border-[#3A6843] transition-all"
+                        onChange={(e) => {
+                          setFullName(e.target.value);
+                          if (fullNameError) setFullNameError('');
+                        }}
+                        className={`w-full px-4 py-2.5 bg-[#F5F3F0] text-[#141310] text-xs font-medium rounded-xl border focus:outline-none focus:bg-white transition-all ${
+                          fullNameError ? 'border-rose-500 focus:border-rose-500' : 'border-[#E4E2DF] focus:border-[#3A6843]'
+                        }`}
                       />
                       <span className="material-symbols-outlined absolute right-3 top-2.5 text-[18px] text-[#7B766F]">
                         person
                       </span>
                     </div>
+                    {fullNameError && (
+                      <p className="text-[11px] text-rose-600 font-semibold mt-1">{fullNameError}</p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-[#141310]" htmlFor="phoneNumber">
-                      Số điện thoại liên hệ
+                      Số điện thoại liên hệ *
                     </label>
                     <div className="relative">
                       <input
@@ -1187,13 +1242,21 @@ const ProfileContent: React.FC = () => {
                         type="tel"
                         required
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-[#F5F3F0] text-[#141310] text-xs font-medium rounded-xl border border-[#E4E2DF] focus:outline-none focus:bg-white focus:border-[#3A6843] transition-all"
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (phoneError) setPhoneError('');
+                        }}
+                        className={`w-full px-4 py-2.5 bg-[#F5F3F0] text-[#141310] text-xs font-medium rounded-xl border focus:outline-none focus:bg-white transition-all ${
+                          phoneError ? 'border-rose-500 focus:border-rose-500' : 'border-[#E4E2DF] focus:border-[#3A6843]'
+                        }`}
                       />
                       <span className="material-symbols-outlined absolute right-3 top-2.5 text-[18px] text-[#7B766F]">
                         smartphone
                       </span>
                     </div>
+                    {phoneError && (
+                      <p className="text-[11px] text-rose-600 font-semibold mt-1">{phoneError}</p>
+                    )}
                   </div>
                 </div>
 
@@ -1286,10 +1349,20 @@ const ProfileContent: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-7 py-2.5 bg-[#141310] text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-[#292724] transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+                    disabled={isSavingProfile}
+                    className="px-7 py-2.5 bg-[#141310] text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-[#292724] transition-all shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-[17px]">save</span>
-                    Lưu thay đổi
+                    {isSavingProfile ? (
+                      <>
+                        <span className="material-symbols-outlined text-[17px] animate-spin">progress_activity</span>
+                        <span>Đang lưu...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[17px]">save</span>
+                        <span>Lưu thay đổi</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
