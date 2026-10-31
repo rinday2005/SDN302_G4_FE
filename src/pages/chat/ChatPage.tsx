@@ -83,7 +83,7 @@ export const ChatPage: React.FC = () => {
       {
         id: 'msg-1',
         sender: 'atelier',
-        senderName: 'Vũ Thanh Tùng (Master Custodian)',
+        senderName: 'Phạm Thùy Dương (Master Custodian)',
         senderRole: 'CUSTODIAN',
         senderAvatar:
           'https://lh3.googleusercontent.com/aida-public/AB6AXuBgD0AT7Kf7zh1FWCGtS5UNoE5w02BFo5pBVmKhaNprtLB3NK_ZXDMUX0Z9EksTo5nlrg_XxyFrd7yBBzZbDcefEzU2R2MZ3HK-BwBSHL0Tnq9t2WdQqCvJSeYFuzzp3zLblmYxmMT6wr58VHRXv1a8yPcrilEixvfz0zPZ-12xlqR2I1dyuKOJ0X5V9-MtcWon9621TvJ2Ws0eYhpcKTA5DpQiOpSBXFnYmOlj5Bx-',
@@ -127,7 +127,7 @@ export const ChatPage: React.FC = () => {
       {
         id: 'msg-3',
         sender: 'atelier',
-        senderName: 'Vũ Thanh Tùng',
+        senderName: 'Phạm Thùy Dương',
         senderRole: 'CUSTODIAN',
         senderAvatar:
           'https://lh3.googleusercontent.com/aida-public/AB6AXuCdLeHuSahX_SC8gBcVoJQWJKup41bBSnFdMvL4tTfXEQ1BkY4bKFuO4rRQfAc0gVD7lBQTlx-JA_QtSIpiTlBgXHgMdIEH-4qEOfNnV3gb34SzRHtpxxCa6Bzz8-Qb5a1vUssAkvaJQViSxhPOa5cRDeHKGjyp1yrt4RdIEJp2o1-v9Z_F31fa3m25yyu30T7SPHbOv1lqfnOC7IHolyp3zBx-XMi3DbvcXA5l1Ndk',
@@ -188,7 +188,7 @@ export const ChatPage: React.FC = () => {
       const replyMsg: ChatMessage = {
         id: `reply-${Date.now()}`,
         sender: 'atelier',
-        senderName: 'Vũ Thanh Tùng (Master Custodian)',
+        senderName: 'Phạm Thùy Dương (Master Custodian)',
         senderRole: 'CUSTODIAN',
         senderAvatar:
           'https://lh3.googleusercontent.com/aida-public/AB6AXuCdLeHuSahX_SC8gBcVoJQWJKup41bBSnFdMvL4tTfXEQ1BkY4bKFuO4rRQfAc0gVD7lBQTlx-JA_QtSIpiTlBgXHgMdIEH-4qEOfNnV3gb34SzRHtpxxCa6Bzz8-Qb5a1vUssAkvaJQViSxhPOa5cRDeHKGjyp1yrt4RdIEJp2o1-v9Z_F31fa3m25yyu30T7SPHbOv1lqfnOC7IHolyp3zBx-XMi3DbvcXA5l1Ndk',
@@ -253,7 +253,7 @@ export const ChatPage: React.FC = () => {
                 <p className="text-xs text-brand-muted mt-1 font-sans">
                   Kênh trao đổi trực tiếp độc quyền giữa khách hàng{' '}
                   <span className="font-semibold text-brand-charcoal">{customerName}</span> và Trưởng Kỹ thuật Viên Thẩm
-                  định <span className="font-semibold text-brand-charcoal">Vũ Thanh Tùng</span>.
+                  định <span className="font-semibold text-brand-charcoal">Phạm Thùy Dương</span>.
                 </p>
               </div>
 
@@ -262,14 +262,14 @@ export const ChatPage: React.FC = () => {
                 <div className="relative">
                   <img
                     className="w-10 h-10 rounded-full object-cover ring-2 ring-brand-sage/30"
-                    alt="Chân dung nghệ nhân giám định Vũ Thanh Tùng"
+                    alt="Chân dung nghệ nhân giám định Phạm Thùy Dương"
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTh1J0ai_UCuCvrMaON5TH-yoipsRqE6EideHgA7cymyCQOyd7H9Gw_xObXbBp8bkPgmE0BuAl2npsRyu3eTbl4iuW7l0_G-Dce4HOpPkE8bBaix3pG4jYpf6ku54qL4z3Krpia8DnirFBvMIB2SR_YuOXg_tz8hzKhpl-iFnsuzXZ4oOj4q2oOzttKBJt5a6HpfQM7egOYNk5zcFbp7PJNAzlohAMWXzSDuqsJWqj"
                   />
                   <span className="absolute bottom-0 right-0 w-3 h-3 bg-brand-sage rounded-full border-2 border-white" />
                 </div>
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-brand-charcoal">Vũ Thanh Tùng</span>
+                    <span className="text-xs font-bold text-brand-charcoal">Phạm Thùy Dương</span>
                     <span className="text-[9px] bg-brand-charcoal text-white font-semibold px-1.5 py-0.5 rounded tracking-wider">
                       CUSTODIAN
                     </span>
@@ -550,7 +550,7 @@ export const ChatPage: React.FC = () => {
                   {isTyping && (
                     <div className="flex items-center gap-2 text-xs text-brand-muted italic pl-12 animate-pulse">
                       <span className="w-2 h-2 rounded-full bg-brand-sage animate-ping" />
-                      <span>Vũ Thanh Tùng đang phản hồi câu hỏi kỹ thuật...</span>
+                      <span>Phạm Thùy Dương đang phản hồi câu hỏi kỹ thuật...</span>
                     </div>
                   )}
 
@@ -601,7 +601,7 @@ export const ChatPage: React.FC = () => {
                   >
                     <textarea
                       className="w-full bg-transparent text-xs text-brand-charcoal placeholder-brand-muted focus:outline-none resize-none leading-relaxed"
-                      placeholder="Nhập tin nhắn trao đổi kỹ thuật hoặc yêu cầu với Trưởng Atelier Vũ Thanh Tùng..."
+                      placeholder="Nhập tin nhắn trao đổi kỹ thuật hoặc yêu cầu với Trưởng Atelier Phạm Thùy Dương..."
                       rows={2}
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
@@ -824,7 +824,7 @@ export const ChatPage: React.FC = () => {
             </div>
 
             <div className="p-4 bg-brand-surface rounded-2xl space-y-2 text-xs text-brand-charcoal border border-brand-border/50">
-              <p className="font-bold text-sm">Trưởng Kỹ Thuật Viên: Vũ Thanh Tùng</p>
+              <p className="font-bold text-sm">Trưởng Kỹ Thuật Viên: Phạm Thùy Dương</p>
               <p className="text-brand-muted">Phòng Thẩm Định &amp; Hiệu Chuẩn Quang Học (Saigon Vault)</p>
               <div className="pt-2 flex items-center justify-between">
                 <span className="text-xs font-semibold">Đường dây nóng độc quyền:</span>

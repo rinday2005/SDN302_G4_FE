@@ -80,7 +80,7 @@ const DEFAULT_THRIFT_DOSSIER: ThriftDossierData = {
   carbonSavedNote: "Tiết kiệm 8.4kg CO₂e so với sản xuất thân máy máy ảnh cơ mới",
   shopName: "Kyoto Archival Optics",
   shopCode: "#SHP-0418",
-  legalRepresentative: "Vũ Thanh Tùng",
+  legalRepresentative: "Phạm Thùy Dương",
   shopRating: 4.98,
   rentHistoryCount: 184,
   thriftHistoryCount: 42,

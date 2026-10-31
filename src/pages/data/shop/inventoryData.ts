@@ -133,7 +133,7 @@ export const mockInventoryUnits: InventoryUnitItem[] = [
     readyNote: 'Sau quy trình đối kiểm 24h',
     location: 'Trạm tủ ẩm A2 (Khoang bảo quản trung tâm, 40% RH), Atelier Chronos, Quận 1, TP. HCM',
     shutterActuations: '4.820 / 100.000',
-    curatorName: 'Vũ Thanh Tùng (#01)',
+    curatorName: 'Phạm Thùy Dương (#01)',
     listedRentPrice: '450.000 ₫ / ngày',
     proposedThriftPrice: '122.000.000 ₫',
     imageUrl:

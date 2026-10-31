@@ -1,20 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getShopProfileApi, updateShopProfileApi } from '../../services/shop.api';
+import { uploadAvatarApi } from '../../services/user.api';
 
 export const ShopOwnerProfile: React.FC = () => {
-  // State for Edit Profile Modal
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  // Inline edit state (thay thế popup/modal cũ)
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
   const [isKycModalOpen, setIsKycModalOpen] = useState(false);
   const [lightboxImg, setLightboxImg] = useState<{ src: string; caption: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Close modals on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setIsEditModalOpen(false);
+        setIsInlineEditing(false);
         setIsKycModalOpen(false);
         setLightboxImg(null);
       }
@@ -23,9 +26,9 @@ export const ShopOwnerProfile: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Form states for Atelier Profile (kết nối DB MongoDB thật)
+  // Form states for Atelier Profile (kết nối DB MongoDB thật, mặc định Phạm Thùy Dương)
   const [shopName, setShopName] = useState('Atelier Chronos & Optics Ltd.');
-  const [ownerName, setOwnerName] = useState('Vũ Thanh Tùng');
+  const [ownerName, setOwnerName] = useState('Phạm Thùy Dương');
   const [roleTitle, setRoleTitle] = useState('Master Curator & Archival Custodian');
   const [primaryEmail, setPrimaryEmail] = useState('shopowner@reuse.vn');
   const [secondaryEmail, setSecondaryEmail] = useState('');
@@ -35,6 +38,18 @@ export const ShopOwnerProfile: React.FC = () => {
   const [specialization, setSpecialization] = useState(
     'Xưởng lưu ký & cho thuê trang phục, thiết bị thời trang cao cấp tuần hoàn.'
   );
+  const [avatarUrl, setAvatarUrl] = useState<string>(
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80'
+  );
+
+  // Validation errors
+  const [formErrors, setFormErrors] = useState<{
+    ownerName?: string;
+    shopName?: string;
+    phoneNumber?: string;
+    primaryEmail?: string;
+    secondaryEmail?: string;
+  }>({});
 
   // Load thực tế từ MongoDB khi vào trang
   useEffect(() => {
@@ -52,6 +67,9 @@ export const ShopOwnerProfile: React.FC = () => {
         if (data.roleTitle) setRoleTitle(data.roleTitle);
         if (data.specialization || data.description) {
           setSpecialization(data.specialization || data.description || '');
+        }
+        if (data.avatarUrl) {
+          setAvatarUrl(data.avatarUrl);
         }
       })
       .catch((err) => {
@@ -74,27 +92,105 @@ export const ShopOwnerProfile: React.FC = () => {
     showToast(`Đã sao chép ${label}: ${text}`);
   };
 
+  const validateForm = () => {
+    const errors: typeof formErrors = {};
+    const trimmedOwner = ownerName.trim();
+    if (!trimmedOwner) {
+      errors.ownerName = 'Họ và tên chủ xưởng không được để trống';
+    } else if (trimmedOwner.length < 2 || trimmedOwner.length > 70) {
+      errors.ownerName = 'Họ và tên phải có độ dài từ 2 đến 70 ký tự';
+    } else if (/[<>{}[\]\\/]/.test(trimmedOwner)) {
+      errors.ownerName = 'Họ và tên chứa ký tự đặc biệt không hợp lệ';
+    }
+
+    const trimmedShop = shopName.trim();
+    if (!trimmedShop) {
+      errors.shopName = 'Tên pháp nhân xưởng không được để trống';
+    } else if (trimmedShop.length < 3 || trimmedShop.length > 100) {
+      errors.shopName = 'Tên xưởng phải từ 3 đến 100 ký tự';
+    }
+
+    const trimmedPhone = phoneNumber.trim();
+    const phoneRegex = /^(0|\+84)(3[2-9]|5[2689]|7[06-9]|8[1-9]|9[0-9])[0-9]{7}$/;
+    if (!trimmedPhone) {
+      errors.phoneNumber = 'Số điện thoại không được để trống';
+    } else if (!phoneRegex.test(trimmedPhone)) {
+      errors.phoneNumber = 'Số điện thoại không đúng định dạng (Ví dụ: 0901234567)';
+    }
+
+    const trimmedEmail = primaryEmail.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail) {
+      errors.primaryEmail = 'Email chính không được để trống';
+    } else if (!emailRegex.test(trimmedEmail)) {
+      errors.primaryEmail = 'Email chính không đúng định dạng';
+    }
+
+    if (secondaryEmail.trim() && !emailRegex.test(secondaryEmail.trim())) {
+      errors.secondaryEmail = 'Email phụ không đúng định dạng';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleAvatarFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Vui lòng chọn file hình ảnh hợp lệ (PNG, JPG, WEBP)!');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Kích thước ảnh tối đa là 5MB!');
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      const uploadedUrl = await uploadAvatarApi(file);
+      if (uploadedUrl) {
+        setAvatarUrl(uploadedUrl);
+        await updateShopProfileApi({ avatarUrl: uploadedUrl });
+        showToast('Ảnh đại diện đã được upload lên Cloudinary và lưu vào MongoDB thành công!');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Lỗi khi upload ảnh';
+      showToast(`Không thể tải ảnh: ${msg}`);
+    } finally {
+      setIsUploadingAvatar(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) {
+      showToast('Dữ liệu không hợp lệ. Vui lòng kiểm tra các trường bị lỗi!');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const updated = await updateShopProfileApi({
-        shopName,
-        ownerName,
-        phoneNumber,
-        secondaryEmail,
-        businessAddress: addressLine,
-        cityRegion,
-        specialization,
-        description: specialization,
-        roleTitle,
+        shopName: shopName.trim(),
+        ownerName: ownerName.trim(),
+        phoneNumber: phoneNumber.trim(),
+        secondaryEmail: secondaryEmail.trim(),
+        businessAddress: addressLine.trim(),
+        cityRegion: cityRegion.trim(),
+        specialization: specialization.trim(),
+        description: specialization.trim(),
+        roleTitle: roleTitle.trim(),
+        avatarUrl,
       });
       if (updated) {
         if (updated.shopName) setShopName(updated.shopName);
         if (updated.ownerName) setOwnerName(updated.ownerName);
         if (updated.phoneNumber) setPhoneNumber(updated.phoneNumber);
       }
-      setIsEditModalOpen(false);
+      setIsInlineEditing(false);
       showToast('Hồ sơ Shop đã được lưu trực tiếp vào MongoDB thành công!');
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Có lỗi khi cập nhật hồ sơ';
@@ -153,15 +249,36 @@ export const ShopOwnerProfile: React.FC = () => {
                 <img
                   alt={`Master Curator ${ownerName}`}
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkSktnVijYsv9egEeoe9zYQQgoIpCEyEYypnZ7J0smSq0md777Wn4t7YoVjw76jobBqZIgjb1N1JYla9gBSN_Fypmv24cUlrt0-ukU1eYfnGaAYsGKm2qzfs7-J8I2iFaPoQEQxZrrXGJQmosLHTqgkWD2GMqdVUYXj_e68KsRhEF4LcWv7K_AwxeR54whJydwqqtOnrg5zlFewL0CWugIFCLd0PDZAmOl4TGVpYmdJ6hE0uppdP1W1A"
+                  src={avatarUrl}
                 />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                  className="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity cursor-pointer backdrop-blur-[2px]"
+                  title="Thay đổi ảnh đại diện qua Cloudinary"
+                >
+                  <span className="material-symbols-outlined text-[22px]">photo_camera</span>
+                  <span className="text-[9px] font-bold uppercase mt-0.5">
+                    {isUploadingAvatar ? 'Đang tải...' : 'Đổi ảnh'}
+                  </span>
+                </button>
                 <div
-                  className="absolute bottom-1 right-1 bg-[#141310] text-[#fdf9f2] rounded p-1 shadow-sm"
+                  className="absolute bottom-1 right-1 bg-[#141310] text-[#fdf9f2] rounded p-1 shadow-sm pointer-events-none"
                   title="Chữ ký chứng thực số B-Corp cấp 1"
                 >
                   <span className="material-symbols-outlined text-[15px] block text-[#d8e3ce]">verified</span>
                 </div>
               </div>
+
+              {/* Hidden file input for Cloudinary upload */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/jpg"
+                onChange={handleAvatarFileSelect}
+                className="hidden"
+              />
 
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -230,17 +347,239 @@ export const ShopOwnerProfile: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setIsEditModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-3 bg-white hover:bg-[#f1ede6] text-[#141310] text-xs uppercase tracking-wider rounded-xl transition-all shadow-xs border border-[#dddad3] font-semibold"
-                title="Chỉnh sửa thông tin xưởng"
+                onClick={() => setIsInlineEditing(!isInlineEditing)}
+                className={`inline-flex items-center gap-1.5 px-4 py-3 text-xs uppercase tracking-wider rounded-xl transition-all shadow-xs border font-semibold ${
+                  isInlineEditing
+                    ? 'bg-[#141310] text-[#fdf9f2] border-[#141310]'
+                    : 'bg-white hover:bg-[#f1ede6] text-[#141310] border-[#dddad3]'
+                }`}
+                title="Chỉnh sửa thông tin xưởng trực tiếp trên trang"
               >
-                <span className="material-symbols-outlined text-[17px]">edit_note</span>
-                <span>Chỉnh sửa hồ sơ</span>
+                <span className="material-symbols-outlined text-[17px]">
+                  {isInlineEditing ? 'close' : 'edit_note'}
+                </span>
+                <span>{isInlineEditing ? 'Đóng biểu mẫu' : 'Chỉnh sửa hồ sơ'}</span>
               </button>
             </div>
           </div>
         </div>
       </section>
+
+      {/* INLINE EDIT FORM SECTION (Chỉnh sửa trực tiếp trên trang - không popup) */}
+      {isInlineEditing && (
+        <section className="max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-12 mb-10">
+          <div className="bg-white rounded-2xl p-6 lg:p-8 shadow-md border-2 border-[#576151]/30 relative">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#dddad3]">
+              <div>
+                <span className="text-xs uppercase tracking-wider text-[#576151] font-bold">INLINE EDIT FORM</span>
+                <h3 className="font-serif text-2xl text-[#141310] font-semibold mt-1">
+                  Chỉnh Sửa Thông Tin Xưởng Lưu Ký (Trực Tiếp Trên Trang)
+                </h3>
+                <p className="text-xs text-[#7b766f] mt-1">
+                  Các thay đổi được validate chặt chẽ và lưu trực tiếp vào MongoDB &amp; Cloudinary.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsInlineEditing(false)}
+                className="w-8 h-8 rounded-full bg-[#f1ede6] flex items-center justify-center text-[#7b766f] hover:text-[#141310] hover:bg-[#e6e2db] transition-colors"
+                title="Đóng form"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-5">
+              <div>
+                <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                  Tên Pháp Nhân Xưởng (Business Entity) *
+                </label>
+                <input
+                  type="text"
+                  value={shopName}
+                  onChange={(e) => {
+                    setShopName(e.target.value);
+                    if (formErrors.shopName) setFormErrors({ ...formErrors, shopName: undefined });
+                  }}
+                  className={`w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border text-sm text-[#141310] focus:outline-none focus:ring-2 ${
+                    formErrors.shopName ? 'border-red-500 focus:ring-red-400' : 'border-[#dddad3] focus:ring-[#576151]'
+                  }`}
+                  placeholder="Nhập tên xưởng pháp nhân..."
+                />
+                {formErrors.shopName && (
+                  <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.shopName}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                    Chủ Xưởng / Đại Diện *
+                  </label>
+                  <input
+                    type="text"
+                    value={ownerName}
+                    onChange={(e) => {
+                      setOwnerName(e.target.value);
+                      if (formErrors.ownerName) setFormErrors({ ...formErrors, ownerName: undefined });
+                    }}
+                    className={`w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border text-sm text-[#141310] focus:outline-none focus:ring-2 ${
+                      formErrors.ownerName ? 'border-red-500 focus:ring-red-400' : 'border-[#dddad3] focus:ring-[#576151]'
+                    }`}
+                    placeholder="Phạm Thùy Dương..."
+                  />
+                  {formErrors.ownerName && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.ownerName}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                    Chức Danh Giám Định
+                  </label>
+                  <input
+                    type="text"
+                    value={roleTitle}
+                    onChange={(e) => setRoleTitle(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
+                    placeholder="Master Curator & Archival Custodian..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                    Email Giám Định Chính *
+                  </label>
+                  <input
+                    type="email"
+                    value={primaryEmail}
+                    onChange={(e) => {
+                      setPrimaryEmail(e.target.value);
+                      if (formErrors.primaryEmail) setFormErrors({ ...formErrors, primaryEmail: undefined });
+                    }}
+                    className={`w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border text-sm text-[#141310] focus:outline-none focus:ring-2 ${
+                      formErrors.primaryEmail ? 'border-red-500 focus:ring-red-400' : 'border-[#dddad3] focus:ring-[#576151]'
+                    }`}
+                    placeholder="shopowner@reuse.vn..."
+                  />
+                  {formErrors.primaryEmail && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.primaryEmail}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                    Email Liên Hệ Phụ
+                  </label>
+                  <input
+                    type="email"
+                    value={secondaryEmail}
+                    onChange={(e) => {
+                      setSecondaryEmail(e.target.value);
+                      if (formErrors.secondaryEmail) setFormErrors({ ...formErrors, secondaryEmail: undefined });
+                    }}
+                    className={`w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border text-sm text-[#141310] focus:outline-none focus:ring-2 ${
+                      formErrors.secondaryEmail ? 'border-red-500 focus:ring-red-400' : 'border-[#dddad3] focus:ring-[#576151]'
+                    }`}
+                    placeholder="contact@atelier.vn (tùy chọn)..."
+                  />
+                  {formErrors.secondaryEmail && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.secondaryEmail}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                  Số Điện Thoại Trực Hotline *
+                </label>
+                <input
+                  type="text"
+                  value={phoneNumber}
+                  onChange={(e) => {
+                    setPhoneNumber(e.target.value);
+                    if (formErrors.phoneNumber) setFormErrors({ ...formErrors, phoneNumber: undefined });
+                  }}
+                  className={`w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border text-sm text-[#141310] focus:outline-none focus:ring-2 ${
+                    formErrors.phoneNumber ? 'border-red-500 focus:ring-red-400' : 'border-[#dddad3] focus:ring-[#576151]'
+                  }`}
+                  placeholder="0901234567..."
+                />
+                {formErrors.phoneNumber && (
+                  <p className="text-xs text-red-600 mt-1 font-medium">{formErrors.phoneNumber}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                    Địa Chỉ Showroom / Vault
+                  </label>
+                  <input
+                    type="text"
+                    value={addressLine}
+                    onChange={(e) => setAddressLine(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
+                    placeholder="123 Lê Lợi, Phường Bến Nghé, Quận 1..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                    Khu Vực / Thành Phố
+                  </label>
+                  <input
+                    type="text"
+                    value={cityRegion}
+                    onChange={(e) => setCityRegion(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
+                    placeholder="Ho Chi Minh City, Vietnam..."
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
+                  Phạm Vi Chuyên Môn &amp; Dịch Vụ Lưu Ký
+                </label>
+                <textarea
+                  rows={3}
+                  value={specialization}
+                  onChange={(e) => setSpecialization(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-[#fdf9f2] rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
+                  placeholder="Mô tả phạm vi hoạt động xưởng..."
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#dddad3]">
+                <button
+                  type="button"
+                  onClick={() => setIsInlineEditing(false)}
+                  className="px-5 py-2.5 rounded-xl border border-[#dddad3] text-xs font-semibold uppercase tracking-wider text-[#4a463f] hover:bg-[#f1ede6] transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-6 py-2.5 rounded-xl bg-[#141310] hover:bg-[#292724] text-[#fdf9f2] text-xs font-semibold uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSaving ? (
+                    <>
+                      <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[16px]">save</span>
+                      <span>Lưu Thay Đổi (MongoDB)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+      )}
 
       {/* Circular Performance & Provenance Snapshot Metrics (3 Cards) */}
       <section className="max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-12 mb-10">
@@ -780,172 +1119,7 @@ export const ShopOwnerProfile: React.FC = () => {
         </div>
       </section>
 
-      {/* MODAL 1: Edit Atelier Profile */}
-      {isEditModalOpen && (
-        <div
-          onClick={() => setIsEditModalOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-[#fdf9f2] rounded-2xl w-full max-w-xl shadow-2xl border border-[#dddad3] p-6 lg:p-8 relative max-h-[90vh] overflow-y-auto cursor-default"
-          >
-            <button
-              onClick={() => setIsEditModalOpen(false)}
-              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-[#f1ede6] flex items-center justify-center text-[#7b766f] hover:text-[#141310] hover:bg-[#e6e2db] transition-colors"
-            >
-              <span className="material-symbols-outlined text-[18px]">close</span>
-            </button>
 
-            <div className="mb-6">
-              <span className="text-xs uppercase tracking-wider text-[#576151] font-bold">PROFILE SETTINGS</span>
-              <h3 className="font-serif text-2xl text-[#141310] font-semibold mt-1">
-                Cập Nhật Thông Tin Xưởng Lưu Ký
-              </h3>
-              <p className="text-xs text-[#7b766f] mt-1">
-                Các thay đổi sẽ được đồng bộ vào hồ sơ định danh đối tác Atelier #OWNER-01.
-              </p>
-            </div>
-
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                  Tên Pháp Nhân Xưởng (Business Entity)
-                </label>
-                <input
-                  type="text"
-                  value={shopName}
-                  onChange={(e) => setShopName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                    Chủ Xưởng / Đại Diện
-                  </label>
-                  <input
-                    type="text"
-                    value={ownerName}
-                    onChange={(e) => setOwnerName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                    Chức Danh Giám Định
-                  </label>
-                  <input
-                    type="text"
-                    value={roleTitle}
-                    onChange={(e) => setRoleTitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                    Email Giám Định Chính
-                  </label>
-                  <input
-                    type="email"
-                    value={primaryEmail}
-                    onChange={(e) => setPrimaryEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                    Email Liên Hệ Phụ
-                  </label>
-                  <input
-                    type="email"
-                    value={secondaryEmail}
-                    onChange={(e) => setSecondaryEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                  Số Điện Thoại Trực Hotline
-                </label>
-                <input
-                  type="text"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                    Địa Chỉ Showroom / Vault
-                  </label>
-                  <input
-                    type="text"
-                    value={addressLine}
-                    onChange={(e) => setAddressLine(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                    Khu Vực / Thành Phố
-                  </label>
-                  <input
-                    type="text"
-                    value={cityRegion}
-                    onChange={(e) => setCityRegion(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#141310] uppercase tracking-wider mb-1">
-                  Phạm Vi Chuyên Môn &amp; Dịch Vụ Lưu Ký
-                </label>
-                <textarea
-                  rows={3}
-                  value={specialization}
-                  onChange={(e) => setSpecialization(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-[#dddad3] text-sm text-[#141310] focus:outline-none focus:ring-2 focus:ring-[#576151]"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#dddad3]">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-5 py-2.5 rounded-xl border border-[#dddad3] text-xs font-semibold uppercase tracking-wider text-[#4a463f] hover:bg-[#f1ede6] transition-colors"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-6 py-2.5 rounded-xl bg-[#141310] hover:bg-[#292724] text-[#fdf9f2] text-xs font-semibold uppercase tracking-wider transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {isSaving && <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>}
-                  <span>{isSaving ? 'Đang lưu...' : 'Lưu Thay Đổi'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* MODAL 2: Interactive KYC & B-Corp Dossier */}
       {isKycModalOpen && (
