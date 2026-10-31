@@ -8,6 +8,7 @@ import {
   confirmDeliveredThriftOrderApi,
   type ThriftOrderApi,
   type ThriftOrderItemApi,
+  type ThriftShippingAddressApi,
 } from '../../../services/thriftOrder.api';
 import { redirectToVnPayGateway } from '../../../services/payment.api';
 import { ReviewModal } from '../../../components/review/ReviewModal';
@@ -208,7 +209,7 @@ export const MyThriftOrders: React.FC = () => {
       };
     });
 
-    const addr = raw.shippingAddress || {};
+    const addr = (raw.shippingAddress || {}) as Partial<ThriftShippingAddressApi>;
     const fullAddr = [addr.detail, addr.ward, addr.district, addr.province].filter(Boolean).join(', ') ||
       '48 Bạch Đằng, Tầng 4 Archive Suite, Phường Hải Châu 1, Quận Hải Châu, TP. Đà Nẵng, Việt Nam';
 
