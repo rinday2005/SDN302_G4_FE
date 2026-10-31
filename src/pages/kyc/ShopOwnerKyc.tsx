@@ -59,7 +59,7 @@ export const ShopOwnerKyc: React.FC = () => {
           </Link>
           <span className="opacity-40">/</span>
           <Link to="/shop/profile" className="hover:text-[#141310] transition-colors flex items-center gap-1 font-medium">
-            <span>Atelier Chronos &amp; Optics • Vũ Thanh Tùng (#OWNER-01)</span>
+            <span>Atelier Chronos &amp; Optics • Phạm Thùy Dương (#OWNER-01)</span>
           </Link>
           <span className="opacity-40">/</span>
           <span className="text-[#141310] font-semibold">Identity &amp; Atelier Verification (/kyc)</span>
@@ -662,7 +662,7 @@ export const ShopOwnerKyc: React.FC = () => {
             <div className="py-6 space-y-4">
               <p className="text-sm text-[#1c1c18] text-center leading-relaxed max-w-lg mx-auto">
                 This certifies that <strong className="text-[#141310]">Atelier Chronos &amp; Optics</strong> operated by{' '}
-                <strong className="text-[#141310]">Master Curator Vũ Thanh Tùng (#OWNER-01)</strong> has fulfilled the forensic calibration and vault security criteria mandated by the ReUse Hub Archival Alliance.
+                <strong className="text-[#141310]">Master Curator Phạm Thùy Dương (#OWNER-01)</strong> has fulfilled the forensic calibration and vault security criteria mandated by the ReUse Hub Archival Alliance.
               </p>
 
               <div className="grid grid-cols-2 gap-4 p-5 bg-[#f7f3ec] rounded-xl border border-[#ebe8e1] text-xs">
