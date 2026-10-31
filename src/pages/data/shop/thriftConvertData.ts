@@ -81,7 +81,7 @@ export const SPECIMEN_PROFILES: Record<string, ConvertibleSpecimenProfile> = {
     recentOrderCode: '#RH-RNT-2024-8845',
     recentCustomer: 'Elena Rostova',
     location: 'Trạm tủ ẩm A2 (Khoang bảo quản trung tâm, 40% RH), Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Vũ Thanh Tùng (#01)',
+    curatorName: 'Phạm Thùy Dương (#01)',
     certificateCode: '#CERT-9942-VN',
     hashProof: 'sha256:d894b8e2f073c683b58498ffaa10e8e9766914fa28db323d61b69827b5e49e21',
     description:
@@ -137,7 +137,7 @@ export const SPECIMEN_PROFILES: Record<string, ConvertibleSpecimenProfile> = {
     recentOrderCode: '#RH-RNT-2024-8702',
     recentCustomer: 'Đặng Minh Trí',
     location: 'Trạm tủ ẩm A1 (Khoang Leica Master), Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Vũ Thanh Tùng (#01)',
+    curatorName: 'Phạm Thùy Dương (#01)',
     certificateCode: '#CERT-8819-VN',
     hashProof: 'sha256:7f3a992bc44101e4a773d1000bb78a2e1f4044c010a3d4f849ef9b071aa57c32',
     description:
@@ -188,7 +188,7 @@ export const SPECIMEN_PROFILES: Record<string, ConvertibleSpecimenProfile> = {
     recentOrderCode: '#RH-RNT-2024-8114',
     recentCustomer: 'Lê Hoàng Nam',
     location: 'Kho lưu trữ triển lãm Vintage, Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Vũ Thanh Tùng (#01)',
+    curatorName: 'Phạm Thùy Dương (#01)',
     certificateCode: '#CERT-7731-VN',
     hashProof: 'sha256:33bc91928aee77bb0198cc21a4f00129bc81109aed8271e89921bcff40128821',
     description:
@@ -234,7 +234,7 @@ export const SPECIMEN_PROFILES: Record<string, ConvertibleSpecimenProfile> = {
     recentOrderCode: '#RH-RNT-2024-8819',
     recentCustomer: 'Atelier Lumina',
     location: 'Trạm kiểm định cơ giới, Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Vũ Thanh Tùng (#01)',
+    curatorName: 'Phạm Thùy Dương (#01)',
     certificateCode: '#CERT-6610-VN',
     hashProof: 'sha256:11ac4481023aeb990022cc447711fe900bb11881aa0022ff8811dd6622aa33bb',
     description:
@@ -275,7 +275,7 @@ export const SPECIMEN_PROFILES: Record<string, ConvertibleSpecimenProfile> = {
     recentOrderCode: '#RH-RNT-2024-8501',
     recentCustomer: 'Vũ Quốc Bảo',
     location: 'Tủ kính bảo mật tầng 2, Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Vũ Thanh Tùng (#01)',
+    curatorName: 'Phạm Thùy Dương (#01)',
     certificateCode: '#CERT-5509-VN',
     hashProof: 'sha256:88ee1100aa77ffbb2299dd3366cc0011883399eedd2211bb7744ff8899aa1100',
     description:

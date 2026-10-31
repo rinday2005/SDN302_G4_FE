@@ -91,7 +91,7 @@ export const INITIAL_THRIFT_LISTINGS: ThriftListingItem[] = [
     image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCzH059kTj9K32iqI2kaUpcMPNiuSt96kf5C9y20U68-w2HjTKBaJ2iSqgRWfcwQZtaJI2Kbx6o44v8X7lgpXQdjmAqgGkrE2gmGNXlFiA3496pd1ifl17SsSUve9b98dvIKEg1b00Ip20JjsWAO-RD_zNN_ENVdpny3QwCs3BJrfoCNHADTnMcgpWQ_wuetxKl3oxg4I-F5461p25vCBiUeyyoUbYmGU7Ces7Xsm9v',
     serialNumber: 'LCA-1994-M6-072',
     submittedAt: '12/10/2026',
-    appraiserName: 'Vũ Thanh Tùng (Chủ xưởng Atelier Chronos)',
+    appraiserName: 'Phạm Thùy Dương (Chủ xưởng Atelier Chronos)',
     curatorNotes: 'Kính ngắm rangefinder cân chỉnh chuẩn điểm vàng tại vô cực. Cơ cấu lên cò mượt mà êm ái.',
   },
   {
