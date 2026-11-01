@@ -798,6 +798,7 @@ export const fetchAdminDashboardData = async (): Promise<AdminDashboardData> => 
   const totalPlatformRevenue = realOrderSum > 0 ? realOrderSum : totalCatalogValue;
   const monthlyVolume = totalPlatformRevenue;
 
+
   return {
     metrics: {
       totalUsers,
@@ -855,9 +856,14 @@ export interface AdminCategoryItemDetail {
   id: string;
   name: string;
   slug: string;
+  code: string;
   description: string;
+  subtitle: string;
+  image: string;
   market: "RENT" | "THRIFT" | "COMMON";
   icon: string;
+  inspectionBadge: string;
+  escrowBadge: string;
   totalItems: number;
   rentItems: number;
   thriftItems: number;
@@ -865,25 +871,39 @@ export interface AdminCategoryItemDetail {
   updatedAt?: string;
 }
 
+const mapRawCategoryToAdminItem = (c: Record<string, unknown>, index: number): AdminCategoryItemDetail => {
+  const rentItems = Number(c.rentItems ?? c.rentCount) || 0;
+  const thriftItems = Number(c.thriftItems ?? c.thriftCount) || 0;
+  const totalItems = Number(c.totalItems) || rentItems + thriftItems;
+  return {
+    id: String(c._id || c.id || ""),
+    name: String(c.name || ""),
+    slug: String(c.slug || String(c.name || "").toLowerCase().replace(/\s+/g, "-")),
+    code: String(c.code || `CAT.${String(index + 1).padStart(2, "0")}`),
+    description: String(c.description || "Danh mục lưu ký tuần hoàn ReUse Hub."),
+    subtitle: String(c.subtitle || "Kiểm định chuẩn hóa 100% · Bảo chứng Smart Escrow"),
+    image: String(c.image || ""),
+    market: (c.type === "BOTH" ? "COMMON" : (c.type as string) || "COMMON") as "RENT" | "THRIFT" | "COMMON",
+    icon: String(c.icon || "category"),
+    inspectionBadge: String(c.inspectionBadge || "100% Kiểm định chất lượng & Khử trùng UV-C"),
+    escrowBadge: String(c.escrowBadge || "Smart Escrow Bảo chứng cọc an toàn 100%"),
+    totalItems,
+    rentItems,
+    thriftItems,
+    status: (c.isActive === false ? "INACTIVE" : "ACTIVE") as "ACTIVE" | "INACTIVE",
+    updatedAt: c.updatedAt
+      ? new Date(String(c.updatedAt)).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0],
+  };
+};
+
 export const fetchAdminCategoriesApi = async (): Promise<AdminCategoryItemDetail[]> => {
   try {
     const res = await api.get("/admin/categories");
     const payload = res.data?.data || res.data;
     const list = Array.isArray(payload) ? payload : (payload?.categories || []);
     if (Array.isArray(list)) {
-      return list.map((c: Record<string, unknown>) => ({
-        id: String(c._id || c.id || ""),
-        name: String(c.name || ""),
-        slug: String(c.slug || String(c.name || "").toLowerCase().replace(/\s+/g, "-")),
-        description: String(c.description || "Danh mục lưu ký tuần hoàn ReUse Hub."),
-        market: (c.type === "BOTH" ? "COMMON" : (c.type as string) || "COMMON") as "RENT" | "THRIFT" | "COMMON",
-        icon: String(c.icon || "category"),
-        totalItems: Number(c.totalItems) || 0,
-        rentItems: Number(c.rentItems) || 0,
-        thriftItems: Number(c.thriftItems) || 0,
-        status: (c.isActive === false ? "INACTIVE" : "ACTIVE") as "ACTIVE" | "INACTIVE",
-        updatedAt: c.updatedAt ? new Date(String(c.updatedAt)).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
-      }));
+      return list.map((c: Record<string, unknown>, idx: number) => mapRawCategoryToAdminItem(c, idx));
     }
   } catch {
     try {
@@ -891,19 +911,7 @@ export const fetchAdminCategoriesApi = async (): Promise<AdminCategoryItemDetail
       const payload = res.data?.data || res.data;
       const list = Array.isArray(payload) ? payload : (payload?.categories || []);
       if (Array.isArray(list)) {
-        return list.map((c: Record<string, unknown>) => ({
-          id: String(c._id || c.id || ""),
-          name: String(c.name || ""),
-          slug: String(c.slug || String(c.name || "").toLowerCase().replace(/\s+/g, "-")),
-          description: String(c.description || "Danh mục lưu ký tuần hoàn ReUse Hub."),
-          market: (c.type === "BOTH" ? "COMMON" : (c.type as string) || "COMMON") as "RENT" | "THRIFT" | "COMMON",
-          icon: String(c.icon || "category"),
-          totalItems: 0,
-          rentItems: 0,
-          thriftItems: 0,
-          status: (c.isActive === false ? "INACTIVE" : "ACTIVE") as "ACTIVE" | "INACTIVE",
-          updatedAt: new Date().toISOString().split("T")[0],
-        }));
+        return list.map((c: Record<string, unknown>, idx: number) => mapRawCategoryToAdminItem(c, idx));
       }
     } catch (err) {
       console.warn("Lỗi khi tải danh mục từ backend:", err);
@@ -912,24 +920,29 @@ export const fetchAdminCategoriesApi = async (): Promise<AdminCategoryItemDetail
   return [];
 };
 
-export const createAdminCategoryApi = async (data: {
+export interface CategoryMutationPayload {
   name: string;
   slug?: string;
+  code?: string;
   description?: string;
+  subtitle?: string;
+  image?: string;
+  icon?: string;
+  inspectionBadge?: string;
+  escrowBadge?: string;
   type?: "RENT" | "THRIFT" | "BOTH";
   isActive?: boolean;
-}) => {
+}
+
+export const createAdminCategoryApi = async (data: CategoryMutationPayload) => {
   const res = await api.post("/admin/categories", data);
   return res.data?.data || res.data;
 };
 
-export const updateAdminCategoryApi = async (id: string, data: {
-  name?: string;
-  slug?: string;
-  description?: string;
-  type?: "RENT" | "THRIFT" | "BOTH";
-  isActive?: boolean;
-}) => {
+export const updateAdminCategoryApi = async (
+  id: string,
+  data: Partial<CategoryMutationPayload>
+) => {
   const res = await api.put(`/admin/categories/${id}`, data);
   return res.data?.data || res.data;
 };
