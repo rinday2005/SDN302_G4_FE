@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   fetchAdminCategoriesApi,
@@ -46,6 +46,32 @@ const ICON_PRESETS = [
   { icon: "category", label: "Mặc định" },
 ];
 
+const formatCategoryItems = (
+  list: Awaited<ReturnType<typeof fetchAdminCategoriesApi>>
+): CategoryItem[] => {
+  return list.map((c, idx) => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug.startsWith("/categories/")
+      ? c.slug
+      : `/categories/${c.slug.replace(/^\/+/, "")}`,
+    code: c.code || `CAT.${String(idx + 1).padStart(2, "0")}`,
+    description: c.description,
+    subtitle: c.subtitle || "Kiểm định chuẩn hóa 100% · Bảo chứng Smart Escrow",
+    image: c.image || "",
+    market: c.market,
+    icon: c.icon || "category",
+    inspectionBadge:
+      c.inspectionBadge || "100% Kiểm định chất lượng & Khử trùng UV-C",
+    escrowBadge: c.escrowBadge || "Smart Escrow Bảo chứng cọc an toàn 100%",
+    totalItems: c.totalItems,
+    rentItems: c.rentItems,
+    thriftItems: c.thriftItems,
+    status: c.status,
+    updatedAt: c.updatedAt,
+  }));
+};
+
 export const CategoryManagement: React.FC = () => {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -91,41 +117,43 @@ export const CategoryManagement: React.FC = () => {
   };
 
   // Nạp danh mục thật từ MongoDB qua API
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       const list = await fetchAdminCategoriesApi();
-      const mapped: CategoryItem[] = list.map((c, idx) => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug.startsWith("/categories/")
-          ? c.slug
-          : `/categories/${c.slug.replace(/^\/+/, "")}`,
-        code: c.code || `CAT.${String(idx + 1).padStart(2, "0")}`,
-        description: c.description,
-        subtitle: c.subtitle || "Kiểm định chuẩn hóa 100% · Bảo chứng Smart Escrow",
-        image: c.image || "",
-        market: c.market,
-        icon: c.icon || "category",
-        inspectionBadge:
-          c.inspectionBadge || "100% Kiểm định chất lượng & Khử trùng UV-C",
-        escrowBadge: c.escrowBadge || "Smart Escrow Bảo chứng cọc an toàn 100%",
-        totalItems: c.totalItems,
-        rentItems: c.rentItems,
-        thriftItems: c.thriftItems,
-        status: c.status,
-        updatedAt: c.updatedAt,
-      }));
-      setCategories(mapped);
+      setCategories(formatCategoryItems(list));
     } catch (err) {
       console.warn("Lỗi tải danh mục:", err);
       showToast("Không thể tải danh mục từ cơ sở dữ liệu MongoDB");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadCategories();
+    let ignore = false;
+    const fetchInitialData = async () => {
+      try {
+        const list = await fetchAdminCategoriesApi();
+        if (!ignore) {
+          setCategories(formatCategoryItems(list));
+        }
+      } catch (err) {
+        if (!ignore) {
+          console.warn("Lỗi tải danh mục:", err);
+          showToast("Không thể tải danh mục từ cơ sở dữ liệu MongoDB");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchInitialData();
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   // KPI Calculations
