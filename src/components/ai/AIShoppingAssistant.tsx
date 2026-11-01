@@ -1413,4 +1413,3 @@ export const AIShoppingAssistant: React.FC = () => {
 };
 
 export default AIShoppingAssistant;
-
