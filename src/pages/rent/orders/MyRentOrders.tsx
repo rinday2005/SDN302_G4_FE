@@ -10,9 +10,10 @@ import {
   type MetricCardData,
 } from '../../data/rent/myRentOrdersData';
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
-import { resolveCleanAddress } from '../../../utils/address';
+import { resolveCleanAddress, calculateDynamicShippingFee, normalizeShopBranch } from '../../../utils/address';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { isObjectIdLike, isUnusableItemTitle, resolveRentProductsByIds } from '../../../utils/rentOrderItemResolver';
+import { ReviewModal } from '../../../components/review/ReviewModal';
 
 export const MyRentOrders: React.FC = () => {
   const { user } = useAuth();
@@ -81,6 +82,9 @@ export const MyRentOrders: React.FC = () => {
   const [showPaymentBanner, setShowPaymentBanner] = useState(Boolean(paymentSuccessParam));
   const [isLoading, setIsLoading] = useState(true);
   const [orders, setOrders] = useState<RentalOrderRecord[]>([]);
+
+  // Review modal state [FE-S5-03]
+  const [reviewOrder, setReviewOrder] = useState<RentalOrderRecord | null>(null);
 
   // Track sidebar collapsed state to display inline restore chip when collapsed
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -418,7 +422,10 @@ export const MyRentOrders: React.FC = () => {
         : (raw as StoredRentalOrderRecord).totalDeposit && (raw as StoredRentalOrderRecord).totalDeposit! > 0
         ? (raw as StoredRentalOrderRecord).totalDeposit!
         : 1500000;
-    const shipFee: number = raw.shippingFee ?? 25000;
+    const firstP = rawItems[0] && typeof rawItems[0].productId === 'object' && rawItems[0].productId !== null ? (rawItems[0].productId as Record<string, unknown>) : null;
+    const itemBranch = normalizeShopBranch(String(firstP?.location || (rawItems[0] as { location?: string; warehouse?: string })?.location || (rawItems[0] as { warehouse?: string })?.warehouse || 'Đà Nẵng'));
+    const shipFee: number = calculateDynamicShippingFee(resolveCleanAddress(raw.shippingAddress, user), itemBranch);
+    const grandFee: number = rentFee + depFee + shipFee;
 
     const rawGrand =
       raw.totalAmount && raw.totalAmount !== 4400000
@@ -426,7 +433,7 @@ export const MyRentOrders: React.FC = () => {
         : (raw as StoredRentalOrderRecord).totalPayment && (raw as StoredRentalOrderRecord).totalPayment !== 4400000
         ? (raw as StoredRentalOrderRecord).totalPayment
         : rentFee + depFee + shipFee;
-    const grandFee: number = rawGrand ?? (rentFee + depFee + shipFee);
+    void rawGrand;
 
     const shipAddress = raw.shippingAddress;
     const addressStr = resolveCleanAddress(shipAddress, user);
@@ -1621,6 +1628,14 @@ export const MyRentOrders: React.FC = () => {
                         ) : order.isCompleted ? (
                           /* BƯỚC 9: ĐÃ HOÀN TẤT THUÊ & TRẢ CỌC */
                           <>
+                            <button
+                              type="button"
+                              onClick={() => setReviewOrder(order)}
+                              className="w-full text-center px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 font-bold text-xs tracking-wide shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                              <span>Đánh giá &amp; Nhận xét sản phẩm</span>
+                            </button>
                             <Link
                               to={`/rent/orders/${order.id}?status=COMPLETED`}
                               className="w-full text-center px-4 py-2.5 rounded-xl bg-[#22201D] hover:bg-black text-white font-semibold text-xs tracking-wide shadow-2xs transition-colors flex items-center justify-center gap-1.5"
@@ -1662,7 +1677,7 @@ export const MyRentOrders: React.FC = () => {
                                     try {
                                       const c = (order.id || '').replace('#', '').trim().toLowerCase();
                                       if (c) localStorage.setItem(`user_initiated_return_${c}`, 'true');
-                                      const rawId = (order as any)._id;
+                                      const rawId = (order as { _id?: string })._id;
                                       if (rawId) localStorage.setItem(`user_initiated_return_${String(rawId).toLowerCase()}`, 'true');
                                       window.dispatchEvent(new Event('storage'));
                                       window.dispatchEvent(new Event('rental_order_updated'));
@@ -1761,6 +1776,23 @@ export const MyRentOrders: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {/* ── MODAL ĐÁNH GIÁ SẢN PHẨM RENT ── */}
+      {reviewOrder && (
+        <ReviewModal
+          isOpen={Boolean(reviewOrder)}
+          onClose={() => setReviewOrder(null)}
+          orderId={reviewOrder.id}
+          orderCode={reviewOrder.code}
+          orderType="RENT"
+          orderItems={reviewOrder.items.map((it) => ({
+            productId: it.id,
+            title: it.title,
+            image: it.img,
+            price: it.dailyRate,
+          }))}
+        />
+      )}
     </div>
   );
 };

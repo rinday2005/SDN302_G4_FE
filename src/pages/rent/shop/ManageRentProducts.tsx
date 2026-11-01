@@ -107,7 +107,6 @@ export const ManageRentProducts: React.FC = () => {
               <tr>
                 <th className="py-3 px-4">Hiện vật &amp; SKU</th>
                 <th className="py-3 px-4">Giá thuê / Cọc</th>
-                <th className="py-3 px-4">Tồn kho</th>
                 <th className="py-3 px-4">Trạng thái duyệt</th>
                 <th className="py-3 px-4">Hiển thị</th>
                 <th className="py-3 px-4 text-right">Thao tác</th>
@@ -130,26 +129,6 @@ export const ManageRentProducts: React.FC = () => {
                   <td className="py-4 px-4">
                     <div className="font-semibold text-[#141310]">{p.pricePerDay.toLocaleString()} ₫/ngày</div>
                     <div className="text-[#7b766f]">Cọc: {p.deposit.toLocaleString()} ₫</div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="font-semibold text-xs sm:text-sm text-[#141310]">
-                      Tổng: {p.totalUnits}{' '}
-                      <span className="font-normal text-xs text-[#4a463f]">
-                        (Rảnh: <strong className="text-emerald-700 font-semibold">{p.readyUnits}</strong> | Đang thuê: <strong className="text-amber-700 font-semibold">{p.rentingUnits}</strong>)
-                      </span>
-                    </div>
-                    <div className="w-full bg-[#ebe8e1] h-1.5 rounded-full mt-1.5 overflow-hidden flex max-w-[160px]">
-                      <div
-                        className="bg-emerald-600 h-full"
-                        style={{ width: `${p.totalUnits > 0 ? (p.readyUnits / p.totalUnits) * 100 : 0}%` }}
-                        title={`Sẵn sàng: ${p.readyUnits}`}
-                      />
-                      <div
-                        className="bg-amber-500 h-full"
-                        style={{ width: `${p.totalUnits > 0 ? (p.rentingUnits / p.totalUnits) * 100 : 0}%` }}
-                        title={`Đang thuê: ${p.rentingUnits}`}
-                      />
-                    </div>
                   </td>
                   <td className="py-4 px-4">
                     <span
@@ -196,35 +175,6 @@ export const ManageRentProducts: React.FC = () => {
                       Sửa
                     </Link>
 
-                    {/* Chức năng Chuyển sang thanh lý đồ cũ (Convert RENT to THRIFT) */}
-                    {p.convertedToThrift ? (
-                      <Link
-                        to={`/shop/rent/convert-thrift/${p.sku}`}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-secondary/80 text-white rounded font-semibold text-[10px] shadow-xs"
-                        title="Đã chuyển sang THRIFT (Đang chờ duyệt)"
-                      >
-                        <span className="material-symbols-outlined text-[12px]">verified</span>
-                        Đã sang THRIFT
-                      </Link>
-                    ) : p.rentingUnits > 0 && p.readyUnits === 0 ? (
-                      <span
-                        title="Không thể chuyển: Tất cả máy đang cho thuê"
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-400 rounded font-semibold text-[10px] cursor-not-allowed opacity-60"
-                      >
-                        <span className="material-symbols-outlined text-[12px]">lock</span>
-                        Đang thuê
-                      </span>
-                    ) : (
-                      <Link
-                        to={`/shop/rent/convert-thrift/${p.sku}`}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-white hover:bg-[#f1ede6] text-[#4a463f] border border-[#ebe8e1] rounded font-semibold text-[10px] shadow-2xs transition-colors"
-                        title="Chuyển giao hiện vật sang thanh lý bán đứt THRIFT"
-                      >
-                        <span className="material-symbols-outlined text-[12px]">sync_alt</span>
-                        Chuyển THRIFT
-                      </Link>
-                    )}
-
                     <button
                       type="button"
                       onClick={() => handleDelete(p.sku, p.name)}
@@ -237,7 +187,7 @@ export const ManageRentProducts: React.FC = () => {
               ))}
               {paginatedProducts.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-gray-500">
+                  <td colSpan={5} className="text-center py-8 text-gray-500">
                     Không tìm thấy sản phẩm nào.
                   </td>
                 </tr>

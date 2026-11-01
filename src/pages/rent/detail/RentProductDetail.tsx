@@ -17,6 +17,8 @@ import {
 import type { RentProductDetailData } from '../../data/rent/rentOrderDetailData';
 import { getPublicRentProductDetailApi } from '../../../services/rentProduct.api';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
+import { getUserProfileAddress, calculateDynamicShippingFee, normalizeShopBranch } from '../../../utils/address';
+import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
 
 type TabKey = 'desc' | 'terms' | 'audit' | 'deposit' | 'shipping';
 
@@ -173,7 +175,15 @@ export const RentProductDetail: React.FC = () => {
 
   const baseDailyRate = product.pricePerDay;
   const baseDeposit = product.deposit;
-  const shippingFee = 25000;
+  const userProfileAddress = useMemo(() => getUserProfileAddress(user), [user]);
+  const shippingFee = useMemo(
+    () =>
+      calculateDynamicShippingFee(
+        userProfileAddress.province || userProfileAddress.full,
+        normalizeShopBranch(product.location || 'Đà Nẵng')
+      ),
+    [userProfileAddress, product.location]
+  );
 
   const rentTotal = baseDailyRate * days * quantity;
   const depositTotal = baseDeposit * quantity;
@@ -899,6 +909,16 @@ export const RentProductDetail: React.FC = () => {
             ))}
           </div>
         </section>
+
+        {/* 4.5. ĐÁNH GIÁ & NHẬN XÉT SẢN PHẨM TỪ DB / USER THỰC TẾ */}
+        <ProductReviewsSection
+          productId={product.id}
+          productTitle={product.title}
+          productImage={product.images[0]?.src}
+          productMode="rent"
+          initialRating={product.rating}
+          initialCount={product.reviewCount}
+        />
 
         {/* 5. SẢN PHẨM LIÊN QUAN ("CÓ THỂ BẠN CŨNG THÍCH") */}
         <section className="space-y-6 pt-2">

@@ -594,17 +594,18 @@ export const ShopDashboard: React.FC = () => {
                   : first && typeof first.productId === 'object' && first.productId
                     ? first.productId
                     : null;
+              const firstExtra = first as { title?: string; imageUrl?: string; image?: string } | undefined;
               const title =
                 first?.name ||
                 first?.productName ||
-                (first as any)?.title ||
+                firstExtra?.title ||
                 listing?.name ||
                 listing?.title ||
                 'Hiện vật THRIFT';
               const rawImg =
                 listing?.images?.[0] ||
-                (first as any)?.imageUrl ||
-                (first as any)?.image ||
+                firstExtra?.imageUrl ||
+                firstExtra?.image ||
                 (Array.isArray(first?.images) && first.images[0]) ||
                 FALLBACK_IMG;
               const img = normalizeImageUrl(rawImg);

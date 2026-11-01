@@ -144,7 +144,7 @@ export const RevenueDashboard: React.FC = () => {
     auth?.user?.id ||
     auth?.user?.username ||
     'OWNER-01';
-  const ownerDisplayName = auth?.user?.fullName || auth?.user?.name || 'Vũ Thanh Tùng';
+  const ownerDisplayName = auth?.user?.fullName || auth?.user?.name || 'Phạm Thùy Dương';
 
   // State Timeline & Ledger Tabs
   const [timeline, setTimeline] = useState<TimelineFilter>('all');

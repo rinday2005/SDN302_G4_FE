@@ -6,6 +6,7 @@ import {
   INITIAL_THRIFT_LISTINGS,
 } from '../../data/shop/thriftListingsData';
 import { getPublicThriftListingByIdApi, updateThriftListingApi } from '../../../services/thrift.api';
+import { normalizeShopBranch } from '../../../utils/address';
 
 interface InspectionPhotoItem {
   id: string;
@@ -46,6 +47,7 @@ export const EditThriftListing: React.FC = () => {
   const [title, setTitle] = useState(initialItem.title);
   const [category, setCategory] = useState('Quần áo & Giày dép Nữ');
   const [brand, setBrand] = useState('ReUse Studio');
+  const [location, setLocation] = useState<string>(normalizeShopBranch((initialItem as { location?: string }).location || 'Đà Nẵng'));
   const [sku, setSku] = useState(initialItem.sku || (id ? `TL-${id.slice(-6).toUpperCase()}` : 'TL-SPECIMEN'));
   const [batchYear, setBatchYear] = useState('2024');
   const [condition, setCondition] = useState<'like-new' | 'good' | 'fair'>('like-new');
@@ -83,6 +85,7 @@ export const EditThriftListing: React.FC = () => {
           setCategory(catName);
           setPriceString((apiItem.price || 0).toLocaleString('vi-VN') + ' ₫');
           setConditionNotes(apiItem.description || '');
+          setLocation(normalizeShopBranch(apiItem.location || 'Đà Nẵng'));
 
           const rawStatus = (apiItem.status || 'APPROVED').toUpperCase();
           if (rawStatus === 'HIDDEN') setStatus('HIDDEN');
@@ -185,6 +188,7 @@ export const EditThriftListing: React.FC = () => {
           description: conditionNotes,
           condition: condition === 'like-new' ? 'Như mới (99%)' : condition === 'good' ? 'Rất tốt (98%)' : 'Tốt (95%)',
           status,
+          location: normalizeShopBranch(location),
           images: photos.map((p) => p.url),
         });
       }
@@ -515,6 +519,18 @@ export const EditThriftListing: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
+                      <label className="block font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-2">
+                        Chi nhánh Kho Lưu Ký / Địa điểm xuất hàng <span className="text-error">*</span>
+                      </label>
+                      <select
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        className="w-full px-4 py-3 bg-surface rounded-DEFAULT font-body-md text-body-md font-semibold text-on-surface focus:outline-none cursor-pointer border border-surface-dim mb-4"
+                      >
+                        <option value="Đà Nẵng">Chi nhánh Đà Nẵng (Kho Miền Trung)</option>
+                        <option value="Hà Nội">Chi nhánh Hà Nội (Kho Miền Bắc)</option>
+                        <option value="TP. Hồ Chí Minh">Chi nhánh TP. Hồ Chí Minh (Kho Miền Nam)</option>
+                      </select>
                       <label className="block font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-2">
                         Mã SKU nội bộ (Custom SKU)
                       </label>

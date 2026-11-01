@@ -509,7 +509,7 @@ export const DisputeReview: React.FC = () => {
                         Kyoto Archival Optics
                       </h3>
                       <span className="text-xs text-[#4c463c]">
-                        Đại diện pháp lý: Vũ Thanh Tùng (#USR-38194)
+                        Đại diện pháp lý: Phạm Thùy Dương (#USR-38194)
                       </span>
                     </div>
                     <div className="flex items-center gap-1 bg-white text-[#6c5937] px-2.5 py-1 rounded text-xs font-semibold border border-[#cfc5b8]/30">

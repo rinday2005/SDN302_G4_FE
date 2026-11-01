@@ -3,7 +3,7 @@ import Header from './Header';
 import type { UserRole } from './Header';
 import Footer from './Footer';
 import { Sidebar } from './Sidebar';
-import AdminLayout from './admin/AdminLayout';
+import AdminLayout from './admin/AdminLayout'; import { AIShoppingAssistant } from '../ai/AIShoppingAssistant';
 
 interface MasterLayoutProps {
   children: React.ReactNode;
@@ -41,7 +41,7 @@ export const MasterLayout: React.FC<MasterLayoutProps> = ({
       </div>
 
       {/* Footer */}
-      <Footer />
+      <Footer /> {!showShopSidebar && <AIShoppingAssistant />}
     </div>
   );
 };

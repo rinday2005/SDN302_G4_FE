@@ -205,7 +205,7 @@ export const RentInventoryDetail: React.FC = () => {
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-[#ebe8e1]">
                   <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Chuyên Viên Quản Lý</span>
-                  <span className="text-sm font-medium text-[#141310]">{unit.curatorName || 'Vũ Thanh Tùng (#01)'}</span>
+                  <span className="text-sm font-medium text-[#141310]">{unit.curatorName || 'Phạm Thùy Dương (#01)'}</span>
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-[#ebe8e1]">
                   <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Giá Niêm Yết Thuê</span>

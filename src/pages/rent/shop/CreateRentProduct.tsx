@@ -18,6 +18,7 @@ const rentProductSchema = z.object({
   accessoriesIncluded: z.string().min(3, 'Vui lòng ghi phụ kiện hoặc chi tiết đi kèm'),
   description: z.string().min(15, 'Mô tả chất liệu, kiểu dáng tối thiểu 15 ký tự'),
   condition: z.string().default('LIKE_NEW'),
+  location: z.string().min(1, 'Vui lòng chọn chi nhánh kho lưu trữ').default('Đà Nẵng'),
   pricePerDay: z.coerce.number().min(20000, 'Giá thuê tối thiểu 20.000 ₫/ngày'),
   deposit: z.coerce.number().min(100000, 'Tiền cọc tối thiểu 100.000 ₫'),
   totalUnits: z.coerce.number().min(1, 'Số lượng nhập kho tối thiểu là 1 bộ/chiếc'),
@@ -73,6 +74,7 @@ export const CreateRentProduct: React.FC = () => {
       mountSensor: '',
       accessoriesIncluded: 'Kèm bao bọc chống bụi và móc treo cao cấp',
       condition: 'LIKE_NEW',
+      location: 'Đà Nẵng',
       minDays: 1,
       maxDays: 30,
       totalUnits: 1,
@@ -89,6 +91,7 @@ export const CreateRentProduct: React.FC = () => {
   const watchedUnits = watch('totalUnits');
   const watchedMinDays = watch('minDays');
   const watchedSizeColor = watch('mountSensor');
+  const watchedLocation = watch('location');
 
   // Xử lý upload ảnh bìa lên Cloudinary
   const handleUploadCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,6 +169,7 @@ export const CreateRentProduct: React.FC = () => {
         maxDays: Number(data.maxDays),
         maintenanceUnits: 0,
         condition: data.condition as any,
+        location: data.location || 'Đà Nẵng',
       });
 
       setCreatedName(data.name);
@@ -501,6 +505,25 @@ export const CreateRentProduct: React.FC = () => {
                 </div>
               </div>
 
+              {/* Chi nhánh kho lưu trữ (Đà Nẵng / Hà Nội / TP. Hồ Chí Minh) */}
+              <div className="p-4 rounded-xl bg-[#f7f3ec] border border-[#e4dfd5]">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#141310] mb-1">
+                  Chi nhánh Kho / Địa điểm xuất hàng <span className="text-red-500">*</span>
+                </label>
+                <select
+                  {...register('location')}
+                  className="w-full px-3.5 py-2.5 bg-white border border-[#cfc9bd] rounded-lg text-sm font-semibold text-[#141310] focus:outline-none focus:border-[#576151] transition-colors"
+                >
+                  <option value="Đà Nẵng">Chi nhánh Đà Nẵng (Kho Miền Trung)</option>
+                  <option value="Hà Nội">Chi nhánh Hà Nội (Kho Miền Bắc)</option>
+                  <option value="TP. Hồ Chí Minh">Chi nhánh TP. Hồ Chí Minh (Kho Miền Nam)</option>
+                </select>
+                <p className="text-[11px] text-[#576151] mt-1.5">
+                  * Phí Bưu tá chuyên dụng Nanuk (2 chiều) sẽ tự động tính theo khoảng cách từ chi nhánh này đến địa chỉ của khách thuê: Nội tỉnh (25.000₫) • Nội miền (35.000₫) • Liên miền (45.000₫).
+                </p>
+                {errors.location && <p className="text-red-600 text-[11px] mt-1">{errors.location.message as string}</p>}
+              </div>
+
               {/* Phụ kiện đi kèm */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-[#141310] mb-1">
@@ -698,6 +721,10 @@ export const CreateRentProduct: React.FC = () => {
                   <div className="flex justify-between text-[11px] text-[#7b766f]">
                     <span>Kho sẵn có:</span>
                     <strong className="text-[#141310]">{watchedUnits || 1} bộ/chiếc</strong>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-[#7b766f]">
+                    <span>Chi nhánh kho:</span>
+                    <strong className="text-[#576151]">{watchedLocation || 'Đà Nẵng'}</strong>
                   </div>
                   <div className="flex justify-between text-[11px] text-[#7b766f]">
                     <span>Thời gian thuê:</span>
