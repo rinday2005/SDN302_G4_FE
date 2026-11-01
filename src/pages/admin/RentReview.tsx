@@ -84,7 +84,7 @@ const DEFAULT_DOSSIER: RentDossierData = {
   shopName: "Kyoto Archival Optics",
   shopCode: "#SHP-0418",
   shopAvatarInitials: "KA",
-  legalRepresentative: "Vũ Thanh Tùng",
+  legalRepresentative: "Phạm Thùy Dương",
   shopRating: 4.98,
   cleanOrdersCount: 184,
   disputeRate: "0.00% (Hoàn hảo)",

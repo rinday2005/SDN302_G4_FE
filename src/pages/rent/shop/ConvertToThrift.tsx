@@ -759,7 +759,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
             </div>
 
             <div className="mt-space-md pt-space-sm flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm border-t border-outline-variant/30">
-              <span>Thẩm định viên: {formData.inspectorName || 'Vũ Thanh Tùng (#01)'}</span>
+              <span>Thẩm định viên: {formData.inspectorName || 'Phạm Thùy Dương (#01)'}</span>
               <span>Mã chứng thực: {formData.certificateCode || '#CERT-9942-VN'}</span>
             </div>
           </div>
@@ -1297,7 +1297,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 </span>
                 <span>B-Corp ReClaim Standard v4.2</span>
               </div>
-              <span className="font-mono text-xs">VŨ THANH TÙNG #OWNER-01</span>
+              <span className="font-mono text-xs">PHẠM THÙY DƯƠNG #OWNER-01</span>
             </div>
           </div>
         </div>

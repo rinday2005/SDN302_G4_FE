@@ -89,7 +89,7 @@ export const shopHeaderNavLinks: ShopHeaderNav[] = [
 
 export const defaultShopProfile: ShopHeaderProfile = {
   shopName: 'Atelier Chronos & Optics',
-  ownerName: 'Vũ Thanh Tùng',
+  ownerName: 'Phạm Thùy Dương',
   roleBadge: 'SHOP OWNER',
 };
 

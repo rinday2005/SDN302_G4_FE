@@ -171,13 +171,6 @@ export const InventoryDashboard: React.FC = () => {
               <span className="material-symbols-outlined text-[18px]">arrow_back</span>
               <span>Quay lại Sản phẩm</span>
             </Link>
-            <Link
-              to="/shop/rent/create"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#141310] hover:bg-[#292724] text-white text-xs uppercase tracking-wider font-semibold rounded shadow-md hover:shadow-lg transition-all"
-            >
-              <span className="material-symbols-outlined text-[18px]">add_box</span>
-              <span>+ Nhập Hiện vật Mới</span>
-            </Link>
           </div>
         </div>
       </section>
@@ -620,14 +613,6 @@ export const InventoryDashboard: React.FC = () => {
                           ? 'Mỗi sản phẩm cho thuê bạn đăng sẽ được tách thành từng hiện vật (theo số lượng) tại đây.'
                           : 'Hãy thử đổi tab, từ khóa tìm kiếm hoặc bộ lọc.'}
                       </div>
-                      {totalAllUnits === 0 && (
-                        <Link
-                          to="/shop/rent/create"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-[#141310] text-white text-xs uppercase tracking-wider font-semibold rounded"
-                        >
-                          + Nhập Hiện vật Mới
-                        </Link>
-                      )}
                     </td>
                   </tr>
                 )}

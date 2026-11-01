@@ -5,10 +5,11 @@ import {
   getPublicRentProductsApi,
   createRentProductApi,
   updateRentProductApi,
-  deleteRentProductApi,
+  deleteRentProductApi, type RentalProductApi,
 } from '../services/rentProduct.api';
 import { getShopRentalOrdersApi, type RentalOrderApi } from '../services/order.api';
 import { normalizeImageUrl } from '../utils/imageUrl';
+import { normalizeShopBranch } from '../utils/address';
 
 // Thêm module augmentation để ép TypeScript hiểu User có name và username
 // (Giúp fix lỗi ở cả file header.tsx)
@@ -70,6 +71,28 @@ interface ShopContextType {
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'REUSE_HUB_RENT_PRODUCTS_STORE_V1';
+
+const safeSaveProductsToStorage = (items: ShopProductItem[]) => {
+  try {
+    const compactItems = items.map((item) => ({
+      ...item,
+      coverImage:
+        item.coverImage && item.coverImage.startsWith('data:') && item.coverImage.length > 2048
+          ? 'https://placehold.co/600x400'
+          : item.coverImage,
+      inspectionImages: Array.isArray(item.inspectionImages)
+        ? item.inspectionImages.filter((img) => !img.startsWith('data:') || img.length <= 2048)
+        : [],
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(compactItems));
+  } catch {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore storage quota errors
+    }
+  }
+};
 
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth = useContext(AuthContext);
@@ -205,7 +228,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             rentingUnits: rentedUnits,
             inspectionUnits: 0,
             approvalStatus,
-            rejectionReason: (p as any).rejectionReason || (p as any).reason || '',
+            rejectionReason: (p as { rejectionReason?: string; reason?: string }).rejectionReason || (p as { reason?: string }).reason || '',
             coverImage,
             inspectionImages: detailImages,
             description: p.description || '',
@@ -213,7 +236,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             minDays: Number((p as { minDays?: number }).minDays) || 1,
             maxDays: Number((p as { maxDays?: number }).maxDays) || 30,
             ownerId: String(ownerIdStr),
-            location: p.location || 'Hà Nội',
+            location: normalizeShopBranch(p.location || 'Đà Nẵng'),
             condition: p.condition || 'LIKE_NEW',
             isVisible: st !== 'HIDDEN',
             maintenanceUnits: 0,
@@ -222,7 +245,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Chỉ lưu sản phẩm thật từ MongoDB, loại bỏ hoàn toàn mock tĩnh
         setProducts(mappedProducts);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedProducts));
+        safeSaveProductsToStorage(mappedProducts);
       }
     } catch (err) {
       console.warn('Lỗi nạp sản phẩm RENT từ MongoDB:', err);
@@ -236,7 +259,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Tự động đồng bộ vào localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+    safeSaveProductsToStorage(products);
   }, [products]);
 
   // Lọc sản phẩm thuộc về Shop Owner hiện tại (hoặc hiển thị tất cả nếu đang ở tài khoản mặc định OWNER-01)
@@ -257,13 +280,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         pricePerDay: Number(data.pricePerDay),
         depositAmount: Number(data.deposit),
         images: images.length > 0 ? images : ['https://placehold.co/600x400'],
-        condition: (data.condition as any) || 'LIKE_NEW',
-        location: data.location || 'Hà Nội',
+        condition: (data.condition as string) || 'LIKE_NEW',
+        location: normalizeShopBranch(data.location || 'Đà Nẵng'),
         totalQuantity: Number(data.totalUnits) || 1,
         rentalRules: data.accessoriesIncluded || 'Vali Nanuk đối kiểm 3 góc',
       };
 
-      const created = await createRentProductApi(payload as any);
+      const created = await createRentProductApi(payload as Partial<RentalProductApi>);
       const newProduct: ShopProductItem = {
         ...data,
         sku: created._id || data.sku,
@@ -305,8 +328,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.pricePerDay) payload.pricePerDay = Number(data.pricePerDay);
         if (data.deposit) payload.depositAmount = Number(data.deposit);
         if (data.totalUnits) payload.totalQuantity = Number(data.totalUnits);
+        if (data.location) payload.location = normalizeShopBranch(data.location);
         if (data.coverImage) payload.images = [data.coverImage, ...(data.inspectionImages || [])];
-        await updateRentProductApi(sku, payload as any);
+        await updateRentProductApi(sku, payload as Partial<RentalProductApi>);
       } catch (err) {
         console.warn('Lỗi gọi API cập nhật sản phẩm:', err);
       }
@@ -342,7 +366,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await updateRentProductApi(sku, {
           status: newVisible ? 'APPROVED' : 'HIDDEN',
-        } as any);
+        } as Partial<RentalProductApi>);
       } catch (err) {
         console.warn('Lỗi toggle visibility trên MongoDB:', err);
       }

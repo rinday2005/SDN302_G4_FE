@@ -48,10 +48,10 @@ const DEFAULT_PROFILES: Record<RoleMode, UserProfileData> = {
     lastActive: "Hoạt động 10 phút trước (Web Client)",
   },
   owner: {
-    fullName: "Vũ Thanh Tùng",
+    fullName: "Phạm Thùy Dương",
     userId: "#OWNER-01",
     roleName: "SHOP OWNER",
-    email: "tung.vu@atelierchronos.vn",
+    email: "duong.pham@atelierchronos.vn",
     phone: "+84 912 889 001",
     standing: "Atelier Master Custodian (Certified)",
     address: "15 Tràng Tiền, Quận Hoàn Kiếm, TP. Hà Nội (Atelier Chronos)",
@@ -150,7 +150,7 @@ export const UserDetail: React.FC = () => {
         : "12 Tháng 1, 2025 (10:42 GMT+7)";
 
       return {
-        fullName: realUser.fullName || (isShop ? "Vũ Thanh Tùng" : "Elena Rostova"),
+        fullName: realUser.fullName || (isShop ? "Phạm Thùy Dương" : "Elena Rostova"),
         userId: `#USR-${realUser._id.slice(-5).toUpperCase()}`,
         roleName: isShop ? "SHOP OWNER" : realUser.role === "ADMIN" ? "ADMINISTRATOR" : "CUSTOMER",
         email: realUser.email,
@@ -367,7 +367,7 @@ export const UserDetail: React.FC = () => {
               }`}
             >
               <span className="material-symbols-outlined text-[18px]">storefront</span>
-              <span>Chủ Xưởng (Shop Owner - {realUser && realUser.role === "SHOP_OWNER" ? realUser.fullName : "Vũ Thanh Tùng"})</span>
+              <span>Chủ Xưởng (Shop Owner - {realUser && realUser.role === "SHOP_OWNER" ? realUser.fullName : "Phạm Thùy Dương"})</span>
             </button>
           </div>
         </div>
@@ -941,7 +941,7 @@ export const UserDetail: React.FC = () => {
                   <span className="text-xs text-[#1c1b19] font-semibold">
                     Dành riêng cho vai trò SHOP OWNER:{" "}
                     <span className="text-[#6c5937] italic font-bold">
-                      Atelier Chronos &amp; Optics (Vũ Thanh Tùng)
+                      Atelier Chronos &amp; Optics (Phạm Thùy Dương)
                     </span>
                   </span>
                 </div>

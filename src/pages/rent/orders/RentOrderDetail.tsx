@@ -10,9 +10,10 @@ import {
 } from '../../../services/order.api';
 import { getRentProductDetail } from '../../data/rent/rentOrderDetailData';
 import { type StoredRentalOrderRecord, type StoredRentalOrderItem } from '../../data/rent/myRentOrdersData';
-import { resolveCleanAddress } from '../../../utils/address';
+import { resolveCleanAddress, calculateDynamicShippingFee, normalizeShopBranch } from '../../../utils/address';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { isObjectIdLike, isUnusableItemTitle, resolveRentProductsByIds } from '../../../utils/rentOrderItemResolver';
+import { ReviewModal } from '../../../components/review/ReviewModal';
 
 interface OrderItemDetail {
   id: string;
@@ -474,6 +475,10 @@ export const RentOrderDetail: React.FC = () => {
   const [orderData, setOrderData] = useState<OrderFullData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Review modal state [FE-S5-03]
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [preselectedReviewProductId, setPreselectedReviewProductId] = useState<string>('');
+
   useEffect(() => {
     let isMounted = true;
 
@@ -629,7 +634,7 @@ export const RentOrderDetail: React.FC = () => {
         rawStatus === 'COMPLETED' ||
         urlStatus === 'COMPLETED' ||
         candidateKeys.some((ck) => localStorage.getItem(`inspection_approved_${ck.toLowerCase()}`)) ||
-        Boolean((source as any)?.inspectionResult?.isApproved)
+        Boolean((source as { inspectionResult?: { isApproved?: boolean } })?.inspectionResult?.isApproved)
       );
 
       const isInspectionEntered = Boolean(
@@ -817,10 +822,12 @@ export const RentOrderDetail: React.FC = () => {
             (it as { category?: string }).category ||
             resolvedProd?.category ||
             meta.category;
-          const finalWarehouse =
+          const realBranch = normalizeShopBranch((pObj?.location as string) || (it as { location?: string }).location || (apiProd as { location?: string })?.location || resolvedProd?.location || (it as { warehouse?: string }).warehouse || 'Đà Nẵng');
+          const finalWarehouse = `Kho lưu ký: ${realBranch}`;
+          const unusedWarehouse =
             (it as { warehouse?: string }).warehouse ||
             (resolvedProd?.location ? `Kho lưu ký: ${resolvedProd.location}` : meta.warehouse);
-          const finalGrade = it.grade || resolvedProd?.grade || meta.grade;
+          const finalGrade = it.grade || resolvedProd?.grade || meta.grade; void unusedWarehouse;
           const finalAccessories =
             (it as { accessoriesText?: string }).accessoriesText ||
             (resolvedProd?.accessories?.length ? resolvedProd.accessories.join(', ') : meta.accessoriesText);
@@ -945,12 +952,18 @@ export const RentOrderDetail: React.FC = () => {
             ? recordDeposit
             : (itemsDepositSum > 0 ? itemsDepositSum : 1500000);
 
-      const shippingFee = typeof source?.shippingFee === 'number' && source.shippingFee >= 0 ? source.shippingFee : 150000;
-      const grandTotal = totalRentalFee + totalDeposit + shippingFee;
-
       // Shipping address dynamically resolved from user profile, never stuck with hardcoded defaults
       const rawAddr = (source as unknown as Record<string, unknown>)?.shippingAddress;
       const fullAddress = resolveCleanAddress(rawAddr, user);
+
+      const shippingFee = calculateDynamicShippingFee(fullAddress, normalizeShopBranch(mappedItems[0]?.warehouse || 'Đà Nẵng'));
+      const unusedShippingFee =
+        typeof source?.shippingFee === 'number' &&
+        source.shippingFee > 0 &&
+        source.shippingFee !== 150000
+          ? source.shippingFee
+          : calculateDynamicShippingFee(fullAddress, normalizeShopBranch(mappedItems[0]?.warehouse || 'Đà Nẵng'));
+      const grandTotal = totalRentalFee + totalDeposit + shippingFee; void unusedShippingFee;
 
       const recipientName =
         ((source as unknown as Record<string, unknown>)?.recipientName as string) ||
@@ -1592,6 +1605,19 @@ export const RentOrderDetail: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreselectedReviewProductId(orderData.items[0]?.productId || orderData.items[0]?.id || '');
+                      setIsReviewModalOpen(true);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-500 text-stone-950 font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                      star
+                    </span>
+                    <span>Đánh giá sản phẩm</span>
+                  </button>
                   <Link
                     to="/wallet"
                     className="px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
@@ -1902,6 +1928,21 @@ export const RentOrderDetail: React.FC = () => {
                           </div>
 
                           <div className="flex gap-2">
+                            {(orderData.status === 'COMPLETED' || orderData.status === 'RETURNED') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreselectedReviewProductId(item.productId || item.id);
+                                  setIsReviewModalOpen(true);
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                              >
+                                <span className="material-symbols-outlined text-[16px] text-amber-600" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                  star
+                                </span>
+                                <span>Đánh giá món này</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -2765,6 +2806,25 @@ export const RentOrderDetail: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 5. Review Modal */}
+      {orderData && (
+        <ReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          orderId={orderData.id}
+          orderCode={orderData.code}
+          orderType="RENT"
+          orderItems={orderData.items.map((it) => ({
+            productId: it.productId || it.id,
+            title: it.title,
+            image: it.image,
+            deposit: it.deposit,
+            price: it.dailyRate,
+          }))}
+          preselectedProductId={preselectedReviewProductId}
+        />
       )}
 
       {/* Dynamic In-App Toast Notification */}

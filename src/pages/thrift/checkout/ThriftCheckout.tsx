@@ -12,6 +12,12 @@ import {
   updateThriftOrderStatusApi,
   type ThriftOrderApi,
 } from '../../../services/thriftOrder.api';
+import {
+  getUserProfileAddress,
+  getShippingZoneInfo,
+  extractCanonicalProvince,
+  normalizeShopBranch,
+} from '../../../utils/address';
 
 export const ThriftCheckout: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
@@ -96,14 +102,10 @@ export const ThriftCheckout: React.FC = () => {
     return storedProfile.phone || user?.phoneNumber || user?.phone || '';
   });
 
+  const userProfileAddress = useMemo(() => getUserProfileAddress(user), [user]);
+
   const [shippingAddress, setShippingAddress] = useState(() => {
-    if (storedProfile.address) {
-      const addr = storedProfile.address;
-      if (typeof addr === 'string') return addr;
-      const parts = [addr.detail, addr.ward, addr.district, addr.province].filter(Boolean);
-      if (parts.length > 0) return parts.join(', ');
-    }
-    return '48 Bạch Đằng, Tầng 4 Archive Suite, Phường Hải Châu 1, Quận Hải Châu, TP. Đà Nẵng, Việt Nam';
+    return userProfileAddress.full;
   });
 
   const [isEditingAddress, setIsEditingAddress] = useState(false);
@@ -170,13 +172,20 @@ export const ThriftCheckout: React.FC = () => {
     return itemizedList.reduce((sum, item) => sum + item.totalItemPrice, 0);
   }, [itemizedList]);
 
+  const shippingZoneInfo = useMemo(() => {
+    return getShippingZoneInfo(
+      shippingAddress || userProfileAddress.province || userProfileAddress.full,
+      normalizeShopBranch((thriftItems[0] as { location?: string })?.location || 'Đà Nẵng')
+    );
+  }, [shippingAddress, userProfileAddress, thriftItems]);
+
   const shippingFee = useMemo(() => {
     const passedFee = (location.state as { shippingFee?: number } | null)?.shippingFee;
-    if (typeof passedFee === 'number' && passedFee >= 0) {
+    if (typeof passedFee === 'number' && passedFee > 0 && passedFee !== THRIFT_SHIPPING_FEE) {
       return passedFee;
     }
-    return THRIFT_SHIPPING_FEE;
-  }, [location.state]);
+    return shippingZoneInfo.fee;
+  }, [location.state, shippingZoneInfo.fee]);
 
   const grandTotal = itemsSubtotal + shippingFee;
 
@@ -244,9 +253,9 @@ export const ThriftCheckout: React.FC = () => {
         recipientName: consigneeName,
         recipientPhone: phone,
         detail: shippingAddress,
-        province: 'Đà Nẵng',
-        district: 'Hải Châu',
-        ward: 'Hải Châu 1',
+        province: extractCanonicalProvince(shippingAddress || userProfileAddress.province).display,
+        district: userProfileAddress.district || 'Hải Châu',
+        ward: userProfileAddress.ward || 'Hải Châu 1',
       },
       shippingFee,
       paymentMethod: 'VNPAY',
@@ -687,7 +696,7 @@ export const ThriftCheckout: React.FC = () => {
                       {formatCurrency(shippingFee)}
                     </span>
                     <p className="text-[10px] text-[#7B766F] uppercase font-semibold">
-                      Phí gộp toàn đơn
+                      Chi nhánh {shippingZoneInfo.shopProvince} ⇄ {shippingZoneInfo.userProvince}
                     </p>
                   </div>
                 </div>

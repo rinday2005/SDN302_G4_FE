@@ -64,6 +64,12 @@ export interface RentalOrderApi {
   rejectionReason?: string;
   receivedAt?: string | null;
   claProof?: ClaProofApi | null;
+  inspectionResult?: {
+    isApproved?: boolean;
+    refundAmount?: number;
+    damagePenaltyAmount?: number;
+    reason?: string;
+  } | null;
   createdAt: string;
   updatedAt?: string;
 }

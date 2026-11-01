@@ -8,7 +8,7 @@ export const RentProductDetail: React.FC = () => {
   const { products } = useShop();
 
   // Lấy dữ liệu sản phẩm tương ứng từ MongoDB ShopContext hoặc mock data
-  const matchedProduct = products.find((p) => p.sku === id || (p as any)._id === id);
+  const matchedProduct = products.find((p) => p.sku === id || (p as { _id?: string })._id === id);
   const product = matchedProduct || mockRentProducts.find((p) => p.sku === id) || mockRentProducts[0];
 
   // Danh sách ảnh 4 góc giám định
@@ -93,7 +93,7 @@ export const RentProductDetail: React.FC = () => {
               <div className="flex flex-wrap items-center gap-4 text-[#7b766f] text-xs">
                 <span className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[16px] text-[#576151]">verified</span>
-                  Xưởng phụ trách: <strong className="text-[#141310]">Atelier Chronos &amp; Optics</strong> (Vũ Thanh Tùng)
+                  Xưởng phụ trách: <strong className="text-[#141310]">Atelier Chronos &amp; Optics</strong> (Phạm Thùy Dương)
                 </span>
                 <span className="text-[#ccc5bc]">•</span>
                 <span>Định danh máy: <strong>#HB-907-88201 / #HB-907-88202</strong></span>
@@ -496,7 +496,7 @@ export const RentProductDetail: React.FC = () => {
                       <span className="font-mono text-xs text-[#7b766f]">12/03/2026 09:30</span>
                     </div>
                     <p className="text-xs text-[#7b766f]">
-                      Chủ xưởng <strong>Vũ Thanh Tùng</strong> nộp hồ sơ niêm yết mới kèm 4 ảnh macro cảm biến kiểm định và tài liệu thông số kỹ thuật gốc Hasselblad.
+                      Chủ xưởng <strong>Phạm Thùy Dương</strong> nộp hồ sơ niêm yết mới kèm 4 ảnh macro cảm biến kiểm định và tài liệu thông số kỹ thuật gốc Hasselblad.
                     </p>
                     <div className="text-[11px] text-[#7b766f] uppercase tracking-wider">Hồ sơ #DOC-2026-HBL907 • Trạng thái: Chờ phân bổ giám định viên</div>
                   </div>

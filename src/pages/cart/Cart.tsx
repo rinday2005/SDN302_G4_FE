@@ -12,7 +12,12 @@ import {
 } from '../data/rent/rentOrderDetailData';
 import { resolveWishlistProduct } from '../../services/wishlistProductResolver';
 import { UserSidebar } from '../../components/layout/UserSidebar';
-import { getUserProfileAddress } from '../../utils/address';
+import {
+  getUserProfileAddress,
+  calculateDynamicShippingFee,
+  extractCanonicalProvince,
+  normalizeShopBranch,
+} from '../../utils/address';
 import { createRentalOrderApi } from '../../services/order.api';
 
 const formatDisplayDateVN = (ymd?: string) => {
@@ -168,7 +173,9 @@ export const Cart: React.FC = () => {
     const startDate = firstItem?.startDate || validDates.startDate;
     const endDate = firstItem?.endDate || validDates.endDate;
 
-    const userProfileAddress = getUserProfileAddress(user);
+    const resolvedProvince = extractCanonicalProvince(
+      userProfileAddress.province || userProfileAddress.full
+    ).display;
     const currentYear = new Date().getFullYear();
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
     const orderCode = `RH-RNT-${currentYear}-${randomSuffix}`;
@@ -199,6 +206,7 @@ export const Cart: React.FC = () => {
         image: item.image || '',
         grade: item.gradeBadge || 'Grade A+',
         shopName: item.vaultOrigin || 'ReUse Vault',
+        location: normalizeShopBranch(item.location || 'Đà Nẵng'),
       };
     });
 
@@ -224,7 +232,7 @@ export const Cart: React.FC = () => {
       shippingAddress: {
         recipientName: user.fullName || 'Khách hàng',
         recipientPhone: user.phoneNumber || user.phone || '0708091060',
-        province: userProfileAddress.province || 'Thành phố Đà Nẵng',
+        province: resolvedProvince || userProfileAddress.province || 'Thành phố Đà Nẵng',
         district: userProfileAddress.district || 'Quận Hải Châu',
         ward: userProfileAddress.ward || 'Phường Hải Châu 1',
         detail: userProfileAddress.detail || userProfileAddress.full || '48 Bạch Đằng, Phường Hải Châu 1, Quận Hải Châu, Thành phố Đà Nẵng',
@@ -247,6 +255,11 @@ export const Cart: React.FC = () => {
         if (apiRes.orderCode) newOrder.orderCode = apiRes.orderCode;
         if (apiRes._id) newOrder._id = apiRes._id;
         if (apiRes._id) (newOrder as Record<string, unknown>).id = apiRes._id;
+        if (typeof apiRes.shippingFee === 'number' && apiRes.shippingFee > 0) {
+          newOrder.shippingFee = apiRes.shippingFee;
+          newOrder.totalAmount = rentSubtotal + rentEscrowTotal + apiRes.shippingFee;
+          newOrder.totalPayment = newOrder.totalAmount;
+        }
       }
     } catch (apiErr) {
       console.warn('Lỗi tạo đơn qua API, dùng fallback local storage:', apiErr);
@@ -400,7 +413,18 @@ export const Cart: React.FC = () => {
     return selectedRentItems.reduce((sum, item) => sum + getDepositValue(item) * (item.quantity || 1), 0);
   }, [selectedRentItems]);
 
-  const rentShipping = selectedRentItems.length > 0 ? 25000 : 0;
+  const userProfileAddress = useMemo(() => getUserProfileAddress(user), [user]);
+
+  const dynamicShippingRate = useMemo(() => {
+    return calculateDynamicShippingFee(
+      userProfileAddress.province || userProfileAddress.full,
+      'Đà Nẵng'
+    );
+  }, [userProfileAddress]);
+
+  const rentBranch = useMemo(() => { void dynamicShippingRate; return normalizeShopBranch(selectedRentItems[0]?.location || 'Đà Nẵng'); }, [selectedRentItems, dynamicShippingRate]);
+  const thriftBranch = useMemo(() => normalizeShopBranch(selectedThriftItems[0]?.location || 'Đà Nẵng'), [selectedThriftItems]);
+  const rentShipping = selectedRentItems.length > 0 ? calculateDynamicShippingFee(userProfileAddress.province || userProfileAddress.full, rentBranch) : 0;
   const rentGrandTotal = rentSubtotal + rentShipping + rentEscrowTotal;
 
   const thriftSubtotal = useMemo(() => {
@@ -410,7 +434,7 @@ export const Cart: React.FC = () => {
     }, 0);
   }, [selectedThriftItems]);
 
-  const thriftShipping = selectedThriftItems.length > 0 ? 30000 : 0;
+  const thriftShipping = selectedThriftItems.length > 0 ? calculateDynamicShippingFee(userProfileAddress.province || userProfileAddress.full, thriftBranch) : 0;
   const thriftGrandTotal = thriftSubtotal + thriftShipping;
 
   const totalPayment = rentGrandTotal + thriftGrandTotal;

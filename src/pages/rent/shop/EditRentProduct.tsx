@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
+import { normalizeShopBranch } from '../../../utils/address';
 
 export const EditRentProduct: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +15,7 @@ export const EditRentProduct: React.FC = () => {
   const [prodName, setProdName] = useState<string>('');
   const [category, setCategory] = useState<string>('');
   const [brand, setBrand] = useState<string>('');
+  const [location, setLocation] = useState<string>('Đà Nẵng');
   const [mountSensor, setMountSensor] = useState<string>('');
   const [accessories, setAccessories] = useState<string>('');
   const [description, setDescription] = useState<string>('');
@@ -43,6 +45,7 @@ export const EditRentProduct: React.FC = () => {
       setProdName(currentProduct.name || '');
       setCategory(currentProduct.category || 'Máy ảnh Medium Format Digital');
       setBrand(currentProduct.brand || '');
+      setLocation(normalizeShopBranch(currentProduct.location || 'Đà Nẵng'));
       setMountSensor(
         currentProduct.mountSensor ||
         'Hasselblad XCD Mount • Cảm biến CMOS 50MP 43.8×32.9mm • Màu 16-bit 14 Dải Stops (HNCS)'
@@ -101,6 +104,7 @@ export const EditRentProduct: React.FC = () => {
       name: prodName,
       category,
       brand,
+      location: normalizeShopBranch(location),
       mountSensor,
       accessoriesIncluded: accessories,
       description,
@@ -559,6 +563,30 @@ export const EditRentProduct: React.FC = () => {
                       : 'bg-[#f7f3ec] text-[#141310] focus:bg-white border border-transparent focus:border-[#ebe8e1]'
                   }`}
                 />
+              </div>
+
+              {/* Chi nhánh kho lưu trữ */}
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
+                  Chi nhánh Kho / Địa điểm xuất hàng <span className="text-[#ba1a1a]">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full appearance-none px-4 py-3 rounded bg-[#f7f3ec] text-[#141310] font-semibold text-sm focus:bg-white focus:outline-none border border-transparent focus:border-[#ebe8e1] pr-10 cursor-pointer"
+                  >
+                    <option value="Đà Nẵng">Chi nhánh Đà Nẵng (Kho Miền Trung)</option>
+                    <option value="Hà Nội">Chi nhánh Hà Nội (Kho Miền Bắc)</option>
+                    <option value="TP. Hồ Chí Minh">Chi nhánh TP. Hồ Chí Minh (Kho Miền Nam)</option>
+                  </select>
+                  <span className="material-symbols-outlined absolute right-3 top-3 pointer-events-none text-[#7b766f] text-[20px]">
+                    expand_more
+                  </span>
+                </div>
+                <span className="text-[11px] text-[#576151] block">
+                  Phí vận chuyển 2 chiều sẽ tự động tính dựa trên chi nhánh kho này và tỉnh/thành nhận hàng của khách thuê.
+                </span>
               </div>
 
               {/* Mount & Sensor */}

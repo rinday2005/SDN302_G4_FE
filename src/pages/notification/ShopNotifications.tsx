@@ -352,7 +352,7 @@ export const ShopNotifications: React.FC = () => {
                   <div className="text-[11px] uppercase tracking-wider text-[#48654b] font-semibold">
                     Tư Cách Shop Owner
                   </div>
-                  <div className="text-sm font-semibold text-[#1c1b19]">Vũ Thanh Tùng (Lvl 2)</div>
+                  <div className="text-sm font-semibold text-[#1c1b19]">Phạm Thùy Dương (Lvl 2)</div>
                 </div>
               </div>
               <span className="material-symbols-outlined text-[#48654b] text-[20px]">check_circle</span>

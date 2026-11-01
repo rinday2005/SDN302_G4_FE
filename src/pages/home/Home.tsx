@@ -1,42 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { AppSidebar } from '../../components/layout/AppSidebar';
-import { getCategoriesApi, type CategoryItem as DbCategoryItem } from '../../services/category.api';
-import { normalizeImageUrl } from '../../utils/imageUrl';
-
-const DEFAULT_HOME_CATEGORIES = [
-  {
-    slug: 'camera',
-    name: 'Camera',
-    image: './src/assets/images/camerahome.jpg',
-    subtitle: '86+ thiết bị',
-  },
-  {
-    slug: 'shoes',
-    name: 'Giày dép',
-    image: './src/assets/images/shoeshome.jpg',
-    subtitle: '70+ đôi',
-  },
-  {
-    slug: 'dam-du-tiec',
-    name: 'Đầm dự tiệc',
-    image: './src/assets/images/partydresshome.jpg',
-    subtitle: '50+ mẫu',
-  },
-  {
-    slug: 'clothing',
-    name: 'Quần áo',
-    image: './src/assets/images/clotheshome.jpg',
-    subtitle: '140+ món',
-  },
-  {
-    slug: 'phu-kien',
-    name: 'Phụ kiện',
-    image: './src/assets/images/accessoryhome.jpg',
-    subtitle: '64+ món',
-  },
-];
+import { AppSidebar } from '../../components/layout/AppSidebar'; import { AIHomeRecommendations } from '../../components/ai/AIHomeRecommendations';
 
 export const Home: React.FC = () => {
   const { user } = useAuth();
@@ -239,7 +204,7 @@ export const Home: React.FC = () => {
             </div>
           </section>
 
-          {/* 2. CATEGORIES SECTION */}
+          <AIHomeRecommendations /> {/* 2. CATEGORIES SECTION */}
           <section className="py-16 px-6 lg:px-12 mx-auto max-w-7xl">
             <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4 pb-4 border-b border-[#E7E2DA]">
               <div>

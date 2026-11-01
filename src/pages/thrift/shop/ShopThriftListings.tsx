@@ -336,7 +336,7 @@ export const ShopThriftListings: React.FC = () => {
             <span className="w-2 h-2 rounded-full bg-secondary"></span>
             <span className="font-semibold text-on-surface">Atelier Chronos &amp; Optics</span>
             <span className="text-outline-variant">/</span>
-            <span>Quản lý Xưởng: Vũ Thanh Tùng</span>
+            <span>Quản lý Xưởng: Phạm Thùy Dương</span>
             <span className="px-1.5 py-0.5 bg-surface-container text-on-surface font-mono rounded-DEFAULT text-[9px]">
               ID: #OWNER-01
             </span>

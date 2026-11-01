@@ -4,6 +4,7 @@ import { ShippingModal } from '../../../components/orders/ShippingModal';
 import type { ShippingData } from '../../../components/orders/ShippingModal';
 import { getShopRentalOrdersApi, handoverRentalOrderApi, approveRentalOrderApi, updateOrderStatusApi } from '../../../services/order.api';
 import type { RentalOrderApi } from '../../../services/order.api';
+import { calculateDynamicShippingFee, normalizeShopBranch } from '../../../utils/address';
 
 export interface FormattedRentalOrder {
   _id: string;
@@ -65,7 +66,7 @@ const mapApiOrderToFormatted = (apiOrder: RentalOrderApi): FormattedRentalOrder 
     productName,
     customerName,
     rentalPeriod,
-    totalAmount: apiOrder.totalAmount || 0,
+    totalAmount: (apiOrder.rentalFee && apiOrder.depositAmount) ? (apiOrder.rentalFee + apiOrder.depositAmount + calculateDynamicShippingFee(apiOrder.shippingAddress ? [apiOrder.shippingAddress.detail, apiOrder.shippingAddress.ward, apiOrder.shippingAddress.district, apiOrder.shippingAddress.province].filter(Boolean).join(', ') : 'Đà Nẵng', normalizeShopBranch(((item?.productId as unknown as { location?: string })?.location) || (item as unknown as { location?: string })?.location || 'Đà Nẵng'))) : (apiOrder.totalAmount || 0),
     depositAmount: apiOrder.depositAmount || 0,
     status: effectiveStatus,
     shippingCarrier: apiOrder.shippingDetails?.carrierName || apiOrder.shippingDetails?.carrier || '',
@@ -105,12 +106,12 @@ export const ShopOrders: React.FC = () => {
 
     // Đồng bộ sang localStorage user để timeline hiển thị Bước 8
     try {
-      const cleanCode = ((order as any).orderCode || order.id || order._id || '').replace('#', '').trim();
+      const cleanCode = ((order as { orderCode?: string }).orderCode || order.id || order._id || '').replace('#', '').trim();
       const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('user_rental_orders'));
       allKeys.forEach((k) => {
         try {
           const list = JSON.parse(localStorage.getItem(k) || '[]');
-          const updated = list.map((o: any) => {
+          const updated = list.map((o: { orderCode?: string; id?: string; _id?: string; [key: string]: unknown }) => {
             const oCode = (o.orderCode || o.id || o._id || '').replace('#', '').trim();
             if (oCode === cleanCode || o._id === targetId || o.id === targetId) {
               return { ...o, status: 'RETURNED' };
@@ -179,7 +180,7 @@ export const ShopOrders: React.FC = () => {
         allKeys.forEach((k) => {
           try {
             const list = JSON.parse(localStorage.getItem(k) || '[]');
-            const updated = list.map((o: any) => {
+            const updated = list.map((o: { orderCode?: string; id?: string; _id?: string; [key: string]: unknown }) => {
               if (o.orderCode === order.id || o.id === order.id || o._id === order._id || o.orderCode === order._id) {
                 return { ...o, status: 'WAITING_PAYMENT' };
               }
@@ -251,7 +252,7 @@ export const ShopOrders: React.FC = () => {
         allKeys.forEach((k) => {
           try {
             const list = JSON.parse(localStorage.getItem(k) || '[]');
-            const updated = list.map((o: any) => {
+            const updated = list.map((o: { orderCode?: string; id?: string; _id?: string; [key: string]: unknown }) => {
               const oCode = (o.orderCode || o.id || o._id || '').replace('#', '').trim();
               if (oCode === cleanCode || o._id === selectedOrder._id || o.id === selectedOrder._id) {
                 return {

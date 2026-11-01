@@ -51,7 +51,7 @@ const INITIAL_DISPUTES: DisputeItem[] = [
     customerUrl: "/admin/users",
     customerTrust: "KYC T2 • 98% Tín Nhiệm",
     shopName: "Kyoto Archival Optics",
-    shopOwner: "Vũ Thanh Tùng (Chủ xưởng)",
+    shopOwner: "Phạm Thùy Dương (Chủ xưởng)",
     shopUrl: "/admin/users",
     categoryTag: "RENT • DEPOSIT DISPUTE",
     description: "Tranh chấp khấu trừ cọc 2,500,000 ₫ do nghi vấn hao mòn màn trập vải sau chuyến thuê 3 ngày.",

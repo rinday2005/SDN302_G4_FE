@@ -116,7 +116,49 @@ export const UserWallet: React.FC = () => {
         }
 
         if (isMounted) {
-          setOrders(combinedOrders);
+        if (isMounted) {
+          try {
+            localStorage.removeItem('user_wallet_available_default');
+            if (uId) localStorage.removeItem(`user_wallet_available_${uId}`);
+          } catch {
+            // ignore
+          }
+          const syncedOrders = combinedOrders.map((o) => {
+            const cleanCode = (o.orderCode || o._id || '').replace('#', '').trim().toLowerCase();
+            const idLower = String(o._id || '').trim().toLowerCase();
+            try {
+              const isApproved =
+                (cleanCode && localStorage.getItem(`inspection_approved_${cleanCode}`) === 'true') ||
+                (idLower && localStorage.getItem(`inspection_approved_${idLower}`) === 'true');
+              if (isApproved) {
+                try {
+          const cCode = (o.orderCode || o._id || '').replace('#', '').trim().toLowerCase();
+          if (cCode) localStorage.setItem(`inspection_approved_${cCode}`, 'true');
+          if (o._id) localStorage.setItem(`inspection_approved_${String(o._id).toLowerCase()}`, 'true');
+        } catch {
+          // ignore
+        }
+        return { ...o, status: 'COMPLETED' };
+              }
+              const isEntered =
+                (cleanCode && localStorage.getItem(`inspection_entered_${cleanCode}`) === 'true') ||
+                (idLower && localStorage.getItem(`inspection_entered_${idLower}`) === 'true');
+              if (isEntered && !['COMPLETED', 'RETURNED'].includes(o.status)) {
+                return { ...o, status: 'RETURNED' };
+              }
+              const hasReturnReq =
+                (cleanCode && localStorage.getItem(`return_request_${cleanCode}`)) ||
+                (idLower && localStorage.getItem(`return_request_${idLower}`));
+              if (hasReturnReq && !['RETURN_REQUESTED', 'RETURNING', 'RETURNED', 'COMPLETED'].includes(o.status)) {
+                return { ...o, status: 'RETURN_REQUESTED' };
+              }
+            } catch {
+              // ignore
+            }
+            return o;
+          });
+          setOrders(syncedOrders);
+        }
         }
       } catch (err) {
         console.warn('Could not load orders for wallet:', err);
@@ -167,7 +209,11 @@ export const UserWallet: React.FC = () => {
         pendingInspectionEscrow += dep;
         pendingItems.push(itemLabel);
       } else if (o.status === 'COMPLETED') {
-        completedRefund += dep;
+        const refundVal =
+          typeof o.inspectionResult?.refundAmount === 'number'
+            ? o.inspectionResult.refundAmount
+            : Math.max(0, dep - (o.inspectionResult?.damagePenaltyAmount || 0));
+        completedRefund += refundVal;
         completedItems.push(itemLabel);
       }
     });
@@ -175,11 +221,13 @@ export const UserWallet: React.FC = () => {
     // Số dư khả dụng (Đã hoàn cọc tự động về ví)
     let availableBalance = completedRefund;
     try {
-      const savedBal = localStorage.getItem(`user_wallet_available_${uId}`) || localStorage.getItem('user_wallet_available_default');
-      if (savedBal !== null && savedBal !== undefined && savedBal !== '') {
-        availableBalance = Math.max(completedRefund, Number(savedBal) || 0);
+      const withdrawnAmount = uId ? Math.max(0, Number(localStorage.getItem(`user_wallet_withdrawn_${uId}`) || 0)) : 0;
+      availableBalance = Math.max(0, completedRefund - withdrawnAmount);
+
+      if (withdrawnAmount < 0) {
+        availableBalance = Math.max(completedRefund, 0);
       } else {
-        availableBalance = completedRefund + pendingInspectionEscrow;
+        availableBalance = Math.max(0, completedRefund - withdrawnAmount);
       }
     } catch {
       // ignore
@@ -190,7 +238,7 @@ export const UserWallet: React.FC = () => {
       pendingInspectionEscrow,
       completedRefund,
       availableBalance,
-      totalDepositLifetime: lockedEscrow + pendingInspectionEscrow,
+      totalDepositLifetime: lockedEscrow + pendingInspectionEscrow + completedRefund,
       lockedItems,
       pendingItems,
       completedItems,
@@ -303,6 +351,13 @@ export const UserWallet: React.FC = () => {
     if (!orders.some((o) => ['RETURN_REQUESTED', 'RETURNING', 'RETURNED'].includes(o.status))) return;
     const updated = orders.map((o) => {
       if (['RETURN_REQUESTED', 'RETURNING', 'RETURNED'].includes(o.status)) {
+        try {
+          const cCode = (o.orderCode || o._id || '').replace('#', '').trim().toLowerCase();
+          if (cCode) localStorage.setItem(`inspection_approved_${cCode}`, 'true');
+          if (o._id) localStorage.setItem(`inspection_approved_${String(o._id).toLowerCase()}`, 'true');
+        } catch {
+          // ignore
+        }
         return { ...o, status: 'COMPLETED' };
       }
       return o;
@@ -327,7 +382,9 @@ export const UserWallet: React.FC = () => {
         `Lệnh rút ${formatVnd(Number(withdrawAmount))} về tài khoản ${bankName} (${bankAccount}) đã được gửi tới hệ thống thanh toán VNPay Sandbox. Mã đối soát: VNP-WD-${Date.now().toString().slice(-6)}`
       );
       try {
-        localStorage.setItem(`user_wallet_available_${uId}`, '0');
+        const prevWithdrawn = uId ? Math.max(0, Number(localStorage.getItem(`user_wallet_withdrawn_${uId}`) || 0)) : 0;
+        if (uId) localStorage.setItem(`user_wallet_withdrawn_${uId}`, String(prevWithdrawn + (Number(withdrawAmount) || 0)));
+        window.dispatchEvent(new CustomEvent('wallet_balance_updated'));
       } catch {
         // ignore
       }
