@@ -265,8 +265,8 @@ export function createThriftProductDetail(
     mainImage: mainImg,
     thumbnails: source.thumbnails && source.thumbnails.length > 0 ? source.thumbnails : [
       { src: mainImg, alt: source.title, title: 'Ngoại quan sản phẩm' },
-      { src: 'https://images.unsplash.com/photo-1581557991964-125469da3b8a?auto=format&fit=crop&w=600&q=80', alt: 'Chi tiết tem kiểm định', title: 'Tem kiểm định & Seal' },
-      { src: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=600&q=80', alt: 'Phụ kiện kèm theo', title: 'Phụ kiện & đóng gói' },
+      { src: mainImg, alt: 'Chi tiết tem kiểm định', title: 'Tem kiểm định & Seal' },
+      { src: mainImg, alt: 'Phụ kiện kèm theo', title: 'Phụ kiện & đóng gói' },
     ],
     reassurancePoints: source.reassurancePoints && source.reassurancePoints.length > 0 ? source.reassurancePoints : [
       'Sở hữu vĩnh viễn (100% Outright)',
