@@ -3,6 +3,42 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { AppSidebar } from '../../components/layout/AppSidebar'; import { AIHomeRecommendations } from '../../components/ai/AIHomeRecommendations';
 
+import { getCategoriesApi, type CategoryItem as DbCategoryItem } from '../../services/category.api';
+import { normalizeImageUrl } from '../../utils/imageUrl';
+
+const DEFAULT_HOME_CATEGORIES = [
+  {
+    slug: 'camera',
+    name: 'Camera',
+    image: './src/assets/images/camerahome.jpg',
+    subtitle: '86+ thiết bị',
+  },
+  {
+    slug: 'shoes',
+    name: 'Giày dép',
+    image: './src/assets/images/shoeshome.jpg',
+    subtitle: '70+ đôi',
+  },
+  {
+    slug: 'dam-du-tiec',
+    name: 'Đầm dự tiệc',
+    image: './src/assets/images/partydresshome.jpg',
+    subtitle: '50+ mẫu',
+  },
+  {
+    slug: 'clothing',
+    name: 'Quần áo',
+    image: './src/assets/images/clotheshome.jpg',
+    subtitle: '140+ món',
+  },
+  {
+    slug: 'phu-kien',
+    name: 'Phụ kiện',
+    image: './src/assets/images/accessoryhome.jpg',
+    subtitle: '64+ món',
+  },
+];
+
 export const Home: React.FC = () => {
   const { user } = useAuth();
   const wishlistTarget = user ? '/wishlist' : '/login';
