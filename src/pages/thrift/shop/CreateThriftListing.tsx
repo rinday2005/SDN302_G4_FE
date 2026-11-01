@@ -17,6 +17,8 @@ interface InspectionPhotoItem {
   badge: string;
 }
 
+const DEFAULT_PRESET_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'FreeSize'];
+
 export const CreateThriftListing: React.FC = () => {
   const navigate = useNavigate();
 
@@ -29,6 +31,23 @@ export const CreateThriftListing: React.FC = () => {
   const [category, setCategory] = useState('');
   const [brandOrigin, setBrandOrigin] = useState('');
   const [sizeColor, setSizeColor] = useState('');
+  const [selectedSizes, setSelectedSizes] = useState<string[]>(['M']);
+  const [customSizeInput, setCustomSizeInput] = useState('');
+
+  const toggleSize = (sz: string) => {
+    setSelectedSizes((prev) =>
+      prev.includes(sz) ? prev.filter((item) => item !== sz) : [...prev, sz]
+    );
+  };
+
+  const handleAddCustomSize = (e?: React.KeyboardEvent | React.MouseEvent) => {
+    if (e && 'key' in e && e.key !== 'Enter') return;
+    const trimmed = customSizeInput.trim().toUpperCase();
+    if (trimmed && !selectedSizes.includes(trimmed)) {
+      setSelectedSizes((prev) => [...prev, trimmed]);
+    }
+    setCustomSizeInput('');
+  };
   const [branchLocation, setBranchLocation] = useState<'Đà Nẵng' | 'Hà Nội' | 'TP. Hồ Chí Minh'>('Đà Nẵng');
   const [skuCode, setSkuCode] = useState(`TH-CLO-${Date.now().toString().slice(-6)}`);
   const [conditionGrade, setConditionGrade] = useState<'like_new' | 'good' | 'fair'>('like_new');
@@ -657,16 +676,85 @@ export const CreateThriftListing: React.FC = () => {
                 </div>
               </div>
 
+              {/* Mục chọn size cho sản phẩm bán */}
+              <div className="bg-[#fbf9f4] p-4 rounded-xl border border-[#e4dfd5] space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#141310] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[16px] text-[#576151]">straighten</span>
+                    Kích cỡ bán (Sizes Available) <span className="text-red-500">*</span>
+                  </label>
+                  <span className="text-[11px] text-[#7b766f]">
+                    Chọn các size có sẵn để khách chọn ở trang chi tiết sản phẩm
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {DEFAULT_PRESET_SIZES.map((sz) => {
+                    const isSelected = selectedSizes.includes(sz);
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => toggleSize(sz)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#141310] text-white border-[#141310] shadow-xs'
+                            : 'bg-white text-[#576151] border-[#e4dfd5] hover:border-[#141310]'
+                        }`}
+                      >
+                        {isSelected ? `✓ ${sz}` : sz}
+                      </button>
+                    );
+                  })}
+                  {selectedSizes
+                    .filter((s) => !DEFAULT_PRESET_SIZES.includes(s))
+                    .map((customSz) => (
+                      <button
+                        key={customSz}
+                        type="button"
+                        onClick={() => toggleSize(customSz)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#141310] text-white border border-[#141310] shadow-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>✓ {customSz}</span>
+                        <span className="material-symbols-outlined text-[13px]">close</span>
+                      </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-2 max-w-xs pt-1">
+                  <input
+                    type="text"
+                    value={customSizeInput}
+                    onChange={(e) => setCustomSizeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomSize();
+                      }
+                    }}
+                    placeholder="Thêm size khác (vd: 39, 40...)"
+                    className="flex-1 px-3 py-1.5 bg-white border border-[#e4dfd5] rounded-lg text-xs text-[#141310] focus:outline-none focus:border-[#576151]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddCustomSize()}
+                    className="px-3 py-1.5 bg-white hover:bg-gray-100 border border-[#e4dfd5] text-[#141310] text-xs font-semibold rounded-lg cursor-pointer"
+                  >
+                    + Thêm
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-[#141310] mb-1.5">
-                    Kích cỡ (Size) &amp; Màu sắc / Chất liệu
+                    Màu sắc &amp; Chất liệu (Mô tả phụ)
                   </label>
                   <input
                     type="text"
                     value={sizeColor}
                     onChange={(e) => setSizeColor(e.target.value)}
-                    placeholder="Ví dụ: Size M (Eo 66-70cm) • Màu Đỏ Burgundy..."
+                    placeholder="Ví dụ: Màu Nâu Vintage, Lụa Satin phối len..."
                     className="w-full px-3.5 py-2.5 bg-[#fbf9f4] border border-[#e4dfd5] rounded-lg text-sm text-[#141310] focus:outline-none focus:border-[#576151] focus:bg-white transition-colors"
                   />
                 </div>

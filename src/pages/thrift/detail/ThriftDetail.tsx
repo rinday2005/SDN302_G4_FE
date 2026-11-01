@@ -7,7 +7,7 @@ import {
   getThriftProductDetail,
   THRIFT_RELATED_PRODUCTS,
 } from '../../data/thrift/thriftDetailData';
-import type { ThriftProductDetail } from '../../data/thrift/thriftDetailData';
+import type { ThriftProductDetail, ThriftDetailThumbnail } from '../../data/thrift/thriftDetailData';
 import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
 
 type InfoTab = 'desc' | 'audit' | 'origin' | 'shipping';
@@ -27,21 +27,66 @@ export const ThriftDetail: React.FC = () => {
     getPublicThriftListingByIdApi(id)
       .then((data) => {
         if (data) {
+          const rawImgs = Array.isArray(data.images) ? data.images.filter(Boolean) : [];
+          const mainImg = rawImgs[0] || undefined;
+
+          // Tạo 3 thumbnails tương ứng từ 3 ảnh được shop owner nhập lúc tạo đơn
+          let derivedThumbnails: ThriftDetailThumbnail[] | undefined = undefined;
+          if (rawImgs.length > 1) {
+            derivedThumbnails = rawImgs.slice(1, 4).map((imgUrl, idx) => {
+              const labels = ['Chi tiết mặt trước', 'Chi tiết mặt sau', 'Cận cảnh chất vải / Tag'];
+              return {
+                src: imgUrl,
+                alt: `${data.name} - ${labels[idx] || `Góc ${idx + 1}`}`,
+                title: labels[idx] || `Góc ${idx + 1}`,
+              };
+            });
+            while (derivedThumbnails.length < 3 && mainImg) {
+              derivedThumbnails.push({
+                src: mainImg,
+                alt: `${data.name} - Ngoại quan`,
+                title: 'Ngoại quan sản phẩm',
+              });
+            }
+          } else if (mainImg) {
+            // Nếu chỉ có 1 ảnh: 3 ảnh dưới cùng đổi thành 3 ảnh giống ảnh 1
+            derivedThumbnails = [
+              { src: mainImg, alt: `${data.name} - Chi tiết 1`, title: 'Ảnh chi tiết 1' },
+              { src: mainImg, alt: `${data.name} - Chi tiết 2`, title: 'Ảnh chi tiết 2' },
+              { src: mainImg, alt: `${data.name} - Chi tiết 3`, title: 'Ảnh chi tiết 3' },
+            ];
+          }
+
+          const isCamera =
+            data.category === 'camera' ||
+            (data.name && /canon|sony|nikon|fujifilm|dji|leica|lumix/i.test(data.name));
+
+          const productSizes = isCamera
+            ? []
+            : Array.isArray(data.sizes) && data.sizes.length > 0
+            ? data.sizes
+            : (data.size ? [data.size] : []);
+
+          const defaultSize = productSizes.length > 0
+            ? (data.size && productSizes.includes(data.size) ? data.size : productSizes[0])
+            : undefined;
+
           setDbProduct({
             id: data._id,
             title: data.name,
             price: data.price,
             quantity: data.quantity,
-            sizes: (data.category === 'camera' || (data.name && /canon|sony|nikon|fujifilm|dji|leica/i.test(data.name))) ? [] : (data.sizes || ['S', 'M', 'L', 'XL']),
-            size: (data.category === 'camera' || (data.name && /canon|sony|nikon|fujifilm|dji|leica/i.test(data.name))) ? undefined : (data.size || 'L'),
+            sizes: productSizes,
+            size: defaultSize,
             status: data.status,
             sourceType: data.sourceType,
             conditionLabel: data.condition || 'Rất tốt (95%)',
             location: data.location || 'Đà Nẵng',
-            mainImage: data.images && data.images.length > 0 ? data.images[0] : undefined,
+            mainImage: mainImg,
+            thumbnails: derivedThumbnails,
           });
-          if (data.size) {
-            setSelectedSize(data.size);
+          if (defaultSize) {
+            setSelectedSize(defaultSize);
           }
         }
       })
@@ -59,6 +104,9 @@ export const ThriftDetail: React.FC = () => {
       title: dbProduct.title || baseProduct.title,
       price: dbProduct.price ?? baseProduct.price,
       mainImage: dbProduct.mainImage || baseProduct.mainImage,
+      thumbnails: dbProduct.thumbnails || baseProduct.thumbnails,
+      sizes: dbProduct.sizes !== undefined ? dbProduct.sizes : baseProduct.sizes,
+      size: dbProduct.size !== undefined ? dbProduct.size : baseProduct.size,
     };
   }, [baseProduct, dbProduct]);
 
