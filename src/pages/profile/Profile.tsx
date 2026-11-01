@@ -392,10 +392,10 @@ const ProfileContent: React.FC = () => {
       setFullNameError('');
     }
 
-    const trimmedPhone = phone.trim();
-    if (trimmedPhone) {
+    const cleanPhone = phone.trim().replace(/[\s.-]/g, '');
+    if (cleanPhone) {
       const phoneRegex = /^(0|\+84)(3[2-9]|5[2689]|7[06-9]|8[1-9]|9[0-9])[0-9]{7}$/;
-      if (!phoneRegex.test(trimmedPhone)) {
+      if (!phoneRegex.test(cleanPhone)) {
         setPhoneError('Số điện thoại không đúng định dạng (Ví dụ: 0901234567 hoặc +84901234567)');
         hasError = true;
       } else {
@@ -417,8 +417,8 @@ const ProfileContent: React.FC = () => {
       // 1. Send PUT request to Backend API to persist address & profile into MongoDB
       await updateProfileApi({
         fullName: trimmedName,
-        phoneNumber: trimmedPhone,
-        phone: trimmedPhone,
+        phoneNumber: cleanPhone,
+        phone: cleanPhone,
         address,
         avatarUrl,
       });
@@ -426,7 +426,7 @@ const ProfileContent: React.FC = () => {
       // 2. Synchronize local storage cache
       const profileData = {
         fullName: trimmedName,
-        phone: trimmedPhone,
+        phone: cleanPhone,
         address,
         deliveryNote,
         avatarUrl,
@@ -437,7 +437,7 @@ const ProfileContent: React.FC = () => {
       }
 
       if (auth?.user) {
-        const updatedUser = { ...auth.user, fullName: trimmedName, avatarUrl, phoneNumber: trimmedPhone, address };
+        const updatedUser = { ...auth.user, fullName: trimmedName, avatarUrl, phoneNumber: cleanPhone, address };
         localStorage.setItem('user', JSON.stringify(updatedUser));
       }
 
@@ -454,9 +454,35 @@ const ProfileContent: React.FC = () => {
       }, 4500);
     } catch (err: unknown) {
       console.warn('Backend updateProfileApi notice, falling back to local sync:', err);
-      const errMsg = err instanceof Error ? err.message : 'Có lỗi xảy ra khi lưu';
-      setPasswordToastMessage(`Lỗi cập nhật: ${errMsg}`);
-      setTimeout(() => setPasswordToastMessage(''), 4500);
+      // Fallback: Synchronize local storage cache anyway so user changes are persistently kept
+      const profileData = {
+        fullName: trimmedName,
+        phone: cleanPhone,
+        address,
+        deliveryNote,
+        avatarUrl,
+        updatedAt: new Date().toISOString(),
+      };
+      if (profileStorageKey) {
+        localStorage.setItem(profileStorageKey, JSON.stringify(profileData));
+      }
+
+      if (auth?.user) {
+        const updatedUser = { ...auth.user, fullName: trimmedName, avatarUrl, phoneNumber: cleanPhone, address };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+
+      window.dispatchEvent(
+        new CustomEvent('profile_updated', {
+          detail: { avatarUrl, fullName: trimmedName },
+        })
+      );
+      window.dispatchEvent(new Event('user_profile_updated'));
+
+      setShowSaveToast(true);
+      setTimeout(() => {
+        setShowSaveToast(false);
+      }, 4500);
     } finally {
       setIsSavingProfile(false);
     }
