@@ -2,12 +2,35 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useCartWishlist } from '../../../context/CartWishlistContext';
 import { getCategoryDetailConfig } from '../../data/categories/categoryDetailData';
-import type { CategoryDetailProduct } from '../../data/categories/categoryDetailData';
+import type { CategoryDetailProduct, CategoryDetailConfig } from '../../data/categories/categoryDetailData';
 import { getPublicRentProductsApi } from '../../../services/rentProduct.api';
 import { getPublicThriftListingsApi } from '../../../services/thrift.api';
+import {
+  getCategoryBySlugApi,
+  getCategoriesApi,
+  type CategoryItem as DbCategoryItem,
+} from '../../../services/category.api';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 
 type DetailMode = 'rent' | 'thrift';
+
+const KNOWN_STATIC_SLUGS = new Set([
+  'camera',
+  'cameras',
+  'shoes',
+  'dam-du-tiec',
+  'dam-tiec',
+  'party-dress',
+  'clothing',
+  'fashion',
+  'thoi-trang',
+  'phu-kien',
+  'electronics',
+  'accessories',
+  'camping',
+  'books',
+  'lifestyle',
+]);
 
 export const CategoryDetail: React.FC = () => {
   const { slug: routeSlug } = useParams<{ slug?: string }>();
@@ -26,8 +49,110 @@ export const CategoryDetail: React.FC = () => {
     return 'camera';
   }, [routeSlug, location.pathname]);
 
-  // Load config based on slug parameter
-  const category = useMemo(() => getCategoryDetailConfig(resolvedSlug), [resolvedSlug]);
+  const isKnownStaticSlug = KNOWN_STATIC_SLUGS.has(resolvedSlug);
+
+  // Live category metadata fetched from MongoDB
+  const [dbCategory, setDbCategory] = useState<DbCategoryItem | null>(null);
+  const [mode, setMode] = useState<DetailMode>('rent');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCategoryMeta = async () => {
+      let found = await getCategoryBySlugApi(resolvedSlug);
+      if (!found) {
+        const all = await getCategoriesApi();
+        found =
+          all.find(
+            (c) =>
+              (c.slug || '').replace(/^\/categories\//i, '').replace(/^\/+/, '').toLowerCase() ===
+                resolvedSlug || (c._id || '').toLowerCase() === resolvedSlug
+          ) || null;
+      }
+
+      if (isMounted) {
+        setDbCategory(found);
+        if (found?.type === 'THRIFT') {
+          setMode('thrift');
+        } else if (found?.type === 'RENT') {
+          setMode('rent');
+        }
+      }
+    };
+
+    void loadCategoryMeta();
+
+    const handleCategoryUpdated = () => {
+      void loadCategoryMeta();
+    };
+    window.addEventListener('category_updated', handleCategoryUpdated);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('category_updated', handleCategoryUpdated);
+    };
+  }, [resolvedSlug]);
+
+  // Merge DB category metadata with static config
+  const category = useMemo<CategoryDetailConfig & { image?: string }>(() => {
+    const base = getCategoryDetailConfig(resolvedSlug);
+    if (!dbCategory && isKnownStaticSlug) {
+      return base;
+    }
+
+    const title =
+      dbCategory?.name ||
+      (isKnownStaticSlug
+        ? base.title
+        : resolvedSlug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
+
+    const code = dbCategory?.code || (isKnownStaticSlug ? base.code : 'CAT.NEW');
+    const subtitle =
+      dbCategory?.subtitle ||
+      (isKnownStaticSlug
+        ? base.archivalLabel
+        : 'Kiểm định chuẩn hóa 100% · Bảo chứng Smart Escrow');
+
+    const archivalLabel = subtitle.toUpperCase().includes('DANH MỤC')
+      ? subtitle
+      : `${code} · ${subtitle}`;
+
+    const description =
+      dbCategory?.description ||
+      (isKnownStaticSlug
+        ? base.description
+        : `Khám phá các sản phẩm thuộc danh mục ${title} theo hình thức RENT ngắn hạn linh hoạt hoặc THRIFT sở hữu vĩnh viễn đã qua thẩm định chất lượng.`);
+
+    const inspectionBadge =
+      dbCategory?.inspectionBadge ||
+      (isKnownStaticSlug ? base.inspectionBadge : '100% Kiểm định chất lượng & Khử trùng UV-C');
+
+    const escrowBadge =
+      dbCategory?.escrowBadge ||
+      (isKnownStaticSlug ? base.escrowBadge : 'Smart Escrow Bảo chứng cọc an toàn 100%');
+
+    return {
+      ...base,
+      slug: dbCategory?.slug || resolvedSlug,
+      code,
+      archivalLabel,
+      title,
+      description,
+      inspectionBadge,
+      escrowBadge,
+      image: dbCategory?.image ? normalizeImageUrl(dbCategory.image) : undefined,
+      rentSearchPlaceholder: `Tìm kiếm sản phẩm RENT trong ${title}...`,
+      thriftSearchPlaceholder: `Tìm kiếm sản phẩm THRIFT trong ${title}...`,
+      inspectionProcessTitle: isKnownStaticSlug
+        ? base.inspectionProcessTitle
+        : `Quy trình kiểm định chất lượng tiêu chuẩn cho danh mục ${title}`,
+      inspectionProcessDesc: isKnownStaticSlug
+        ? base.inspectionProcessDesc
+        : description,
+      rentItems: isKnownStaticSlug ? base.rentItems : [],
+      thriftItems: isKnownStaticSlug ? base.thriftItems : [],
+    };
+  }, [resolvedSlug, dbCategory, isKnownStaticSlug]);
 
   // Dynamic live products fetched from MongoDB
   const [dbRentItems, setDbRentItems] = useState<CategoryDetailProduct[]>([]);
@@ -36,16 +161,27 @@ export const CategoryDetail: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
 
-    const matchesCategory = (cat: unknown, slug: string): boolean => {
+    const matchesCategory = (cat: unknown, slug: string, dbCat: DbCategoryItem | null): boolean => {
       const s = slug.toLowerCase();
+      let pId = '';
       let pSlug = '';
       let pName = '';
       if (typeof cat === 'object' && cat !== null) {
-        pSlug = ((cat as { slug?: string; name?: string }).slug || '').toLowerCase();
-        pName = ((cat as { slug?: string; name?: string }).name || '').toLowerCase();
+        const cObj = cat as { _id?: string; id?: string; slug?: string; name?: string };
+        pId = String(cObj._id || cObj.id || '').toLowerCase();
+        pSlug = (cObj.slug || '').toLowerCase();
+        pName = (cObj.name || '').toLowerCase();
       } else if (typeof cat === 'string') {
+        pId = cat.toLowerCase();
         pSlug = cat.toLowerCase();
         pName = cat.toLowerCase();
+      }
+
+      if (dbCat) {
+        const targetId = String(dbCat._id || dbCat.id || '').toLowerCase();
+        const targetName = (dbCat.name || '').toLowerCase();
+        if (targetId && pId === targetId) return true;
+        if (targetName && pName === targetName) return true;
       }
 
       if (s === 'camera' || s === 'cameras') {
@@ -58,12 +194,21 @@ export const CategoryDetail: React.FC = () => {
         return pSlug.includes('dam') || pName.includes('đầm') || pName.includes('váy');
       }
       if (s === 'clothing' || s === 'quan-ao' || s === 'fashion' || s === 'thoi-trang') {
-        return pSlug.includes('clothing') || pSlug.includes('fashion') || pName.includes('quần áo') || pName.includes('áo');
+        return (
+          pSlug.includes('clothing') ||
+          pSlug.includes('fashion') ||
+          pName.includes('quần áo') ||
+          pName.includes('áo')
+        );
       }
       if (s === 'phu-kien' || s === 'accessories' || s === 'lifestyle' || s === 'electronics') {
-        return pSlug.includes('phu-kien') || pSlug.includes('accessory') || pName.includes('phụ kiện');
+        return (
+          pSlug.includes('phu-kien') ||
+          pSlug.includes('accessory') ||
+          pName.includes('phụ kiện')
+        );
       }
-      return pSlug === s || pName.includes(s);
+      return pSlug === s || (pName.length > 0 && pName.includes(s));
     };
 
     Promise.all([
@@ -74,16 +219,26 @@ export const CategoryDetail: React.FC = () => {
 
       if (Array.isArray(rentList) && rentList.length > 0) {
         const filteredRent = rentList.filter((item) =>
-          matchesCategory(item.categoryId || item.category, resolvedSlug)
+          matchesCategory(item.categoryId || item.category, resolvedSlug, dbCategory)
         );
         const mappedRent: CategoryDetailProduct[] = filteredRent.map((item) => {
-          const img = Array.isArray(item.images) && item.images.length > 0 ? normalizeImageUrl(item.images[0]) : '';
+          const img =
+            Array.isArray(item.images) && item.images.length > 0
+              ? normalizeImageUrl(item.images[0])
+              : '';
           const cond = item.condition || 'GOOD';
-          const condLabel = cond === 'NEW' ? 'Mới 100%' : cond === 'LIKE_NEW' ? 'Grade Mint (99%)' : 'Grade A (95%)';
+          const condLabel =
+            cond === 'NEW'
+              ? 'Mới 100%'
+              : cond === 'LIKE_NEW'
+              ? 'Grade Mint (99%)'
+              : 'Grade A (95%)';
           return {
             id: item._id,
             title: item.name,
-            description: item.description || `${item.name} chính hãng được kiểm định chất lượng nghiêm ngặt.`,
+            description:
+              item.description ||
+              `${item.name} chính hãng được kiểm định chất lượng nghiêm ngặt.`,
             image: img,
             alt: item.name,
             gradeBadge: condLabel,
@@ -98,18 +253,25 @@ export const CategoryDetail: React.FC = () => {
           };
         });
         setDbRentItems(mappedRent);
+      } else {
+        setDbRentItems([]);
       }
 
       if (Array.isArray(thriftList) && thriftList.length > 0) {
         const filteredThrift = thriftList.filter((item) =>
-          matchesCategory(item.categoryId || item.category, resolvedSlug)
+          matchesCategory(item.categoryId || item.category, resolvedSlug, dbCategory)
         );
         const mappedThrift: CategoryDetailProduct[] = filteredThrift.map((item) => {
-          const img = Array.isArray(item.images) && item.images.length > 0 ? normalizeImageUrl(item.images[0]) : '';
+          const img =
+            Array.isArray(item.images) && item.images.length > 0
+              ? normalizeImageUrl(item.images[0])
+              : '';
           return {
             id: item._id,
             title: item.name,
-            description: item.description || `${item.name} lưu trữ tuyển chọn đã qua thẩm định vòng đời.`,
+            description:
+              item.description ||
+              `${item.name} lưu trữ tuyển chọn đã qua thẩm định vòng đời.`,
             image: img,
             alt: item.name,
             gradeBadge: item.condition || 'Grade Mint (98%)',
@@ -121,17 +283,20 @@ export const CategoryDetail: React.FC = () => {
             href: `/thrift/products/${item._id}`,
             mode: 'thrift',
             sourceType: (item.sourceType === 'rent' ? 'rent' : 'used') as 'rent' | 'used',
-            sourceLabel: item.sourceType === 'rent' ? 'Từ sản phẩm RENT' : 'Đồ đã qua sử dụng',
+            sourceLabel:
+              item.sourceType === 'rent' ? 'Từ sản phẩm RENT' : 'Đồ đã qua sử dụng',
           };
         });
         setDbThriftItems(mappedThrift);
+      } else {
+        setDbThriftItems([]);
       }
     });
 
     return () => {
       isMounted = false;
     };
-  }, [resolvedSlug]);
+  }, [resolvedSlug, dbCategory]);
 
   // Merge live DB products with static base config to guarantee updated images & pricing
   const resolvedRentItems = useMemo(() => {
@@ -173,7 +338,6 @@ export const CategoryDetail: React.FC = () => {
     return [...updatedStatic, ...Array.from(dbMap.values())];
   }, [category.thriftItems, dbThriftItems]);
 
-  const [mode, setMode] = useState<DetailMode>('rent');
   const [searchQuery, setSearchQuery] = useState('');
 
   // RENT filter states
@@ -253,14 +417,17 @@ export const CategoryDetail: React.FC = () => {
 
       let matchPrice = true;
       if (rentPriceRange === 'under300') matchPrice = item.price < 300000;
-      else if (rentPriceRange === '300to600') matchPrice = item.price >= 300000 && item.price <= 600000;
+      else if (rentPriceRange === '300to600')
+        matchPrice = item.price >= 300000 && item.price <= 600000;
       else if (rentPriceRange === 'above600') matchPrice = item.price > 600000;
 
       const matchCondition =
-        rentCondition === 'all' || item.gradeBadge.toLowerCase().includes(rentCondition.toLowerCase());
+        rentCondition === 'all' ||
+        item.gradeBadge.toLowerCase().includes(rentCondition.toLowerCase());
 
       const matchLocation =
-        rentLocation === 'all' || item.locationBadge.toLowerCase().includes(rentLocation.toLowerCase());
+        rentLocation === 'all' ||
+        item.locationBadge.toLowerCase().includes(rentLocation.toLowerCase());
 
       return matchSearch && matchPrice && matchCondition && matchLocation;
     });
@@ -278,7 +445,8 @@ export const CategoryDetail: React.FC = () => {
 
       let matchPrice = true;
       if (thriftPriceRange === 'under10m') matchPrice = item.price < 10000000;
-      else if (thriftPriceRange === '10to30m') matchPrice = item.price >= 10000000 && item.price <= 30000000;
+      else if (thriftPriceRange === '10to30m')
+        matchPrice = item.price >= 10000000 && item.price <= 30000000;
       else if (thriftPriceRange === 'above30m') matchPrice = item.price > 30000000;
 
       const matchSource =
@@ -287,14 +455,23 @@ export const CategoryDetail: React.FC = () => {
         (thriftSource === 'used' && item.sourceType === 'used');
 
       const matchCondition =
-        thriftCondition === 'all' || item.gradeBadge.toLowerCase().includes(thriftCondition.toLowerCase());
+        thriftCondition === 'all' ||
+        item.gradeBadge.toLowerCase().includes(thriftCondition.toLowerCase());
 
       const matchLocation =
-        thriftLocation === 'all' || item.locationBadge.toLowerCase().includes(thriftLocation.toLowerCase());
+        thriftLocation === 'all' ||
+        item.locationBadge.toLowerCase().includes(thriftLocation.toLowerCase());
 
       return matchSearch && matchPrice && matchSource && matchCondition && matchLocation;
     });
-  }, [resolvedThriftItems, searchQuery, thriftPriceRange, thriftSource, thriftCondition, thriftLocation]);
+  }, [
+    resolvedThriftItems,
+    searchQuery,
+    thriftPriceRange,
+    thriftSource,
+    thriftCondition,
+    thriftLocation,
+  ]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -342,14 +519,17 @@ export const CategoryDetail: React.FC = () => {
             <div className="space-y-2">
               <h3 className="text-xl font-bold text-[#1C1A18]">Yêu cầu Đăng nhập</h3>
               <p className="text-xs text-[#5E5A53] leading-relaxed">
-                Bạn đang truy cập ở chế độ công khai (Khách vãng lai). Để <strong>{authModal.actionName}</strong>,
-                vui lòng đăng nhập hoặc tạo tài khoản thành viên ReUse Hub.
+                Bạn đang truy cập ở chế độ công khai (Khách vãng lai). Để{' '}
+                <strong>{authModal.actionName}</strong>, vui lòng đăng nhập hoặc tạo tài khoản
+                thành viên ReUse Hub.
               </p>
             </div>
 
             <div className="p-3.5 bg-[#F4F0EA]/70 rounded-2xl text-left space-y-1.5 text-xs text-[#5E5A53] border border-[#E6E2DC]">
               <div className="flex items-center gap-2 font-semibold text-[#1C1A18]">
-                <span className="material-symbols-outlined text-[16px] text-emerald-700">verified</span>
+                <span className="material-symbols-outlined text-[16px] text-emerald-700">
+                  verified
+                </span>
                 Quyền lợi thành viên:
               </div>
               <ul className="list-disc list-inside space-y-0.5 text-[11px] text-[#78736A]">
@@ -361,9 +541,9 @@ export const CategoryDetail: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Link
-                to={`/login?redirect=${encodeURIComponent(authModal.targetUrl)}&message=${encodeURIComponent(
-                  `Bạn cần đăng nhập để ${authModal.actionName}!`
-                )}`}
+                to={`/login?redirect=${encodeURIComponent(
+                  authModal.targetUrl
+                )}&message=${encodeURIComponent(`Bạn cần đăng nhập để ${authModal.actionName}!`)}`}
                 className="flex-1 py-3 px-4 rounded-xl bg-[#1C1A18] text-white text-xs font-bold text-center hover:bg-[#292724] transition-all shadow-sm"
               >
                 Đăng nhập ngay
@@ -382,7 +562,10 @@ export const CategoryDetail: React.FC = () => {
       {/* Main Container */}
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
         {/* Top Breadcrumb Section */}
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-[#78736A] tracking-wide">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex items-center gap-2 text-xs text-[#78736A] tracking-wide"
+        >
           <Link to="/" className="hover:text-[#1C1A18] transition-colors">
             Trang chủ
           </Link>
@@ -391,7 +574,9 @@ export const CategoryDetail: React.FC = () => {
             Danh mục
           </Link>
           <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-          <span className="text-[#1C1A18] font-semibold truncate max-w-xs">{category.title}</span>
+          <span className="text-[#1C1A18] font-semibold truncate max-w-xs">
+            {category.title}
+          </span>
         </nav>
 
         {/* Editorial Category Header */}
@@ -399,38 +584,58 @@ export const CategoryDetail: React.FC = () => {
           data-reveal
           className="relative bg-[#F7F5F0] rounded-2xl p-6 lg:p-10 shadow-sm border border-[#E6E2DC] overflow-hidden"
         >
-          <div className="relative z-10 max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#F0ECE1] rounded-full text-[10px] tracking-[0.2em] font-bold text-[#79716B] uppercase mb-4 border border-[#E6E2DC]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#B45309]" />
-              {category.archivalLabel}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 relative z-10">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#F0ECE1] rounded-full text-[10px] tracking-[0.2em] font-bold text-[#79716B] uppercase mb-4 border border-[#E6E2DC]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#B45309]" />
+                {category.archivalLabel}
+              </div>
+
+              <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#1C1A18] mb-4">
+                {category.title}
+              </h1>
+
+              <p className="text-sm lg:text-base text-[#79716B] leading-relaxed max-w-2xl">
+                {category.description}
+              </p>
             </div>
 
-            <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#1C1A18] mb-4">
-              {category.title}
-            </h1>
-
-            <p className="text-sm lg:text-base text-[#79716B] leading-relaxed max-w-2xl">
-              {category.description}
-            </p>
+            {category.image && (
+              <div className="w-full lg:w-72 aspect-[4/3] rounded-2xl overflow-hidden bg-[#E6E2DC] shadow-sm border border-[#E6E2DC] shrink-0">
+                <img
+                  src={category.image}
+                  alt={category.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
           </div>
 
           {/* Metrics Bar inside Header */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-6 border-t border-[#E6E2DC]">
             <div className="flex flex-col">
               <span className="font-serif text-2xl font-bold text-[#1C1A18]">{rentCount}</span>
-              <span className="text-xs text-[#79716B] font-medium mt-0.5">Thiết bị RENT sẵn sàng</span>
+              <span className="text-xs text-[#79716B] font-medium mt-0.5">
+                Thiết bị RENT sẵn sàng
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="font-serif text-2xl font-bold text-[#1C1A18]">{thriftCount}</span>
-              <span className="text-xs text-[#79716B] font-medium mt-0.5">Sản phẩm THRIFT lưu trữ</span>
+              <span className="text-xs text-[#79716B] font-medium mt-0.5">
+                Sản phẩm THRIFT lưu trữ
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="font-serif text-2xl font-bold text-[#1C1A18]">100%</span>
-              <span className="text-xs text-[#79716B] font-medium mt-0.5">{category.inspectionBadge}</span>
+              <span className="text-xs text-[#79716B] font-medium mt-0.5">
+                {category.inspectionBadge}
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="font-serif text-2xl font-bold text-[#1C1A18]">Escrow</span>
-              <span className="text-xs text-[#79716B] font-medium mt-0.5">{category.escrowBadge}</span>
+              <span className="text-xs text-[#79716B] font-medium mt-0.5">
+                {category.escrowBadge}
+              </span>
             </div>
           </div>
         </header>
@@ -459,8 +664,13 @@ export const CategoryDetail: React.FC = () => {
                 {rentCount} thiết bị
               </span>
             </div>
-            <p className={`text-xs leading-relaxed ${mode === 'rent' ? 'text-stone-300' : 'text-[#79716B]'}`}>
-              Trải nghiệm {category.title.toLowerCase()} theo ngày, hoàn cọc 100% an toàn qua Smart Escrow bảo chứng minh bạch.
+            <p
+              className={`text-xs leading-relaxed ${
+                mode === 'rent' ? 'text-stone-300' : 'text-[#79716B]'
+              }`}
+            >
+              Trải nghiệm {category.title.toLowerCase()} theo ngày, hoàn cọc 100% an toàn qua Smart
+              Escrow bảo chứng minh bạch.
             </p>
             <div
               className={`h-1 w-full rounded-full mt-4 transition-all ${
@@ -491,8 +701,13 @@ export const CategoryDetail: React.FC = () => {
                 {thriftCount} sản phẩm
               </span>
             </div>
-            <p className={`text-xs leading-relaxed ${mode === 'thrift' ? 'text-stone-300' : 'text-[#79716B]'}`}>
-              Sở hữu vĩnh viễn đồ cũ tuyển chọn &amp; thiết bị chuyển đổi từ vòng đời RENT với giá ưu đãi tối đa.
+            <p
+              className={`text-xs leading-relaxed ${
+                mode === 'thrift' ? 'text-stone-300' : 'text-[#79716B]'
+              }`}
+            >
+              Sở hữu vĩnh viễn đồ cũ tuyển chọn &amp; thiết bị chuyển đổi từ vòng đời RENT với giá ưu
+              đãi tối đa.
             </p>
             <div
               className={`h-1 w-full rounded-full mt-4 transition-all ${
@@ -503,7 +718,10 @@ export const CategoryDetail: React.FC = () => {
         </div>
 
         {/* FILTERS SECTION */}
-        <section data-reveal className="bg-[#F7F5F0] rounded-2xl p-5 shadow-sm border border-[#E6E2DC]">
+        <section
+          data-reveal
+          className="bg-[#F7F5F0] rounded-2xl p-5 shadow-sm border border-[#E6E2DC]"
+        >
           {/* Search within Category & Quick Controls */}
           <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between pb-4 border-b border-[#E6E2DC]">
             <div className="relative flex-1 max-w-md">
@@ -559,7 +777,9 @@ export const CategoryDetail: React.FC = () => {
                   Thời gian dự kiến
                 </label>
                 <div className="flex items-center bg-[#FBF9F5] border border-[#E6E2DC] rounded-xl px-3 py-2 text-xs text-[#1C1A18]">
-                  <span className="material-symbols-outlined text-[#79716B] text-sm mr-2">date_range</span>
+                  <span className="material-symbols-outlined text-[#79716B] text-sm mr-2">
+                    date_range
+                  </span>
                   <span className="text-[#79716B]">Chọn ngày nhận &amp; trả</span>
                 </div>
               </div>
@@ -710,7 +930,9 @@ export const CategoryDetail: React.FC = () => {
                           onClick={() => handleToggleWishlist(product)}
                           title={isSaved ? 'Đã lưu' : 'Lưu yêu thích'}
                           className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors cursor-pointer shadow-xs ${
-                            isSaved ? 'bg-[#1C1A18] text-rose-400' : 'bg-white/80 hover:bg-white text-[#1C1A18]'
+                            isSaved
+                              ? 'bg-[#1C1A18] text-rose-400'
+                              : 'bg-white/80 hover:bg-white text-[#1C1A18]'
                           }`}
                         >
                           <span
@@ -737,7 +959,9 @@ export const CategoryDetail: React.FC = () => {
                         <h2 className="font-serif text-lg font-bold text-[#1C1A18] group-hover:text-amber-800 transition-colors">
                           <Link to={product.href}>{product.title}</Link>
                         </h2>
-                        <p className="text-xs text-[#79716B] mt-1 line-clamp-1">{product.description}</p>
+                        <p className="text-xs text-[#79716B] mt-1 line-clamp-1">
+                          {product.description}
+                        </p>
                       </div>
                     </div>
 
@@ -747,11 +971,14 @@ export const CategoryDetail: React.FC = () => {
                         {product.mode === 'rent' ? (
                           <>
                             <div className="text-[11px] text-[#79716B]">
-                              Cọc hoàn lại: {product.deposit ? formatVND(product.deposit) : '1.500.000₫'}
+                              Cọc hoàn lại:{' '}
+                              {product.deposit ? formatVND(product.deposit) : '1.500.000₫'}
                             </div>
                             <div className="font-serif text-lg font-bold text-[#1C1A18]">
                               {formatVND(product.price)}{' '}
-                              <span className="text-xs font-sans font-normal text-[#79716B]">/ ngày</span>
+                              <span className="text-xs font-sans font-normal text-[#79716B]">
+                                / ngày
+                              </span>
                             </div>
                           </>
                         ) : (
@@ -806,15 +1033,18 @@ export const CategoryDetail: React.FC = () => {
           </section>
         ) : (
           /* Empty State Fallback */
-          <div data-reveal className="my-12 p-12 bg-[#F7F5F0] rounded-2xl text-center border border-[#E6E2DC] space-y-4">
+          <div
+            data-reveal
+            className="my-12 p-12 bg-[#F7F5F0] rounded-2xl text-center border border-[#E6E2DC] space-y-4"
+          >
             <div className="w-12 h-12 rounded-full bg-[#E6E2DC] text-[#79716B] flex items-center justify-center mx-auto">
               <span className="material-symbols-outlined text-[24px]">search_off</span>
             </div>
             <h3 className="font-serif text-xl font-bold text-[#1C1A18]">
-              Không tìm thấy sản phẩm phù hợp
+              Chưa có sản phẩm phù hợp trong danh mục {category.title}
             </h3>
             <p className="text-xs text-[#79716B] max-w-sm mx-auto leading-relaxed">
-              Hãy thử mở rộng bộ lọc giá, thay đổi khu vực kho hoặc tìm kiếm với từ khoá tổng quát hơn.
+              Hãy thử chuyển đổi giữa tab Dịch vụ Thuê RENT / Mua lưu trữ THRIFT hoặc đặt lại bộ lọc tìm kiếm.
             </p>
             <button
               type="button"
@@ -827,10 +1057,13 @@ export const CategoryDetail: React.FC = () => {
         )}
 
         {/* Editorial Pagination */}
-        <div data-reveal className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-t border-[#E6E2DC]">
+        <div
+          data-reveal
+          className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-t border-[#E6E2DC]"
+        >
           <div className="text-xs text-[#79716B]">
             Trang <span className="font-semibold text-[#1C1A18]">1</span> trên{' '}
-            <span className="font-semibold text-[#1C1A18]">15</span> trang lưu trữ
+            <span className="font-semibold text-[#1C1A18]">1</span> trang lưu trữ
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -840,22 +1073,16 @@ export const CategoryDetail: React.FC = () => {
             >
               ‹ Trước
             </button>
-            <button type="button" className="w-8 h-8 rounded-lg text-xs font-bold bg-[#1C1A18] text-white">
+            <button
+              type="button"
+              className="w-8 h-8 rounded-lg text-xs font-bold bg-[#1C1A18] text-white"
+            >
               1
-            </button>
-            <button type="button" className="w-8 h-8 rounded-lg text-xs font-medium text-[#79716B] hover:bg-[#F0ECE1] transition-colors cursor-pointer">
-              2
-            </button>
-            <button type="button" className="w-8 h-8 rounded-lg text-xs font-medium text-[#79716B] hover:bg-[#F0ECE1] transition-colors cursor-pointer">
-              3
-            </button>
-            <span className="px-1 text-xs text-[#79716B]">...</span>
-            <button type="button" className="w-8 h-8 rounded-lg text-xs font-medium text-[#79716B] hover:bg-[#F0ECE1] transition-colors cursor-pointer">
-              15
             </button>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#1C1A18] hover:bg-[#F0ECE1] transition-colors cursor-pointer"
+              disabled
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#79716B] hover:bg-[#F0ECE1] transition-colors cursor-not-allowed opacity-50"
             >
               Sau ›
             </button>
@@ -863,7 +1090,10 @@ export const CategoryDetail: React.FC = () => {
         </div>
 
         {/* Circular Education & Provenance Banner */}
-        <aside data-reveal className="mt-14 p-8 bg-[#F0ECE1] rounded-2xl relative overflow-hidden shadow-xs border border-[#E6E2DC]">
+        <aside
+          data-reveal
+          className="mt-14 p-8 bg-[#F0ECE1] rounded-2xl relative overflow-hidden shadow-xs border border-[#E6E2DC]"
+        >
           <div className="relative z-10 max-w-3xl space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-900">
               <span className="material-symbols-outlined text-sm">verified_user</span>

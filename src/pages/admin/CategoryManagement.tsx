@@ -1,11 +1,14 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   fetchAdminCategoriesApi,
   createAdminCategoryApi,
   updateAdminCategoryApi,
   toggleCategoryStatusApi,
+  deleteAdminCategoryApi,
 } from "../../services/admin.api";
+import { uploadImageApi } from "../../services/upload.api";
+import { normalizeImageUrl } from "../../utils/imageUrl";
 
 export type MarketType = "ALL" | "RENT" | "THRIFT" | "COMMON";
 export type CategoryStatus = "ACTIVE" | "INACTIVE";
@@ -15,15 +18,33 @@ export interface CategoryItem {
   id: string;
   name: string;
   slug: string;
+  code: string;
   description: string;
+  subtitle: string;
+  image: string;
   market: "RENT" | "THRIFT" | "COMMON";
   icon: string;
+  inspectionBadge: string;
+  escrowBadge: string;
   totalItems: number;
   rentItems: number;
   thriftItems: number;
   status: CategoryStatus;
   updatedAt?: string;
 }
+
+const ICON_PRESETS = [
+  { icon: "photo_camera", label: "Camera" },
+  { icon: "steps", label: "Giày dép" },
+  { icon: "styler", label: "Đầm dạ hội" },
+  { icon: "checkroom", label: "Quần áo" },
+  { icon: "diamond", label: "Phụ kiện" },
+  { icon: "shopping_bag", label: "Túi xách" },
+  { icon: "watch", label: "Đồng hồ" },
+  { icon: "camping", label: "Dã ngoại" },
+  { icon: "devices", label: "Thiết bị" },
+  { icon: "category", label: "Mặc định" },
+];
 
 export const CategoryManagement: React.FC = () => {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -36,16 +57,30 @@ export const CategoryManagement: React.FC = () => {
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Form Fields
+  // Form Fields matching User Category UI (/categories, /categories/:slug, /)
   const [formName, setFormName] = useState("");
   const [formSlug, setFormSlug] = useState("");
+  const [formCode, setFormCode] = useState("");
   const [formMarket, setFormMarket] = useState<"RENT" | "THRIFT" | "COMMON">("COMMON");
+  const [formSubtitle, setFormSubtitle] = useState("");
   const [formDesc, setFormDesc] = useState("");
+  const [formImage, setFormImage] = useState("");
+  const [formIcon, setFormIcon] = useState("category");
+  const [formInspectionBadge, setFormInspectionBadge] = useState(
+    "100% Kiểm định chất lượng & Khử trùng UV-C"
+  );
   const [formStatus, setFormStatus] = useState<CategoryStatus>("ACTIVE");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Confirm Status Modal
   const [confirmModalItem, setConfirmModalItem] = useState<CategoryItem | null>(null);
+
+  // Confirm Delete Modal
+  const [deleteModalItem, setDeleteModalItem] = useState<CategoryItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -59,13 +94,21 @@ export const CategoryManagement: React.FC = () => {
   const loadCategories = async () => {
     try {
       const list = await fetchAdminCategoriesApi();
-      const mapped: CategoryItem[] = list.map((c) => ({
+      const mapped: CategoryItem[] = list.map((c, idx) => ({
         id: c.id,
         name: c.name,
-        slug: c.slug.startsWith("/categories/") ? c.slug : `/categories/${c.slug.replace(/^\/+/, "")}`,
+        slug: c.slug.startsWith("/categories/")
+          ? c.slug
+          : `/categories/${c.slug.replace(/^\/+/, "")}`,
+        code: c.code || `CAT.${String(idx + 1).padStart(2, "0")}`,
         description: c.description,
+        subtitle: c.subtitle || "Kiểm định chuẩn hóa 100% · Bảo chứng Smart Escrow",
+        image: c.image || "",
         market: c.market,
-        icon: c.icon,
+        icon: c.icon || "category",
+        inspectionBadge:
+          c.inspectionBadge || "100% Kiểm định chất lượng & Khử trùng UV-C",
+        escrowBadge: c.escrowBadge || "Smart Escrow Bảo chứng cọc an toàn 100%",
         totalItems: c.totalItems,
         rentItems: c.rentItems,
         thriftItems: c.thriftItems,
@@ -82,40 +125,7 @@ export const CategoryManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    let ignore = false;
-    const initLoad = async () => {
-      try {
-        const list = await fetchAdminCategoriesApi();
-        if (!ignore) {
-          const mapped: CategoryItem[] = list.map((c) => ({
-            id: c.id,
-            name: c.name,
-            slug: c.slug.startsWith("/categories/") ? c.slug : `/categories/${c.slug.replace(/^\/+/, "")}`,
-            description: c.description,
-            market: c.market,
-            icon: c.icon,
-            totalItems: c.totalItems,
-            rentItems: c.rentItems,
-            thriftItems: c.thriftItems,
-            status: c.status,
-            updatedAt: c.updatedAt,
-          }));
-          setCategories(mapped);
-          setLoading(false);
-        }
-      } catch (err) {
-        if (!ignore) {
-          console.warn("Lỗi tải danh mục:", err);
-          setLoading(false);
-        }
-      }
-    };
-
-    void initLoad();
-
-    return () => {
-      ignore = true;
-    };
+    void loadCategories();
   }, []);
 
   // KPI Calculations
@@ -158,10 +168,30 @@ export const CategoryManagement: React.FC = () => {
         .trim()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
         .replace(/[^\w\s-]/g, "")
         .replace(/[\s_-]+/g, "-")
         .replace(/^-+|-+$/g, "");
       setFormSlug(generated || "your-category");
+    }
+  };
+
+  // Upload image to Cloudinary
+  const handleUploadCategoryImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingImage(true);
+      const uploadedUrl = await uploadImageApi(file, "reuse_hub/categories");
+      setFormImage(uploadedUrl);
+      showToast("Đã tải ảnh danh mục lên Cloudinary thành công!");
+    } catch (err) {
+      console.error("Lỗi upload ảnh Cloudinary:", err);
+      showToast("Không thể tải ảnh lên Cloudinary. Vui lòng thử lại.");
+    } finally {
+      setIsUploadingImage(false);
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -170,8 +200,13 @@ export const CategoryManagement: React.FC = () => {
     setEditingCategory(null);
     setFormName("");
     setFormSlug("your-category");
+    setFormCode(`CAT.${String(categories.length + 1).padStart(2, "0")}`);
     setFormMarket("COMMON");
+    setFormSubtitle("Kiểm định chuẩn hóa 100% · Bảo chứng Smart Escrow");
     setFormDesc("");
+    setFormImage("");
+    setFormIcon("category");
+    setFormInspectionBadge("100% Kiểm định chất lượng & Khử trùng UV-C");
     setFormStatus("ACTIVE");
     setIsModalOpen(true);
   };
@@ -181,8 +216,15 @@ export const CategoryManagement: React.FC = () => {
     setEditingCategory(cat);
     setFormName(cat.name);
     setFormSlug(cat.slug.replace("/categories/", ""));
+    setFormCode(cat.code || "CAT.01");
     setFormMarket(cat.market);
-    setFormDesc(cat.description);
+    setFormSubtitle(cat.subtitle || "");
+    setFormDesc(cat.description || "");
+    setFormImage(cat.image || "");
+    setFormIcon(cat.icon || "category");
+    setFormInspectionBadge(
+      cat.inspectionBadge || "100% Kiểm định chất lượng & Khử trùng UV-C"
+    );
     setFormStatus(cat.status);
     setIsModalOpen(true);
   };
@@ -197,24 +239,30 @@ export const CategoryManagement: React.FC = () => {
 
     const rawSlug = formSlug.replace(/^\/categories\//, "").replace(/^\/+/, "").trim();
 
+    const payload = {
+      name: formName.trim(),
+      slug: rawSlug,
+      code: formCode.trim() || `CAT.${String(categories.length + 1).padStart(2, "0")}`,
+      subtitle:
+        formSubtitle.trim() || "Kiểm định chuẩn hóa 100% · Bảo chứng Smart Escrow",
+      description:
+        formDesc.trim() ||
+        `Danh mục sản phẩm ${formName.trim()} tuần hoàn được kiểm định chất lượng tại ReUse Hub.`,
+      image: formImage.trim(),
+      icon: formIcon || "category",
+      inspectionBadge:
+        formInspectionBadge.trim() || "100% Kiểm định chất lượng & Khử trùng UV-C",
+      type: (formMarket === "COMMON" ? "BOTH" : formMarket) as "RENT" | "THRIFT" | "BOTH",
+      isActive: formStatus === "ACTIVE",
+    };
+
     try {
+      setIsSaving(true);
       if (editingCategory) {
-        await updateAdminCategoryApi(editingCategory.id, {
-          name: formName.trim(),
-          slug: rawSlug,
-          description: formDesc.trim(),
-          type: formMarket === "COMMON" ? "BOTH" : formMarket,
-          isActive: formStatus === "ACTIVE",
-        });
+        await updateAdminCategoryApi(editingCategory.id, payload);
         showToast(`Đã cập nhật danh mục "${formName}" vào MongoDB thành công.`);
       } else {
-        await createAdminCategoryApi({
-          name: formName.trim(),
-          slug: rawSlug,
-          description: formDesc.trim() || "Chưa có mô tả chi tiết.",
-          type: formMarket === "COMMON" ? "BOTH" : formMarket,
-          isActive: formStatus === "ACTIVE",
-        });
+        await createAdminCategoryApi(payload);
         showToast(`Đã tạo mới danh mục "${formName}" lưu vào MongoDB thành công.`);
       }
       setIsModalOpen(false);
@@ -227,6 +275,8 @@ export const CategoryManagement: React.FC = () => {
           ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
           : undefined;
       showToast(errMsg || "Lỗi lưu danh mục vào cơ sở dữ liệu");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -256,18 +306,46 @@ export const CategoryManagement: React.FC = () => {
     }
   };
 
-  // Export JSON or CSV
+  // Handle Delete Confirmation qua MongoDB API
+  const handleConfirmDeleteCategory = async () => {
+    if (!deleteModalItem) return;
+
+    try {
+      setIsDeleting(true);
+      await deleteAdminCategoryApi(deleteModalItem.id);
+      showToast(`Đã xóa danh mục "${deleteModalItem.name}" khỏi MongoDB.`);
+      setDeleteModalItem(null);
+      await loadCategories();
+      window.dispatchEvent(new Event("category_updated"));
+    } catch (err: unknown) {
+      console.error(err);
+      const errMsg =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      showToast(errMsg || "Lỗi khi xóa danh mục khỏi cơ sở dữ liệu");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Export JSON
   const handleExport = () => {
     const dataToExport = filteredCategories.map((c) => ({
       id: c.id,
+      code: c.code,
       name: c.name,
       slug: c.slug,
       market: c.market,
+      subtitle: c.subtitle,
+      description: c.description,
+      image: c.image,
+      icon: c.icon,
+      inspectionBadge: c.inspectionBadge,
       totalItems: c.totalItems,
       rentItems: c.rentItems,
       thriftItems: c.thriftItems,
       status: c.status,
-      description: c.description,
       updatedAt: c.updatedAt,
     }));
 
@@ -288,19 +366,19 @@ export const CategoryManagement: React.FC = () => {
   // Filter & Sort Logic
   const filteredCategories = categories
     .filter((item) => {
-      // Market Tab
       if (activeTab !== "ALL" && item.market !== activeTab) return false;
-
-      // Status Filter
       if (statusFilter !== "ALL" && item.status !== statusFilter) return false;
 
-      // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchName = item.name.toLowerCase().includes(q);
         const matchSlug = item.slug.toLowerCase().includes(q);
         const matchDesc = item.description.toLowerCase().includes(q);
-        if (!matchName && !matchSlug && !matchDesc) return false;
+        const matchSubtitle = (item.subtitle || "").toLowerCase().includes(q);
+        const matchCode = (item.code || "").toLowerCase().includes(q);
+        if (!matchName && !matchSlug && !matchDesc && !matchSubtitle && !matchCode) {
+          return false;
+        }
       }
 
       return true;
@@ -349,7 +427,7 @@ export const CategoryManagement: React.FC = () => {
           <span className="text-[#cfc5b8]">•</span>
           <span className="tracking-wide">HỆ THỐNG BẢO MẬT V4.2</span>
           <span className="text-[#cfc5b8]">•</span>
-          <span className="tracking-wide">Giao Thức Bảo Mật FIDO2 Cấp Cao</span>
+          <span className="tracking-wide">Đồng Bộ Cloudinary &amp; MongoDB</span>
           <span className="text-[#cfc5b8]">•</span>
           <span className="tracking-wide font-medium text-[#1c1b19]">
             SỔ BỘ QUẢN LÝ PHÂN LOẠI &amp; TAXONOMY
@@ -371,11 +449,21 @@ export const CategoryManagement: React.FC = () => {
                 Categories
               </h1>
               <p className="text-sm text-[#4c463c] mt-1">
-                Quản lý danh mục sản phẩm trên marketplace ReUse Hub.
+                Quản lý danh mục sản phẩm lưu trữ trực tiếp trên MongoDB &amp; Cloudinary, đồng bộ tức thời sang giao diện khách hàng.
               </p>
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap">
+              <Link
+                to="/categories"
+                target="_blank"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-white hover:bg-[#ece7e4] text-[#1c1b19] text-xs font-semibold tracking-wide transition-colors border border-[#cfc5b8]/40 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[18px] text-[#6c5937]">
+                  visibility
+                </span>
+                <span>Xem Giao Diện User</span>
+              </Link>
               <button
                 type="button"
                 onClick={handleExport}
@@ -384,15 +472,15 @@ export const CategoryManagement: React.FC = () => {
                 <span className="material-symbols-outlined text-[18px] text-[#6c5937]">
                   download
                 </span>
-                <span>Xuất Sổ Bộ (JSON/CSV)</span>
+                <span>Xuất Sổ Bộ (JSON)</span>
               </button>
               <button
                 type="button"
                 onClick={handleOpenCreateModal}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#1c1b19] hover:bg-[#6c5937] text-white text-xs font-semibold tracking-wider transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#1c1b19] hover:bg-[#6c5937] text-white text-xs font-semibold tracking-wider transition-colors shadow-sm cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                <span>+ Add Category</span>
+                <span>+ Thêm Danh Mục</span>
               </button>
             </div>
           </div>
@@ -413,7 +501,7 @@ export const CategoryManagement: React.FC = () => {
                 <span className="text-3xl font-serif font-bold text-[#1c1b19]">
                   {metrics.total}
                 </span>
-                <span className="text-xs text-[#4c463c]">Active Classes</span>
+                <span className="text-xs text-[#4c463c]">Danh mục DB</span>
               </div>
               <div className="mt-3 pt-2 border-t border-[#cfc5b8]/20 text-[#4c463c] text-xs flex items-center justify-between">
                 <span>Quy mô toàn sàn</span>
@@ -554,7 +642,7 @@ export const CategoryManagement: React.FC = () => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search category, slug..."
+                  placeholder="Tìm tên, mã, slug, mô tả..."
                   className="w-full pl-9 pr-3 py-2 bg-white rounded-lg text-xs text-[#1c1b19] border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] placeholder:text-[#7e766a]"
                 />
               </div>
@@ -587,7 +675,7 @@ export const CategoryManagement: React.FC = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#f2ede9] text-[#4c463c] text-[11px] uppercase tracking-wider border-b border-[#cfc5b8]/30">
-                    <th className="py-3.5 px-5 font-semibold">Tên &amp; Hồ Sơ Phân Loại</th>
+                    <th className="py-3.5 px-5 font-semibold">Ảnh &amp; Hồ Sơ Phân Loại</th>
                     <th className="py-3.5 px-4 font-semibold">Đường Dẫn Public Slug</th>
                     <th className="py-3.5 px-4 font-semibold">Loại Sàn Áp Dụng</th>
                     <th className="py-3.5 px-4 font-semibold text-right">Tổng Sản Phẩm</th>
@@ -639,6 +727,7 @@ export const CategoryManagement: React.FC = () => {
                   ) : (
                     filteredCategories.map((cat) => {
                       const isActive = cat.status === "ACTIVE";
+                      const imgSrc = normalizeImageUrl(cat.image);
 
                       return (
                         <tr
@@ -647,20 +736,43 @@ export const CategoryManagement: React.FC = () => {
                             !isActive ? "opacity-75 bg-[#f2ede9]/40" : ""
                           }`}
                         >
-                          {/* Name & Profile */}
+                          {/* Image, Code, Name, Subtitle & Description */}
                           <td className="py-3.5 px-5">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center text-[#6c5937] shrink-0 shadow-sm border border-[#cfc5b8]/30">
-                                <span className="material-symbols-outlined text-[22px]">
-                                  {cat.icon || "category"}
+                            <div className="flex items-center gap-3.5">
+                              <div className="relative w-14 h-14 rounded-xl bg-white overflow-hidden flex items-center justify-center text-[#6c5937] shrink-0 shadow-sm border border-[#cfc5b8]/40">
+                                {imgSrc ? (
+                                  <img
+                                    src={imgSrc}
+                                    alt={cat.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="material-symbols-outlined text-[24px]">
+                                    {cat.icon || "category"}
+                                  </span>
+                                )}
+                                <span className="absolute bottom-0.5 right-0.5 w-5 h-5 rounded-md bg-[#1c1b19]/80 text-white flex items-center justify-center backdrop-blur-xs">
+                                  <span className="material-symbols-outlined text-[12px]">
+                                    {cat.icon || "category"}
+                                  </span>
                                 </span>
                               </div>
-                              <div className="min-w-0 max-w-[280px]">
-                                <div className="text-sm font-semibold text-[#1c1b19] tracking-tight">
-                                  {cat.name}
+                              <div className="min-w-0 max-w-[320px]">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#ece7e4] text-[#6c5937]">
+                                    {cat.code}
+                                  </span>
+                                  <span className="text-sm font-semibold text-[#1c1b19] tracking-tight truncate">
+                                    {cat.name}
+                                  </span>
                                 </div>
+                                {cat.subtitle && (
+                                  <div className="text-[11px] font-medium text-[#6c5937] truncate mt-0.5">
+                                    {cat.subtitle}
+                                  </div>
+                                )}
                                 <div
-                                  className="text-[11px] text-[#4c463c] truncate max-w-xs"
+                                  className="text-[11px] text-[#4c463c] truncate max-w-xs mt-0.5"
                                   title={cat.description}
                                 >
                                   {cat.description}
@@ -733,7 +845,7 @@ export const CategoryManagement: React.FC = () => {
                               <Link
                                 to={cat.slug}
                                 target="_blank"
-                                title="Xem danh mục trên sàn công khai"
+                                title="Xem danh mục trên giao diện User"
                                 className="p-1.5 text-[#4c463c] hover:text-[#1c1b19] hover:bg-white rounded transition-colors"
                               >
                                 <span className="material-symbols-outlined text-[18px]">
@@ -744,7 +856,7 @@ export const CategoryManagement: React.FC = () => {
                                 type="button"
                                 onClick={() => handleOpenEditModal(cat)}
                                 title="Chỉnh sửa danh mục"
-                                className="p-1.5 text-[#4c463c] hover:text-[#6c5937] hover:bg-white rounded transition-colors"
+                                className="p-1.5 text-[#4c463c] hover:text-[#6c5937] hover:bg-white rounded transition-colors cursor-pointer"
                               >
                                 <span className="material-symbols-outlined text-[18px]">
                                   edit_note
@@ -754,7 +866,7 @@ export const CategoryManagement: React.FC = () => {
                                 type="button"
                                 onClick={() => setConfirmModalItem(cat)}
                                 title={isActive ? "Tạm dừng hiển thị" : "Kích hoạt lại"}
-                                className={`p-1.5 rounded transition-colors ${
+                                className={`p-1.5 rounded transition-colors cursor-pointer ${
                                   isActive
                                     ? "text-[#4c463c] hover:text-[#ba1a1a] hover:bg-white"
                                     : "text-[#4c463c] hover:text-[#48654b] hover:bg-white"
@@ -762,6 +874,16 @@ export const CategoryManagement: React.FC = () => {
                               >
                                 <span className="material-symbols-outlined text-[18px]">
                                   {isActive ? "block" : "check_circle"}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteModalItem(cat)}
+                                title="Xóa danh mục"
+                                className="p-1.5 text-[#4c463c] hover:text-[#ba1a1a] hover:bg-white rounded transition-colors cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">
+                                  delete
                                 </span>
                               </button>
                             </div>
@@ -812,7 +934,7 @@ export const CategoryManagement: React.FC = () => {
                 verified
               </span>
               <span>
-                Hệ sinh thái phân loại danh mục tuân thủ bộ chỉ mục Universal Circular Taxonomy (UCT-2025).
+                Hệ sinh thái phân loại danh mục tuân thủ bộ chỉ mục Universal Circular Taxonomy (UCT-2025) &amp; lưu trữ ảnh trên Cloudinary CDN.
               </span>
             </div>
             <div className="font-mono text-[#7e766a] text-[11px]">
@@ -822,178 +944,404 @@ export const CategoryManagement: React.FC = () => {
         </section>
       </main>
 
-      {/* MODAL 1: ADD / EDIT CATEGORY */}
+      {/* MODAL 1: ADD / EDIT CATEGORY (MATCHING USER CATEGORY UI + CLOUDINARY UPLOAD) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#fdf8f5] rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-[#cfc5b8]/50 relative animate-scale-up">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#cfc5b8]/30">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-[#fdf8f5] rounded-2xl max-w-4xl w-full p-6 sm:p-7 shadow-2xl border border-[#cfc5b8]/50 relative my-8 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 mb-5 border-b border-[#cfc5b8]/30">
               <div>
                 <span className="text-[10px] text-[#6c5937] uppercase font-bold tracking-wider">
-                  Hồ Sơ Sổ Bộ
+                  Hồ Sơ Sổ Bộ · Đồng Bộ Giao Diện Khách Hàng &amp; Cloudinary
                 </span>
-                <h2 className="font-serif text-xl font-bold text-[#1c1b19]">
+                <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#1c1b19]">
                   {editingCategory ? "Chỉnh Sửa Danh Mục" : "Thêm Danh Mục Mới"}
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-[#f2ede9] hover:bg-[#ece7e4] text-[#4c463c] flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-full bg-[#f2ede9] hover:bg-[#ece7e4] text-[#4c463c] flex items-center justify-center transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-[#1c1b19] mb-1">
-                  Tên Danh Mục (Category Name) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formName}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="Ví dụ: Cameras & Optics"
-                  className="w-full px-3 py-2 bg-white rounded-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-xs text-[#1c1b19]"
-                />
-              </div>
+            <form onSubmit={handleSubmitForm} className="space-y-5 text-xs">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* LEFT COLUMN: FORM INPUTS */}
+                <div className="lg:col-span-7 space-y-4">
+                  {/* Row 1: Category Name & Code */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-[#1c1b19] mb-1">
+                        Tên Danh Mục (Hiển thị tiêu đề chính) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formName}
+                        onChange={(e) => handleNameChange(e.target.value)}
+                        placeholder="Ví dụ: Camera, Giày dép, Túi xách..."
+                        className="w-full px-3 py-2 bg-white rounded-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-xs text-[#1c1b19]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-[#1c1b19] mb-1">
+                        Mã Danh Mục (Code)
+                      </label>
+                      <input
+                        type="text"
+                        value={formCode}
+                        onChange={(e) => setFormCode(e.target.value.toUpperCase())}
+                        placeholder="CAT.06"
+                        className="w-full px-3 py-2 bg-white font-mono rounded-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-xs text-[#1c1b19]"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block font-semibold text-[#1c1b19] mb-1">
-                  Public Slug (URL Định Danh) *
-                </label>
-                <div className="flex items-center">
-                  <span className="px-3 py-2 bg-[#f2ede9] text-[#4c463c] font-mono text-[11px] rounded-l-lg border border-r-0 border-[#cfc5b8]/40">
-                    /categories/
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    value={formSlug}
-                    onChange={(e) => setFormSlug(e.target.value)}
-                    placeholder="cameras-optics"
-                    className="w-full px-3 py-2 bg-white font-mono text-xs rounded-r-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-[#1c1b19]"
-                  />
-                </div>
-                <p className="text-[11px] text-[#7e766a] mt-1">
-                  Đường dẫn khách hàng truy cập:{" "}
-                  <span className="text-[#6c5937] font-mono">
-                    /categories/{formSlug || "your-category"}
-                  </span>
-                </p>
-              </div>
+                  {/* Row 2: Public Slug */}
+                  <div>
+                    <label className="block font-semibold text-[#1c1b19] mb-1">
+                      Public Slug (URL Định Danh trên trang User) *
+                    </label>
+                    <div className="flex items-center">
+                      <span className="px-3 py-2 bg-[#f2ede9] text-[#4c463c] font-mono text-[11px] rounded-l-lg border border-r-0 border-[#cfc5b8]/40">
+                        /categories/
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        value={formSlug}
+                        onChange={(e) => setFormSlug(e.target.value)}
+                        placeholder="camera"
+                        className="w-full px-3 py-2 bg-white font-mono text-xs rounded-r-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-[#1c1b19]"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block font-semibold text-[#1c1b19] mb-1.5">
-                  Loại Thị Trường Áp Dụng (Marketplace Type)
-                </label>
-                <div className="grid grid-cols-3 gap-2.5">
-                  <label
-                    className={`cursor-pointer p-2.5 rounded-lg border transition-all flex flex-col items-center text-center ${
-                      formMarket === "RENT"
-                        ? "bg-[#9c6a3d]/15 border-[#7f5227] text-[#7f5227]"
-                        : "bg-white border-[#cfc5b8]/40 text-[#4c463c] hover:bg-[#f7f3ef]"
-                    }`}
-                  >
+                  {/* Row 3: Marketplace Type */}
+                  <div>
+                    <label className="block font-semibold text-[#1c1b19] mb-1.5">
+                      Loại Thị Trường Áp Dụng (Hiển thị huy hiệu RENT / THRIFT)
+                    </label>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <label
+                        className={`cursor-pointer p-2.5 rounded-lg border transition-all flex flex-col items-center text-center ${
+                          formMarket === "RENT"
+                            ? "bg-[#9c6a3d]/15 border-[#7f5227] text-[#7f5227]"
+                            : "bg-white border-[#cfc5b8]/40 text-[#4c463c] hover:bg-[#f7f3ef]"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="marketTypeRadio"
+                          value="RENT"
+                          checked={formMarket === "RENT"}
+                          onChange={() => setFormMarket("RENT")}
+                          className="sr-only"
+                        />
+                        <span className="font-bold text-xs">RENT</span>
+                        <span className="text-[10px] opacity-80 mt-0.5">Chỉ cho thuê</span>
+                      </label>
+
+                      <label
+                        className={`cursor-pointer p-2.5 rounded-lg border transition-all flex flex-col items-center text-center ${
+                          formMarket === "THRIFT"
+                            ? "bg-[#caebc9]/40 border-[#48654b] text-[#48654b]"
+                            : "bg-white border-[#cfc5b8]/40 text-[#4c463c] hover:bg-[#f7f3ef]"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="marketTypeRadio"
+                          value="THRIFT"
+                          checked={formMarket === "THRIFT"}
+                          onChange={() => setFormMarket("THRIFT")}
+                          className="sr-only"
+                        />
+                        <span className="font-bold text-xs">THRIFT</span>
+                        <span className="text-[10px] opacity-80 mt-0.5">Thuần mua đứt</span>
+                      </label>
+
+                      <label
+                        className={`cursor-pointer p-2.5 rounded-lg border transition-all flex flex-col items-center text-center ${
+                          formMarket === "COMMON"
+                            ? "bg-[#86724d]/20 border-[#6c5937] text-[#6c5937]"
+                            : "bg-white border-[#cfc5b8]/40 text-[#4c463c] hover:bg-[#f7f3ef]"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="marketTypeRadio"
+                          value="COMMON"
+                          checked={formMarket === "COMMON"}
+                          onChange={() => setFormMarket("COMMON")}
+                          className="sr-only"
+                        />
+                        <span className="font-bold text-xs">COMMON</span>
+                        <span className="text-[10px] opacity-80 mt-0.5">Cả RENT &amp; THRIFT</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Row 4: Subtitle (Tagline at footer of User Category card) */}
+                  <div>
+                    <label className="block font-semibold text-[#1c1b19] mb-1">
+                      Thông Điệp Phụ / Điểm Nhấn (Hiển thị chân thẻ trang /categories)
+                    </label>
                     <input
-                      type="radio"
-                      name="marketTypeRadio"
-                      value="RENT"
-                      checked={formMarket === "RENT"}
-                      onChange={() => setFormMarket("RENT")}
-                      className="sr-only"
+                      type="text"
+                      value={formSubtitle}
+                      onChange={(e) => setFormSubtitle(e.target.value)}
+                      placeholder="Ví dụ: Bao gồm body, lens prime & gimbal · Khử khuẩn UV 100%"
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-xs text-[#1c1b19]"
                     />
-                    <span className="font-bold text-xs">RENT</span>
-                    <span className="text-[10px] opacity-80 mt-0.5">Chỉ cho thuê</span>
-                  </label>
+                  </div>
 
-                  <label
-                    className={`cursor-pointer p-2.5 rounded-lg border transition-all flex flex-col items-center text-center ${
-                      formMarket === "THRIFT"
-                        ? "bg-[#caebc9]/40 border-[#48654b] text-[#48654b]"
-                        : "bg-white border-[#cfc5b8]/40 text-[#4c463c] hover:bg-[#f7f3ef]"
-                    }`}
-                  >
+                  {/* Row 5: Description */}
+                  <div>
+                    <label className="block font-semibold text-[#1c1b19] mb-1">
+                      Mô Tả Danh Mục (Hiển thị trên thẻ /categories &amp; đầu trang chi tiết)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={formDesc}
+                      onChange={(e) => setFormDesc(e.target.value)}
+                      placeholder="Nhập mô tả chi tiết danh mục, dòng sản phẩm tiêu biểu và tiêu chuẩn thẩm định..."
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-xs text-[#1c1b19]"
+                    />
+                  </div>
+
+                  {/* Row 6: Inspection Badge */}
+                  <div>
+                    <label className="block font-semibold text-[#1c1b19] mb-1">
+                      Nhãn Bảo Chứng Kiểm Định (Hiển thị tại trang chi tiết danh mục)
+                    </label>
                     <input
-                      type="radio"
-                      name="marketTypeRadio"
-                      value="THRIFT"
-                      checked={formMarket === "THRIFT"}
-                      onChange={() => setFormMarket("THRIFT")}
-                      className="sr-only"
+                      type="text"
+                      value={formInspectionBadge}
+                      onChange={(e) => setFormInspectionBadge(e.target.value)}
+                      placeholder="Ví dụ: 100% Kiểm định Shutter & Cảm biến"
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-xs text-[#1c1b19]"
                     />
-                    <span className="font-bold text-xs">THRIFT</span>
-                    <span className="text-[10px] opacity-80 mt-0.5">Chỉ mua đứt</span>
-                  </label>
+                  </div>
 
-                  <label
-                    className={`cursor-pointer p-2.5 rounded-lg border transition-all flex flex-col items-center text-center ${
-                      formMarket === "COMMON"
-                        ? "bg-[#86724d]/20 border-[#6c5937] text-[#6c5937]"
-                        : "bg-white border-[#cfc5b8]/40 text-[#4c463c] hover:bg-[#f7f3ef]"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="marketTypeRadio"
-                      value="COMMON"
-                      checked={formMarket === "COMMON"}
-                      onChange={() => setFormMarket("COMMON")}
-                      className="sr-only"
-                    />
-                    <span className="font-bold text-xs">COMMON</span>
-                    <span className="text-[10px] opacity-80 mt-0.5">Cả hai sàn</span>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-[#1c1b19] mb-1">
-                  Mô Tả Tiêu Chuẩn
-                </label>
-                <textarea
-                  rows={3}
-                  value={formDesc}
-                  onChange={(e) => setFormDesc(e.target.value)}
-                  placeholder="Nhập tóm tắt mô tả, tiêu chí giám định và phân loại tài sản..."
-                  className="w-full px-3 py-2 bg-white rounded-lg border border-[#cfc5b8]/40 focus:outline-none focus:ring-1 focus:ring-[#6c5937] text-xs text-[#1c1b19]"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-[#cfc5b8]/30">
-                <div>
-                  <div className="font-semibold text-[#1c1b19]">Trạng Thái Niêm Yết</div>
-                  <div className="text-[10px] text-[#7e766a]">
-                    Cho phép hiển thị trên thanh điều hướng &amp; bộ lọc người dùng
+                  {/* Row 7: Icon Selector */}
+                  <div>
+                    <label className="block font-semibold text-[#1c1b19] mb-1.5">
+                      Biểu Tượng Danh Mục (Icon)
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ICON_PRESETS.map((item) => (
+                        <button
+                          key={item.icon}
+                          type="button"
+                          onClick={() => setFormIcon(item.icon)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] transition-all cursor-pointer ${
+                            formIcon === item.icon
+                              ? "bg-[#1c1b19] text-white border-[#1c1b19] font-semibold"
+                              : "bg-white text-[#4c463c] border-[#cfc5b8]/40 hover:bg-[#f2ede9]"
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[15px]">
+                            {item.icon}
+                          </span>
+                          <span>{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formStatus === "ACTIVE"}
-                    onChange={(e) =>
-                      setFormStatus(e.target.checked ? "ACTIVE" : "INACTIVE")
-                    }
-                    className="sr-only peer"
-                  />
-                  <div className="w-10 h-5 bg-[#cfc5b8] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-[#48654b] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
-                </label>
+
+                {/* RIGHT COLUMN: CLOUDINARY IMAGE UPLOAD & LIVE USER CARD PREVIEW */}
+                <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
+                  {/* Cloudinary Upload Box */}
+                  <div className="p-4 rounded-xl bg-white border border-[#cfc5b8]/40 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-[#1c1b19] block">
+                          Ảnh Bìa Danh Mục (Cloudinary)
+                        </span>
+                        <span className="text-[10px] text-[#7e766a]">
+                          Tải ảnh lên Cloudinary để hiển thị ở trang chủ &amp; trang danh mục User
+                        </span>
+                      </div>
+                      {formImage.includes("cloudinary.com") && (
+                        <span className="px-2 py-0.5 rounded-full bg-[#caebc9] text-[#48654b] text-[10px] font-bold">
+                          Cloudinary ✓
+                        </span>
+                      )}
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadCategoryImage}
+                      className="hidden"
+                    />
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isUploadingImage}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex-1 py-2.5 px-3 rounded-lg bg-[#1c1b19] hover:bg-[#6c5937] text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-60 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          {isUploadingImage ? "sync" : "cloud_upload"}
+                        </span>
+                        <span>
+                          {isUploadingImage
+                            ? "Đang tải lên Cloudinary..."
+                            : formImage
+                            ? "Đổi Ảnh Trên Cloudinary"
+                            : "Tải Ảnh Lên Cloudinary"}
+                        </span>
+                      </button>
+                      {formImage && (
+                        <button
+                          type="button"
+                          onClick={() => setFormImage("")}
+                          title="Xóa ảnh"
+                          className="p-2.5 rounded-lg bg-[#f2ede9] hover:bg-[#ffdad6] text-[#4c463c] hover:text-[#ba1a1a] transition-colors cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">
+                            delete
+                          </span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-medium text-[#7e766a] mb-1">
+                        Hoặc dán trực tiếp URL ảnh (Cloudinary / HTTPS):
+                      </label>
+                      <input
+                        type="text"
+                        value={formImage}
+                        onChange={(e) => setFormImage(e.target.value)}
+                        placeholder="https://res.cloudinary.com/..."
+                        className="w-full px-2.5 py-1.5 bg-[#fdf8f5] rounded-lg border border-[#cfc5b8]/40 text-[11px] text-[#1c1b19] font-mono focus:outline-none focus:ring-1 focus:ring-[#6c5937]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Live User UI Card Preview */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-[#4c463c]">
+                      <span className="font-semibold uppercase tracking-wider">
+                        Xem Trước Thẻ Hiển Thị Ở Giao Diện User (/categories)
+                      </span>
+                      <span className="font-mono text-[10px] text-[#6c5937]">
+                        Live Preview
+                      </span>
+                    </div>
+
+                    <div className="rounded-2xl overflow-hidden border border-[#E6E2DC] bg-[#F7F5F0] shadow-md flex flex-col">
+                      <div className="relative w-full h-40 bg-[#E6E2DC] overflow-hidden flex items-center justify-center">
+                        {formImage ? (
+                          <img
+                            src={normalizeImageUrl(formImage)}
+                            alt={formName || "Preview"}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center gap-1 text-[#79716B]">
+                            <span className="material-symbols-outlined text-3xl">
+                              {formIcon || "image"}
+                            </span>
+                            <span className="text-[11px]">Chưa có ảnh bìa</span>
+                          </div>
+                        )}
+                        <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                          {formMarket === "THRIFT" ? (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-[#B45309] text-white">
+                              Thuần THRIFT
+                            </span>
+                          ) : formMarket === "RENT" ? (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-[#1C1A18]/85 text-white">
+                              Chuyên RENT
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#1C1A18]/85 text-white">
+                                RENT
+                              </span>
+                              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#FBF9F5]/90 text-[#1C1A18] border border-[#E6E2DC]">
+                                THRIFT
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <span className="absolute bottom-2 right-3 font-mono text-[10px] text-white/90 bg-black/50 px-2 py-0.5 rounded">
+                          {formCode || "CAT.01"}
+                        </span>
+                      </div>
+
+                      <div className="p-4 space-y-2">
+                        <h3 className="font-serif text-lg font-semibold text-[#1C1A18]">
+                          {formName || "Tên danh mục"}
+                        </h3>
+                        <p className="text-[11px] text-[#79716B] line-clamp-2 leading-relaxed">
+                          {formDesc ||
+                            "Mô tả danh mục sẽ hiển thị tại đây để khách hàng nắm rõ các dòng sản phẩm và tiêu chuẩn kiểm định."}
+                        </p>
+                        <div className="pt-2.5 border-t border-[#E6E2DC] flex items-center justify-between text-[10px] text-[#79716B] font-mono">
+                          <span className="truncate max-w-[180px]">
+                            {formSubtitle || "Kiểm định chuẩn hóa 100%"}
+                          </span>
+                          <span className="font-sans font-semibold text-[#1C1A18]">
+                            Khám phá →
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Active Status Toggle */}
+                  <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-[#cfc5b8]/40">
+                    <div>
+                      <div className="font-semibold text-[#1c1b19]">
+                        Trạng Thái Niêm Yết Công Khai
+                      </div>
+                      <div className="text-[10px] text-[#7e766a]">
+                        Hiển thị trên trang chủ, trang /categories &amp; bộ lọc sản phẩm
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formStatus === "ACTIVE"}
+                        onChange={(e) =>
+                          setFormStatus(e.target.checked ? "ACTIVE" : "INACTIVE")
+                        }
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-[#cfc5b8] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white peer-checked:bg-[#48654b] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+                    </label>
+                  </div>
+                </div>
               </div>
 
-              <div className="pt-3 flex items-center justify-end gap-2 border-t border-[#cfc5b8]/30">
+              <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-[#cfc5b8]/30">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-[#f2ede9] hover:bg-[#ece7e4] text-[#1c1b19] font-medium transition-colors"
+                  className="px-4 py-2.5 rounded-lg bg-[#f2ede9] hover:bg-[#ece7e4] text-[#1c1b19] font-medium transition-colors cursor-pointer"
                 >
                   Hủy Bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#1c1b19] hover:bg-[#6c5937] text-white font-semibold transition-colors shadow-sm"
+                  disabled={isSaving || isUploadingImage}
+                  className="px-5 py-2.5 rounded-lg bg-[#1c1b19] hover:bg-[#6c5937] text-white font-semibold transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
                 >
-                  Lưu Danh Mục
+                  {isSaving
+                    ? "Đang lưu vào DB..."
+                    : editingCategory
+                    ? "Lưu Cập Nhật"
+                    : "Tạo Danh Mục Mới"}
                 </button>
               </div>
             </form>
@@ -1038,22 +1386,22 @@ export const CategoryManagement: React.FC = () => {
               </strong>{" "}
               lưu hành.{" "}
               {confirmModalItem.status === "ACTIVE"
-                ? "Khi tạm dừng, các sản phẩm thuộc danh mục sẽ bị ẩn khỏi kết quả tìm kiếm và danh sách marketplace."
-                : "Khi kích hoạt, danh mục và toàn bộ sản phẩm sẽ hiển thị lại công khai trên marketplace."}
+                ? "Khi tạm dừng, danh mục này sẽ bị ẩn khỏi trang danh mục của khách hàng."
+                : "Khi kích hoạt, danh mục sẽ hiển thị lại công khai trên giao diện khách hàng."}
             </p>
 
             <div className="flex items-center justify-center gap-2.5">
               <button
                 type="button"
                 onClick={() => setConfirmModalItem(null)}
-                className="w-full py-2.5 rounded-lg bg-[#f2ede9] hover:bg-[#ece7e4] text-[#1c1b19] text-xs font-semibold transition-colors"
+                className="w-full py-2.5 rounded-lg bg-[#f2ede9] hover:bg-[#ece7e4] text-[#1c1b19] text-xs font-semibold transition-colors cursor-pointer"
               >
                 Giữ Nguyên
               </button>
               <button
                 type="button"
                 onClick={handleConfirmToggleStatus}
-                className={`w-full py-2.5 rounded-lg text-white text-xs font-semibold tracking-wider transition-colors shadow-sm ${
+                className={`w-full py-2.5 rounded-lg text-white text-xs font-semibold tracking-wider transition-colors shadow-sm cursor-pointer ${
                   confirmModalItem.status === "ACTIVE"
                     ? "bg-[#ba1a1a] hover:bg-[#93000a]"
                     : "bg-[#48654b] hover:bg-[#314d34]"
@@ -1062,6 +1410,46 @@ export const CategoryManagement: React.FC = () => {
                 {confirmModalItem.status === "ACTIVE"
                   ? "Xác Nhận Tạm Dừng"
                   : "Xác Nhận Kích Hoạt"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: CONFIRM DELETE CATEGORY */}
+      {deleteModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#fdf8f5] rounded-2xl max-w-md w-full p-6 shadow-2xl text-center border border-[#cfc5b8]/50 animate-scale-up">
+            <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-3 bg-[#ffdad6] text-[#ba1a1a]">
+              <span className="material-symbols-outlined text-[28px]">delete_forever</span>
+            </div>
+
+            <h3 className="font-serif text-lg font-bold text-[#1c1b19] mb-1.5">
+              Xóa Vĩnh Viễn Danh Mục?
+            </h3>
+
+            <p className="text-xs text-[#4c463c] mb-5 leading-relaxed">
+              Bạn có chắc chắn muốn xóa danh mục{" "}
+              <strong className="text-[#1c1b19]">{deleteModalItem.name}</strong> (
+              <span className="font-mono">{deleteModalItem.slug}</span>) khỏi cơ sở dữ liệu MongoDB? Thao tác này không thể hoàn tác.
+            </p>
+
+            <div className="flex items-center justify-center gap-2.5">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteModalItem(null)}
+                className="w-full py-2.5 rounded-lg bg-[#f2ede9] hover:bg-[#ece7e4] text-[#1c1b19] text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDeleteCategory}
+                className="w-full py-2.5 rounded-lg bg-[#ba1a1a] hover:bg-[#93000a] text-white text-xs font-semibold tracking-wider transition-colors shadow-sm disabled:opacity-60 cursor-pointer"
+              >
+                {isDeleting ? "Đang xóa..." : "Xác Nhận Xóa"}
               </button>
             </div>
           </div>

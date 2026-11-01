@@ -1,11 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { AppSidebar } from '../../components/layout/AppSidebar';
+import { getCategoriesApi, type CategoryItem as DbCategoryItem } from '../../services/category.api';
+import { normalizeImageUrl } from '../../utils/imageUrl';
+
+const DEFAULT_HOME_CATEGORIES = [
+  {
+    slug: 'camera',
+    name: 'Camera',
+    image: './src/assets/images/camerahome.jpg',
+    subtitle: '86+ thiết bị',
+  },
+  {
+    slug: 'shoes',
+    name: 'Giày dép',
+    image: './src/assets/images/shoeshome.jpg',
+    subtitle: '70+ đôi',
+  },
+  {
+    slug: 'dam-du-tiec',
+    name: 'Đầm dự tiệc',
+    image: './src/assets/images/partydresshome.jpg',
+    subtitle: '50+ mẫu',
+  },
+  {
+    slug: 'clothing',
+    name: 'Quần áo',
+    image: './src/assets/images/clotheshome.jpg',
+    subtitle: '140+ món',
+  },
+  {
+    slug: 'phu-kien',
+    name: 'Phụ kiện',
+    image: './src/assets/images/accessoryhome.jpg',
+    subtitle: '64+ món',
+  },
+];
 
 export const Home: React.FC = () => {
   const { user } = useAuth();
   const wishlistTarget = user ? '/wishlist' : '/login';
+  const [dbCategories, setDbCategories] = useState<DbCategoryItem[] | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
@@ -24,6 +60,54 @@ export const Home: React.FC = () => {
     window.addEventListener('reuse_user_sidebar_toggle', handleSync);
     return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadCats = async () => {
+      const list = await getCategoriesApi();
+      if (isMounted && Array.isArray(list) && list.length > 0) {
+        setDbCategories(list.filter((c) => c.isActive !== false));
+      }
+    };
+    void loadCats();
+    const handleUpdated = () => {
+      void loadCats();
+    };
+    window.addEventListener('category_updated', handleUpdated);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('category_updated', handleUpdated);
+    };
+  }, []);
+
+  const homeCategories = useMemo(() => {
+    if (!dbCategories || dbCategories.length === 0) {
+      return DEFAULT_HOME_CATEGORIES;
+    }
+    return dbCategories.map((c) => {
+      const cleanSlug = (c.slug || '')
+        .replace(/^\/categories\//i, '')
+        .replace(/^\/+/, '')
+        .trim()
+        .toLowerCase();
+      const def = DEFAULT_HOME_CATEGORIES.find((d) => d.slug === cleanSlug);
+      const total = Number(c.totalItems) || (Number(c.rentItems) || 0) + (Number(c.thriftItems) || 0);
+      return {
+        slug: cleanSlug,
+        name: c.name || def?.name || 'Danh mục',
+        image:
+          c.image && c.image.trim()
+            ? normalizeImageUrl(c.image)
+            : def?.image || './src/assets/images/camerahome.jpg',
+        subtitle:
+          total > 0
+            ? `${total} sản phẩm`
+            : c.subtitle && c.subtitle.trim()
+            ? c.subtitle.trim()
+            : def?.subtitle || 'Khám phá ngay',
+      };
+    });
+  }, [dbCategories]);
 
   return (
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased selection:bg-[#1C1A18] selection:text-[#FBF9F5] home-container">
@@ -173,80 +257,23 @@ export const Home: React.FC = () => {
               </Link>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              <Link
-                className="group bg-white rounded-lg border border-[#E7E2DA] overflow-hidden p-3 hover:border-[#1C1A18] transition-colors flex flex-col"
-                to="/categories/camera"
-              >
-                <div className="aspect-square rounded overflow-hidden bg-[#F4F0EA] mb-2.5">
-                  <img
-                    alt="Camera & Thiết bị quang học"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/camerahome.jpg"
-                  />
-                </div>
-                <h3 className="font-semibold text-xs text-[#1C1A18]">Camera</h3>
-                <span className="text-[11px] text-[#78736A] mt-0.5">86+ thiết bị</span>
-              </Link>
-
-              <Link
-                className="group bg-white rounded-lg border border-[#E7E2DA] overflow-hidden p-3 hover:border-[#1C1A18] transition-colors flex flex-col"
-                to="/categories/shoes"
-              >
-                <div className="aspect-square rounded overflow-hidden bg-[#F4F0EA] mb-2.5">
-                  <img
-                    alt="Giày dép"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/shoeshome.jpg"
-                  />
-                </div>
-                <h3 className="font-semibold text-xs text-[#1C1A18]">Giày dép</h3>
-                <span className="text-[11px] text-[#78736A] mt-0.5">70+ đôi</span>
-              </Link>
-
-              <Link
-                className="group bg-white rounded-lg border border-[#E7E2DA] overflow-hidden p-3 hover:border-[#1C1A18] transition-colors flex flex-col"
-                to="/categories/dam-du-tiec"
-              >
-                <div className="aspect-square rounded overflow-hidden bg-[#F4F0EA] mb-2.5">
-                  <img
-                    alt="Đầm dự tiệc"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/partydresshome.jpg"
-                  />
-                </div>
-                <h3 className="font-semibold text-xs text-[#1C1A18]">Đầm dự tiệc</h3>
-                <span className="text-[11px] text-[#78736A] mt-0.5">50+ mẫu</span>
-              </Link>
-
-              <Link
-                className="group bg-white rounded-lg border border-[#E7E2DA] overflow-hidden p-3 hover:border-[#1C1A18] transition-colors flex flex-col"
-                to="/categories/clothing"
-              >
-                <div className="aspect-square rounded overflow-hidden bg-[#F4F0EA] mb-2.5">
-                  <img
-                    alt="Quần áo"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/clotheshome.jpg"
-                  />
-                </div>
-                <h3 className="font-semibold text-xs text-[#1C1A18]">Quần áo</h3>
-                <span className="text-[11px] text-[#78736A] mt-0.5">140+ món</span>
-              </Link>
-
-              <Link
-                className="group bg-white rounded-lg border border-[#E7E2DA] overflow-hidden p-3 hover:border-[#1C1A18] transition-colors flex flex-col"
-                to="/categories/phu-kien"
-              >
-                <div className="aspect-square rounded overflow-hidden bg-[#F4F0EA] mb-2.5">
-                  <img
-                    alt="Phụ kiện"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/accessoryhome.jpg"
-                  />
-                </div>
-                <h3 className="font-semibold text-xs text-[#1C1A18]">Phụ kiện</h3>
-                <span className="text-[11px] text-[#78736A] mt-0.5">64+ món</span>
-              </Link>
+              {homeCategories.map((cat) => (
+                <Link
+                  key={cat.slug}
+                  className="group bg-white rounded-lg border border-[#E7E2DA] overflow-hidden p-3 hover:border-[#1C1A18] transition-colors flex flex-col"
+                  to={`/categories/${cat.slug}`}
+                >
+                  <div className="aspect-square rounded overflow-hidden bg-[#F4F0EA] mb-2.5">
+                    <img
+                      alt={cat.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      src={cat.image}
+                    />
+                  </div>
+                  <h3 className="font-semibold text-xs text-[#1C1A18] truncate">{cat.name}</h3>
+                  <span className="text-[11px] text-[#78736A] mt-0.5 truncate">{cat.subtitle}</span>
+                </Link>
+              ))}
             </div>
           </section>
 
