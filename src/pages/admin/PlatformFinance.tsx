@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { fetchPlatformFinanceApi } from "../../services/admin.api";
 import type {
@@ -48,7 +48,7 @@ export const PlatformFinance: React.FC = () => {
   };
 
   // Fetch report from live backend database
-  const loadFinancialData = async (isBackground = false) => {
+  const loadFinancialData = useCallback(async (isBackground = false) => {
     if (!isBackground) setIsLoading(true);
     try {
       const data = await fetchPlatformFinanceApi();
@@ -62,10 +62,31 @@ export const PlatformFinance: React.FC = () => {
     } finally {
       if (!isBackground) setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadFinancialData();
+    let isMounted = true;
+    void (async () => {
+      try {
+        const data = await fetchPlatformFinanceApi();
+        if (isMounted && data) {
+          setReport(data);
+          setTransactions(data.transactions || []);
+        }
+      } catch (err) {
+        if (isMounted) {
+          console.error("Lỗi khi tải báo cáo tài chính nền tảng:", err);
+          showToast("Không thể tải dữ liệu tài chính từ máy chủ. Vui lòng thử lại!");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Gateway Sync Action (Refreshes live DB from VNPay IPN)
@@ -209,10 +230,6 @@ export const PlatformFinance: React.FC = () => {
     showToast("Đã xuất báo cáo đối soát tài chính đa phân khu từ Live Database!");
   };
 
-  // Reset pagination to page 1 whenever filters or search change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedType, selectedStatus, pageSize]);
 
   // Filter transactions
   const filteredTxns = transactions.filter((t) => {
@@ -1072,7 +1089,10 @@ export const PlatformFinance: React.FC = () => {
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
                   placeholder="Tìm theo Transaction ID, VNPay Ref, Mã Đơn Hàng..."
                   className="w-full pl-9 pr-4 py-2 rounded-lg bg-white text-[#1c1c18] text-xs placeholder:text-[#7b766f] border border-[#ccc5bc]/40 focus:outline-none focus:ring-1 focus:ring-[#141310] shadow-sm"
                 />
@@ -1082,7 +1102,10 @@ export const PlatformFinance: React.FC = () => {
               <div className="md:col-span-4">
                 <select
                   value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value as TxnType)}
+                  onChange={(e) => {
+                    setSelectedType(e.target.value as TxnType);
+                    setCurrentPage(1);
+                  }}
                   className="w-full px-3 py-2 rounded-lg bg-white text-[#1c1c18] text-xs border border-[#ccc5bc]/40 focus:outline-none focus:ring-1 focus:ring-[#141310] shadow-sm cursor-pointer"
                 >
                   <option value="ALL">Loại giao dịch: Tất Cả ({transactions.length})</option>
@@ -1099,7 +1122,10 @@ export const PlatformFinance: React.FC = () => {
               <div className="md:col-span-3">
                 <select
                   value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value as TxnStatus)}
+                  onChange={(e) => {
+                    setSelectedStatus(e.target.value as TxnStatus);
+                    setCurrentPage(1);
+                  }}
                   className="w-full px-3 py-2 rounded-lg bg-white text-[#1c1c18] text-xs border border-[#ccc5bc]/40 focus:outline-none focus:ring-1 focus:ring-[#141310] shadow-sm cursor-pointer"
                 >
                   <option value="ALL">Trạng thái: Tất Cả</option>
@@ -1159,6 +1185,7 @@ export const PlatformFinance: React.FC = () => {
                             setSearchQuery("");
                             setSelectedType("ALL");
                             setSelectedStatus("ALL");
+                            setCurrentPage(1);
                           }}
                           className="mt-2 px-3.5 py-1.5 rounded-lg bg-[#141310] text-white text-xs font-semibold"
                         >
@@ -1258,7 +1285,10 @@ export const PlatformFinance: React.FC = () => {
                 <span>Số dòng / trang:</span>
                 <select
                   value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
                   className="px-2 py-1 rounded bg-[#f7f3ec] text-[#1c1c18] font-semibold border border-[#ccc5bc]/40 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#141310]"
                 >
                   <option value={8}>8 dòng</option>

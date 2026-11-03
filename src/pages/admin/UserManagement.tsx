@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { fetchAdminUsers } from "../../services/admin.api";
+import {
+  fetchAdminUsers,
+  toggleUserLockApi,
+  respondUserAppealApi,
+} from "../../services/admin.api";
 import type { MongoUserItem } from "../../services/admin.api";
 
-type RoleFilter = "ALL" | "USER" | "SHOP_OWNER" | "ADMIN";
+type QuickFilterTab = "ALL" | "ACTIVE" | "LOCKED" | "KYC_APPROVED" | "KYC_PENDING";
 type StatusFilter = "ALL" | "ACTIVE" | "SUSPENDED" | "PENDING";
 type KycFilter = "ALL" | "APPROVED" | "PENDING" | "UNVERIFIED";
 
@@ -58,7 +62,7 @@ export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<MongoUserItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedRole, setSelectedRole] = useState<RoleFilter>("ALL");
+  const [quickFilter, setQuickFilter] = useState<QuickFilterTab>("ALL");
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("ALL");
   const [selectedKyc, setSelectedKyc] = useState<KycFilter>("ALL");
 
@@ -76,11 +80,34 @@ export const UserManagement: React.FC = () => {
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Lock User Modal State
+  const [lockingUser, setLockingUser] = useState<MongoUserItem | null>(null);
+  const [lockReasonInput, setLockReasonInput] = useState<string>(
+    "Tài khoản bị tạm khóa để kiểm tra bảo mật hoặc rà soát giao dịch"
+  );
+  const [isSubmittingLock, setIsSubmittingLock] = useState<boolean>(false);
+
+  // Respond to Appeal Modal State
+  const [respondingAppealUser, setRespondingAppealUser] = useState<MongoUserItem | null>(null);
+  const [appealLockReason, setAppealLockReason] = useState<string>("");
+  const [adminReplyText, setAdminReplyText] = useState<string>(
+    "Đội ngũ Quản trị viên ReUse Hub đã xem xét giải trình và xác thực thông tin tài khoản hợp lệ. Tài khoản đã được phục hồi toàn bộ quyền truy cập."
+  );
+  const [shouldUnlock, setShouldUnlock] = useState<boolean>(true);
+  const [isSubmittingAppeal, setIsSubmittingAppeal] = useState<boolean>(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
     }, 3500);
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+    }
+    showToast(`Đã sao chép ${label} vào bộ nhớ tạm!`);
   };
 
   useEffect(() => {
@@ -110,46 +137,52 @@ export const UserManagement: React.FC = () => {
     };
   }, []);
 
-  // Compute live metrics strictly from real MongoDB users
-  const metrics = useMemo(() => {
-    const total = users.length;
-    const customers = users.filter((u) => u.role === "USER").length;
-    const shopOwners = users.filter((u) => u.role === "SHOP_OWNER").length;
-    const admins = users.filter((u) => u.role === "ADMIN").length;
+  // Lọc chỉ lấy danh sách tài khoản role USER (loại bỏ Admin và Shop Owner)
+  const userOnlyList = useMemo(() => {
+    return users.filter(
+      (u) => u.role === "USER" || (!u.role && u.role !== "ADMIN" && u.role !== "SHOP_OWNER")
+    );
+  }, [users]);
 
-    const kycApproved = users.filter((u) => u.kycStatus === "APPROVED").length;
-    const kycPending = users.filter((u) => u.kycStatus === "PENDING").length;
-    const suspended = users.filter((u) => u.status === "SUSPENDED").length;
+  // Compute live metrics strictly from real MongoDB user accounts
+  const metrics = useMemo(() => {
+    const total = userOnlyList.length;
+    const kycApproved = userOnlyList.filter((u) => u.kycStatus === "APPROVED").length;
+    const kycPending = userOnlyList.filter((u) => u.kycStatus === "PENDING").length;
+    const suspended = userOnlyList.filter(
+      (u) => u.status === "SUSPENDED" || u.status === "LOCKED" || u.status === "lock" || u.status === "locked" || Boolean(u.isLocked)
+    ).length;
+    const active = Math.max(0, total - suspended);
 
     const kycPercent = total > 0 ? ((kycApproved / total) * 100).toFixed(1) : "0.0";
     const suspendedPercent = total > 0 ? ((suspended / total) * 100).toFixed(2) : "0.00";
 
     return {
       total,
-      customers,
-      shopOwners,
-      admins,
+      active,
       kycApproved,
       kycPercent,
       kycPending,
       suspended,
       suspendedPercent,
     };
-  }, [users]);
+  }, [userOnlyList]);
 
-  // Filter users based on tab, search input, status, and KYC
+  // Filter users based on quick filter tab, search input, status, and KYC
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
-      // Role filter
-      if (selectedRole !== "ALL" && user.role !== selectedRole) {
-        return false;
-      }
+    const list = userOnlyList.filter((user) => {
+      const isLockedUser =
+        user.status === "SUSPENDED" || user.status === "LOCKED" || user.status === "lock" || user.status === "locked" || Boolean(user.isLocked);
 
-      // Status filter (defaulting undefined to ACTIVE)
-      const userStatus = user.status || "ACTIVE";
-      if (selectedStatus !== "ALL" && userStatus !== selectedStatus) {
-        return false;
-      }
+      // Quick filter tabs
+      if (quickFilter === "ACTIVE" && isLockedUser) return false;
+      if (quickFilter === "LOCKED" && !isLockedUser) return false;
+      if (quickFilter === "KYC_APPROVED" && user.kycStatus !== "APPROVED") return false;
+      if (quickFilter === "KYC_PENDING" && user.kycStatus !== "PENDING") return false;
+
+      // Status filter (match with DB status & isLocked)
+      if (selectedStatus === "ACTIVE" && isLockedUser) return false;
+      if (selectedStatus === "SUSPENDED" && !isLockedUser) return false;
 
       // KYC filter
       if (selectedKyc === "APPROVED" && user.kycStatus !== "APPROVED") return false;
@@ -176,7 +209,33 @@ export const UserManagement: React.FC = () => {
 
       return true;
     });
-  }, [users, selectedRole, selectedStatus, selectedKyc, searchTerm]);
+
+    // Ưu tiên đưa các tài khoản có đơn khiếu nại (PENDING) lên đầu danh sách/đầu trang
+    return [...list].sort((a, b) => {
+      const aIsLocked =
+        a.status === "SUSPENDED" || a.status === "LOCKED" || a.status === "lock" || a.status === "locked" || Boolean(a.isLocked);
+      const bIsLocked =
+        b.status === "SUSPENDED" || b.status === "LOCKED" || b.status === "lock" || b.status === "locked" || Boolean(b.isLocked);
+
+      const aHasAppeal = aIsLocked && Boolean(a.lockAppeal && a.lockAppeal.status === "PENDING");
+      const bHasAppeal = bIsLocked && Boolean(b.lockAppeal && b.lockAppeal.status === "PENDING");
+
+      if (aHasAppeal && !bHasAppeal) return -1;
+      if (!aHasAppeal && bHasAppeal) return 1;
+
+      // Cùng có đơn khiếu nại -> xếp theo thời gian gửi đơn mới nhất
+      if (aHasAppeal && bHasAppeal) {
+        const timeA = new Date(a.lockAppeal?.submittedAt || a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.lockAppeal?.submittedAt || b.updatedAt || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      }
+
+      // Thông thường -> xếp theo ngày tạo mới nhất
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [userOnlyList, quickFilter, selectedStatus, selectedKyc, searchTerm]);
 
   // Pagination slicing
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
@@ -185,8 +244,8 @@ export const UserManagement: React.FC = () => {
     return filteredUsers.slice(start, start + pageSize);
   }, [filteredUsers, currentPage, pageSize]);
 
-  const handleRoleChange = (role: RoleFilter) => {
-    setSelectedRole(role);
+  const handleQuickFilterChange = (tab: QuickFilterTab) => {
+    setQuickFilter(tab);
     setCurrentPage(1);
   };
 
@@ -206,45 +265,155 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleResetFilters = () => {
-    setSelectedRole("ALL");
+    setQuickFilter("ALL");
     setSelectedStatus("ALL");
     setSelectedKyc("ALL");
     setSearchTerm("");
     setCurrentPage(1);
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    showToast(`Đã sao chép ${label} vào bộ nhớ tạm!`);
+  // Mở khóa tài khoản trực tiếp và lưu vào DB
+  const handleDirectUnlock = async (userId: string, fullName?: string) => {
+    try {
+      await toggleUserLockApi(userId, false);
+      setUsers((prev) =>
+        prev.map((u) =>
+          u._id === userId ? { ...u, status: "ACTIVE", isLocked: false, lockReason: "" } : u
+        )
+      );
+      if (inspectingUser && inspectingUser._id === userId) {
+        setInspectingUser((prev) =>
+          prev ? { ...prev, status: "ACTIVE", isLocked: false, lockReason: "" } : null
+        );
+      }
+      showToast(`Đã mở khóa tài khoản ${fullName || ""} thành công và lưu vào MongoDB!`);
+    } catch (err: unknown) {
+      const errObj = err as { response?: { data?: { message?: string } }; message?: string };
+      showToast("Không thể mở khóa tài khoản: " + (errObj?.response?.data?.message || errObj?.message || "Lỗi không xác định"));
+    }
   };
 
-  // Toggle user suspension status (in local state + toast)
-  const handleToggleStatus = (userId: string) => {
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u._id === userId) {
-          const newStatus = u.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
-          showToast(
-            `Đã chuyển trạng thái tài khoản ${u.fullName} thành: ${
-              newStatus === "SUSPENDED" ? "Tạm Khóa" : "Hoạt Động"
-            }`
-          );
-          return { ...u, status: newStatus };
-        }
-        return u;
-      })
-    );
-    if (inspectingUser && inspectingUser._id === userId) {
-      setInspectingUser((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: prev.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
-            }
-          : null
-      );
-    }
+  // Kích hoạt tạm khóa / mở khóa tài khoản
+  const handleInitiateLockToggle = (user: MongoUserItem) => {
     setActionMenuUserId(null);
+    const isLocked =
+      user.status === "SUSPENDED" || user.status === "LOCKED" || user.status === "lock" || user.status === "locked" || Boolean(user.isLocked);
+    if (isLocked) {
+      handleDirectUnlock(user._id, user.fullName);
+    } else {
+      setLockingUser(user);
+    }
+  };
+
+  // Xác nhận tạm khóa tài khoản và lưu vào MongoDB
+  const handleConfirmLock = async () => {
+    if (!lockingUser) return;
+    setIsSubmittingLock(true);
+    try {
+      await toggleUserLockApi(lockingUser._id, true, lockReasonInput);
+      setUsers((prev) =>
+        prev.map((u) =>
+          u._id === lockingUser._id
+            ? {
+                ...u,
+                status: "lock",
+                isLocked: true,
+                lockReason: lockReasonInput,
+                lockedAt: new Date().toISOString(),
+                lockAppeal: null,
+              }
+            : u
+        )
+      );
+      if (inspectingUser && inspectingUser._id === lockingUser._id) {
+        setInspectingUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "lock",
+                isLocked: true,
+                lockReason: lockReasonInput,
+                lockedAt: new Date().toISOString(),
+                lockAppeal: null,
+              }
+            : null
+        );
+      }
+      showToast(`Đã tạm khóa tài khoản ${lockingUser.fullName} và lưu trạng thái vào MongoDB!`);
+      setLockingUser(null);
+    } catch (err: unknown) {
+      const errObj = err as { response?: { data?: { message?: string } }; message?: string };
+      showToast("Lỗi khi tạm khóa: " + (errObj?.response?.data?.message || errObj?.message || "Lỗi không xác định"));
+    } finally {
+      setIsSubmittingLock(false);
+    }
+  };
+
+  // Mở modal phản hồi khiếu nại của User (Appeal Response)
+  const handleOpenRespondAppeal = (user: MongoUserItem) => {
+    setActionMenuUserId(null);
+    setRespondingAppealUser(user);
+    setAppealLockReason(user.lockReason || "Tài khoản bị tạm khóa để kiểm tra bảo mật");
+    setAdminReplyText(
+      "Đội ngũ Quản trị viên ReUse Hub đã xem xét câu hỏi và giải trình của bạn. Chúng tôi xác nhận tài khoản hoàn toàn hợp lệ và đã tiến hành mở khóa toàn diện."
+    );
+    setShouldUnlock(true);
+  };
+
+  // Xác nhận phản hồi khiếu nại, mở khóa và gửi Gmail thật
+  const handleConfirmRespondAppeal = async () => {
+    if (!respondingAppealUser) return;
+    setIsSubmittingAppeal(true);
+    try {
+      await respondUserAppealApi(respondingAppealUser._id, {
+        unlock: shouldUnlock,
+        lockReason: appealLockReason,
+        adminReply: adminReplyText,
+      });
+
+      setUsers((prev) =>
+        prev.map((u) =>
+          u._id === respondingAppealUser._id
+            ? {
+                ...u,
+                status: shouldUnlock ? "ACTIVE" : u.status,
+                isLocked: shouldUnlock ? false : u.isLocked,
+                lockReason: shouldUnlock ? "" : u.lockReason,
+                lockAppeal: u.lockAppeal
+                  ? {
+                      ...u.lockAppeal,
+                      status: shouldUnlock ? "RESOLVED" : "REJECTED",
+                      adminReply: adminReplyText,
+                      resolvedAt: new Date().toISOString(),
+                    }
+                  : null,
+              }
+            : u
+        )
+      );
+
+      if (inspectingUser && inspectingUser._id === respondingAppealUser._id) {
+        setInspectingUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: shouldUnlock ? "ACTIVE" : prev.status,
+                isLocked: shouldUnlock ? false : prev.isLocked,
+              }
+            : null
+        );
+      }
+
+      showToast(
+        `Đã phản hồi khiếu nại, mở khóa tài khoản và gửi email thông báo thành công tới ${respondingAppealUser.email}!`
+      );
+      setRespondingAppealUser(null);
+    } catch (err: unknown) {
+      const errObj = err as { response?: { data?: { message?: string } }; message?: string };
+      showToast("Lỗi xử lý phản hồi: " + (errObj?.response?.data?.message || errObj?.message || "Lỗi không xác định"));
+    } finally {
+      setIsSubmittingAppeal(false);
+    }
   };
 
   // Export CSV of currently filtered users
@@ -395,7 +564,7 @@ export const UserManagement: React.FC = () => {
             <div className="flex items-start justify-between">
               <div className="flex flex-col gap-1">
                 <span className="text-[11px] text-[#7b766f] uppercase tracking-wider font-bold">
-                  TỔNG THÀNH VIÊN SÀN
+                  TỔNG NGƯỜI DÙNG (ROLE USER)
                 </span>
                 <span className="font-serif text-3xl sm:text-4xl font-bold text-[#1c1c18] leading-none mt-1">
                   {metrics.total}
@@ -409,11 +578,11 @@ export const UserManagement: React.FC = () => {
             </div>
             <div className="mt-4 pt-2.5 bg-[#ffffff]/80 -mx-5 -mb-5 px-5 py-2.5 border-t border-[#ccc5bc]/20">
               <div className="flex items-center justify-between text-xs text-[#4a463f] font-medium">
-                <span>{metrics.customers} Khách Hàng</span>
+                <span>{metrics.active} Đang Hoạt Động</span>
                 <span className="text-[#ccc5bc]">•</span>
-                <span>{metrics.shopOwners} Shop Owner</span>
+                <span>{metrics.suspended} Bị Tạm Khóa</span>
                 <span className="text-[#ccc5bc]">•</span>
-                <span>{metrics.admins} Admin</span>
+                <span>{metrics.kycApproved} Đã Duyệt KYC</span>
               </div>
             </div>
           </div>
@@ -523,52 +692,63 @@ export const UserManagement: React.FC = () => {
       {/* Multi-tier Search, Filter & Role Tabs Bar */}
       <section className="w-full bg-[#fdf9f2] px-4 sm:px-6 lg:px-12 pb-6">
         <div className="max-w-7xl mx-auto flex flex-col gap-4 bg-[#f7f3ec] p-4 sm:p-5 rounded-2xl shadow-xs border border-[#ccc5bc]/30">
-          {/* Top Row: Role Filter Tabs */}
+          {/* Top Row: Quick Filter Tabs for Users */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ccc5bc]/30 pb-3">
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 max-w-full">
               <button
-                onClick={() => handleRoleChange("ALL")}
+                onClick={() => handleQuickFilterChange("ALL")}
                 type="button"
-                className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  selectedRole === "ALL"
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  quickFilter === "ALL"
                     ? "bg-[#292724] text-[#fdf9f2] shadow-xs"
                     : "text-[#4a463f] hover:bg-[#ebe8e1] hover:text-[#1c1c18]"
                 }`}
               >
-                Tất Cả ({metrics.total})
+                Tất Cả Người Dùng ({metrics.total})
               </button>
               <button
-                onClick={() => handleRoleChange("USER")}
+                onClick={() => handleQuickFilterChange("ACTIVE")}
                 type="button"
-                className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  selectedRole === "USER"
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  quickFilter === "ACTIVE"
                     ? "bg-[#292724] text-[#fdf9f2] shadow-xs"
                     : "text-[#4a463f] hover:bg-[#ebe8e1] hover:text-[#1c1c18]"
                 }`}
               >
-                Khách Hàng / Customer ({metrics.customers})
+                Đang Hoạt Động ({metrics.active})
               </button>
               <button
-                onClick={() => handleRoleChange("SHOP_OWNER")}
+                onClick={() => handleQuickFilterChange("LOCKED")}
                 type="button"
-                className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  selectedRole === "SHOP_OWNER"
-                    ? "bg-[#292724] text-[#fdf9f2] shadow-xs"
-                    : "text-[#4a463f] hover:bg-[#ebe8e1] hover:text-[#1c1c18]"
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  quickFilter === "LOCKED"
+                    ? "bg-[#ba1a1a] text-[#ffffff] shadow-xs"
+                    : "text-[#ba1a1a] hover:bg-[#ffdad6]/60"
                 }`}
               >
-                Chủ Xưởng / Shop Owner ({metrics.shopOwners})
+                Bị Tạm Khóa ({metrics.suspended})
               </button>
               <button
-                onClick={() => handleRoleChange("ADMIN")}
+                onClick={() => handleQuickFilterChange("KYC_APPROVED")}
                 type="button"
-                className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  selectedRole === "ADMIN"
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  quickFilter === "KYC_APPROVED"
                     ? "bg-[#292724] text-[#fdf9f2] shadow-xs"
                     : "text-[#4a463f] hover:bg-[#ebe8e1] hover:text-[#1c1c18]"
                 }`}
               >
-                Quản Trị Viên / Administrator ({metrics.admins})
+                Đã Duyệt KYC ({metrics.kycApproved})
+              </button>
+              <button
+                onClick={() => handleQuickFilterChange("KYC_PENDING")}
+                type="button"
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  quickFilter === "KYC_PENDING"
+                    ? "bg-[#7b5227] text-[#ffffff] shadow-xs"
+                    : "text-[#7b5227] hover:bg-[#f0e0cb]"
+                }`}
+              >
+                Chờ Duyệt KYC ({metrics.kycPending})
               </button>
             </div>
 
@@ -576,8 +756,8 @@ export const UserManagement: React.FC = () => {
               <span className="material-symbols-outlined text-[16px] text-[#576151]">
                 tune
               </span>
-              <span className="uppercase tracking-wider font-semibold">
-                Chế độ lọc thời gian thực
+              <span className="uppercase tracking-wider font-semibold text-[11px]">
+                Bộ lọc thời gian thực
               </span>
             </div>
           </div>
@@ -682,7 +862,7 @@ export const UserManagement: React.FC = () => {
           </div>
 
           {/* Responsive Table */}
-          <div className="w-full overflow-x-auto">
+          <div className="w-full overflow-x-auto min-h-[360px] pb-24">
             {loading ? (
               <div className="py-20 text-center flex flex-col items-center justify-center">
                 <div className="w-9 h-9 border-3 border-[#576151] border-t-transparent rounded-full animate-spin mb-3"></div>
@@ -715,129 +895,91 @@ export const UserManagement: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <table className="w-full text-left text-sm border-collapse min-w-[950px]">
+              <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-[#f7f3ec]/80 text-[#7b766f] text-[11px] uppercase tracking-wider font-bold border-b border-[#ccc5bc]/30">
-                    <th className="py-3.5 px-4 pl-6 font-bold" scope="col">
+                  <tr className="bg-[#f7f3ec]/90 text-[#7b766f] text-[11px] uppercase tracking-wider font-bold border-b border-[#ccc5bc]/30">
+                    <th className="py-2.5 px-3 pl-5 font-bold w-[26%]" scope="col">
                       Người Dùng
                     </th>
-                    <th className="py-3.5 px-4 font-bold" scope="col">
+                    <th className="py-2.5 px-3 font-bold w-[25%]" scope="col">
                       Email &amp; Bảo Mật
                     </th>
-                    <th className="py-3.5 px-4 font-bold" scope="col">
-                      Phân Vai
-                    </th>
-                    <th className="py-3.5 px-4 font-bold" scope="col">
+                    <th className="py-2.5 px-3 font-bold w-[14%]" scope="col">
                       Trạng Thái
                     </th>
-                    <th className="py-3.5 px-4 font-bold" scope="col">
+                    <th className="py-2.5 px-3 font-bold w-[13%]" scope="col">
                       Định Danh KYC
                     </th>
-                    <th className="py-3.5 px-4 font-bold" scope="col">
-                      Ngày Tạo
+                    <th className="py-2.5 px-3 font-bold w-[12%]" scope="col">
+                      Thời Gian
                     </th>
-                    <th className="py-3.5 px-4 font-bold" scope="col">
-                      Hoạt Động Gần Nhất
-                    </th>
-                    <th className="py-3.5 px-4 pr-6 text-right font-bold" scope="col">
+                    <th className="py-2.5 px-3 pr-5 text-right font-bold w-[10%]" scope="col">
                       Thao Tác
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#ccc5bc]/20 text-[#1c1c18]">
-                  {paginatedUsers.map((user) => {
+                  {paginatedUsers.map((user, index) => {
                     const initials = getInitials(user.fullName);
-                    const isShopOwner = user.role === "SHOP_OWNER";
-                    const isAdmin = user.role === "ADMIN";
-                    const isCustomer = user.role === "USER";
                     const isKycApproved = user.kycStatus === "APPROVED";
                     const isKycPending = user.kycStatus === "PENDING";
-                    const isSuspended = user.status === "SUSPENDED";
+                    const isAccountLocked =
+                      user.status === "SUSPENDED" || user.status === "LOCKED" || user.status === "lock" || user.status === "locked" || Boolean(user.isLocked);
+                    const hasPendingAppeal = Boolean(user.lockAppeal && user.lockAppeal.status === "PENDING");
+                    // ĐIỀU KIỆN: Chỉ hiện nút Phản hồi khi tài khoản BỊ KHÓA VÀ user ĐÃ GỬI ĐƠN
+                    const canRespondAppeal = isAccountLocked && hasPendingAppeal;
                     const timeInfo = formatDate(user.createdAt);
                     const relativeTime = getRelativeTime(user.updatedAt || user.createdAt);
-
-                    // Avatar background
-                    let avatarBg = "bg-[#ebe8e1] text-[#292724]";
-                    if (isShopOwner) avatarBg = "bg-[#2e2618] text-[#f0e0cb]";
-                    if (isAdmin) avatarBg = "bg-[#292724] text-[#fdf9f2]";
 
                     return (
                       <tr
                         key={user._id}
-                        className={`hover:bg-[#f7f3ec]/60 transition-colors ${
-                          isShopOwner ? "bg-[#f7f3ec]/20" : ""
-                        }`}
+                        className={canRespondAppeal ? "bg-[#fffbeb]/70 hover:bg-[#fef3c7]/60 transition-colors" : "hover:bg-[#f7f3ec]/60 transition-colors"}
                       >
-                        {/* Column 1: Người Dùng */}
-                        <td className="py-4 px-4 pl-6 align-middle">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-10 h-10 rounded-full ${avatarBg} overflow-hidden shrink-0 flex items-center justify-center font-serif font-bold text-sm shadow-xs`}
-                            >
+                        {/* Cột 1: Người Dùng */}
+                        <td className="py-2.5 px-3 pl-5 align-middle">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-[#ebe8e1] text-[#292724] overflow-hidden shrink-0 flex items-center justify-center font-serif font-bold text-xs shadow-xs">
                               {initials}
                             </div>
                             <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-[#1c1c18] leading-tight truncate max-w-[160px]">
-                                  {user.fullName || "Người Dùng"}
-                                </span>
-                                {isShopOwner && (
-                                  <span className="px-1.5 py-0.5 rounded bg-[#f0e0cb] text-[#4f4535] text-[9px] uppercase font-bold shrink-0">
-                                    CHỦ XƯỞNG
-                                  </span>
-                                )}
-                                {isAdmin && (
-                                  <span className="px-1.5 py-0.5 rounded bg-[#ebe8e1] text-[#1c1c18] text-[9px] uppercase font-bold shrink-0">
-                                    HỆ THỐNG
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-xs text-[#7b766f] tracking-wide mt-0.5">
+                              <span
+                                className="font-semibold text-[#1c1c18] leading-tight truncate max-w-[170px]"
+                                title={user.fullName || "Người Dùng"}
+                              >
+                                {user.fullName || "Người Dùng"}
+                              </span>
+                              <span className="text-[11px] text-[#7b766f] tracking-wide mt-0.5 truncate">
                                 {user.phoneNumber || "Chưa cập nhật SĐT"}
                               </span>
                             </div>
                           </div>
                         </td>
 
-                        {/* Column 2: Email & Bảo Mật */}
-                        <td className="py-4 px-4 align-middle">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[#1c1c18] font-medium leading-tight truncate max-w-[210px]">
+                        {/* Cột 2: Email & Bảo Mật */}
+                        <td className="py-2.5 px-3 align-middle">
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span
+                              className="text-[#1c1c18] font-medium leading-tight truncate max-w-[210px]"
+                              title={user.email}
+                            >
                               {user.email}
                             </span>
-                            {isAdmin && (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-[#292724] font-semibold">
-                                <span className="material-symbols-outlined text-[13px]">
-                                  admin_panel_settings
-                                </span>{" "}
-                                Audit Officer • Khóa FIDO2
-                              </span>
-                            )}
-                            {isShopOwner && (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-[#7b5227] font-semibold">
-                                <span className="material-symbols-outlined text-[13px]">
-                                  key
-                                </span>{" "}
-                                Khóa Cứng (Hardware Key)
-                              </span>
-                            )}
-                            {isCustomer && isKycApproved && (
+                            {isKycApproved ? (
                               <span className="inline-flex items-center gap-1 text-[11px] text-[#576151] font-medium">
                                 <span className="material-symbols-outlined text-[13px]">
                                   shield
                                 </span>{" "}
                                 2FA FIDO2 Kích Hoạt
                               </span>
-                            )}
-                            {isCustomer && isKycPending && (
+                            ) : isKycPending ? (
                               <span className="inline-flex items-center gap-1 text-[11px] text-[#7b5227] font-medium">
                                 <span className="material-symbols-outlined text-[13px]">
                                   hourglass_top
                                 </span>{" "}
                                 Chờ Kích Hoạt Bảo Mật
                               </span>
-                            )}
-                            {isCustomer && !isKycApproved && !isKycPending && (
+                            ) : (
                               <span className="inline-flex items-center gap-1 text-[11px] text-[#7b766f]">
                                 Xác Thực Tiêu Chuẩn
                               </span>
@@ -845,163 +987,189 @@ export const UserManagement: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Column 3: Phân Vai */}
-                        <td className="py-4 px-4 align-middle">
-                          {isCustomer && (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[#4a463f] bg-[#f1ede6] text-xs font-semibold">
-                              Customer
-                            </span>
-                          )}
-                          {isShopOwner && (
-                            <div className="flex flex-col items-start">
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[#4f4535] bg-[#f0e0cb] text-xs font-bold">
-                                Shop Owner
+                        {/* Cột 3: Trạng Thái (Chỉ hiện "Đã khóa" khi bị khóa; khi user gửi đơn thì hiện "Có đơn khiếu nại") */}
+                        <td className="py-2.5 px-3 align-middle">
+                          {isAccountLocked ? (
+                            hasPendingAppeal ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#fef3c7] text-[#92400e] text-[11px] font-bold whitespace-nowrap border border-[#f59e0b]/40 shadow-2xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#d97706] animate-pulse"></span>{" "}
+                                Có đơn khiếu nại
                               </span>
-                              <span className="text-[10px] text-[#7b766f] mt-0.5">
-                                Đối tác chính thức
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#ffdad6] text-[#ba1a1a] text-[11px] font-bold whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#ba1a1a]"></span>{" "}
+                                Đã khóa
                               </span>
-                            </div>
-                          )}
-                          {isAdmin && (
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[#fdf9f2] bg-[#292724] text-xs font-bold">
-                              Administrator
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Column 4: Trạng Thái */}
-                        <td className="py-4 px-4 align-middle">
-                          {isSuspended ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#ffdad6] text-[#ba1a1a] text-xs font-bold">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#ba1a1a]"></span>{" "}
-                              Tạm Khóa
-                            </span>
+                            )
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#d8e3ce] text-[#5b6655] text-xs font-semibold">
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#d8e3ce] text-[#5b6655] text-[11px] font-semibold whitespace-nowrap">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#576151] animate-pulse"></span>{" "}
-                              Hoạt Động
+                              Hoạt động
                             </span>
                           )}
                         </td>
 
-                        {/* Column 5: Định Danh KYC */}
-                        <td className="py-4 px-4 align-middle">
+                        {/* Cột 4: Định Danh KYC */}
+                        <td className="py-2.5 px-3 align-middle">
                           {isKycApproved ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#d8e3ce] text-[#5b6655] text-xs font-bold">
-                              <span className="material-symbols-outlined text-[14px]">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#d8e3ce] text-[#5b6655] text-[11px] font-bold whitespace-nowrap">
+                              <span className="material-symbols-outlined text-[13px]">
                                 verified
                               </span>{" "}
                               Đã Duyệt
                             </span>
                           ) : isKycPending ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#f0e0cb] text-[#4f4535] text-xs font-bold">
-                              <span className="material-symbols-outlined text-[14px]">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f0e0cb] text-[#4f4535] text-[11px] font-bold whitespace-nowrap">
+                              <span className="material-symbols-outlined text-[13px]">
                                 hourglass_top
                               </span>{" "}
                               Chờ Duyệt
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#ebe8e1] text-[#7b766f] text-xs font-medium">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#ebe8e1] text-[#7b766f] text-[11px] font-medium whitespace-nowrap">
                               Chưa Nộp
                             </span>
                           )}
                         </td>
 
-                        {/* Column 6: Ngày Tạo */}
-                        <td className="py-4 px-4 align-middle">
-                          <div className="flex flex-col text-xs text-[#4a463f]">
+                        {/* Cột 5: Thời Gian (Ngày tạo & Hoạt động gần nhất) */}
+                        <td className="py-2.5 px-3 align-middle">
+                          <div className="flex flex-col text-[11px] text-[#4a463f]">
                             <span className="font-semibold text-[#1c1c18]">
                               {timeInfo.date}
                             </span>
-                            <span className="text-[#7b766f] font-mono text-[11px]">
-                              {timeInfo.time}
+                            <span className="text-[#576151] text-[10px] mt-0.5">
+                              {relativeTime}
                             </span>
                           </div>
                         </td>
 
-                        {/* Column 7: Hoạt Động Gần Nhất */}
-                        <td className="py-4 px-4 align-middle">
-                          <span className="text-xs text-[#576151] font-semibold">
-                            {relativeTime}
-                          </span>
-                        </td>
+                        {/* Cột 6: Thao Tác (Nút "Đơn khiếu nại" thay thế chỗ nút "Chi Tiết" đối với tài khoản bị khóa và đã gửi đơn) */}
+                        <td className="py-2.5 px-3 pr-5 text-right align-middle relative">
+                          <div className="inline-flex items-center gap-1.5 justify-end">
+                            {canRespondAppeal ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenRespondAppeal(user)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#fef3c7] hover:bg-[#fde68a] text-[#92400e] text-xs font-bold border border-[#f59e0b]/50 transition-all shadow-xs shrink-0 cursor-pointer animate-fade-in"
+                                title="Bấm để xem câu hỏi khiếu nại và phản hồi mở khóa tài khoản"
+                              >
+                                <span className="material-symbols-outlined text-[15px] text-[#d97706]">
+                                  quickreply
+                                </span>
+                                <span>Phản hồi</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setInspectingUser(user)}
+                                className="px-2.5 py-1 rounded-md bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] font-bold text-xs transition-colors border border-[#ccc5bc]/30 shrink-0 cursor-pointer"
+                              >
+                                Chi Tiết
+                              </button>
+                            )}
 
-                        {/* Column 8: Thao Tác */}
-                        <td className="py-4 px-4 pr-6 text-right align-middle relative">
-                          <div className="inline-flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setInspectingUser(user)}
-                              className="px-3 py-1.5 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] font-bold text-xs transition-colors border border-[#ccc5bc]/30"
-                            >
-                              Chi Tiết
-                            </button>
                             <div className="relative">
                               <button
                                 type="button"
-                                onClick={() =>
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setActionMenuUserId(
                                     actionMenuUserId === user._id ? null : user._id
-                                  )
-                                }
-                                className="w-8 h-8 rounded-lg hover:bg-[#ebe8e1] text-[#7b766f] hover:text-[#1c1c18] flex items-center justify-center transition-colors"
+                                  );
+                                }}
+                                className="w-7 h-7 rounded-md hover:bg-[#ebe8e1] text-[#7b766f] hover:text-[#1c1c18] flex items-center justify-center transition-colors cursor-pointer"
+                                title="Thao tác khác"
                               >
-                                <span className="material-symbols-outlined text-[18px]">
+                                <span className="material-symbols-outlined text-[16px]">
                                   more_vert
                                 </span>
                               </button>
 
-                              {/* Action Popover Menu */}
+                              {/* Action Popover Menu với hướng mở thông minh & đóng khi click ngoài */}
                               {actionMenuUserId === user._id && (
-                                <div className="absolute right-0 top-full mt-1 w-48 bg-[#ffffff] rounded-xl shadow-xl border border-[#ccc5bc]/40 z-30 py-1.5 text-left text-xs font-medium animate-fade-in">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      copyToClipboard(user._id, "ID MongoDB");
+                                <>
+                                  <div
+                                    className="fixed inset-0 z-40 cursor-default"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       setActionMenuUserId(null);
                                     }}
-                                    className="w-full px-3 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2 text-[#1c1c18]"
+                                  />
+                                  <div
+                                    className={`absolute right-0 ${
+                                      index >= Math.max(1, paginatedUsers.length - 2)
+                                        ? "bottom-full mb-1.5"
+                                        : "top-full mt-1.5"
+                                    } w-52 bg-[#ffffff] rounded-xl shadow-2xl border border-[#ccc5bc]/60 z-50 py-1.5 text-left text-xs font-medium animate-fade-in`}
                                   >
-                                    <span className="material-symbols-outlined text-[16px] text-[#7b766f]">
-                                      content_copy
-                                    </span>
-                                    <span>Sao chép ID</span>
-                                  </button>
+                                    {/* Đối với user có đơn khiếu nại (đã thay thế nút Chi tiết), đưa lựa chọn xem chi tiết vào menu */}
+                                    {canRespondAppeal && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActionMenuUserId(null);
+                                          setInspectingUser(user);
+                                        }}
+                                        className="w-full px-3.5 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2.5 text-[#1c1c18] font-medium transition-colors"
+                                      >
+                                        <span className="material-symbols-outlined text-[15px] text-[#7b766f]">
+                                          visibility
+                                        </span>
+                                        <span>Xem chi tiết tài khoản</span>
+                                      </button>
+                                    )}
 
-                                  {user.kycStatus === "PENDING" && (
-                                    <Link
-                                      to="/admin/kyc"
-                                      onClick={() => setActionMenuUserId(null)}
-                                      className="w-full px-3 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2 text-[#7b5227]"
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        copyToClipboard(user._id, "ID MongoDB");
+                                        setActionMenuUserId(null);
+                                      }}
+                                      className="w-full px-3.5 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2.5 text-[#1c1c18] transition-colors"
                                     >
-                                      <span className="material-symbols-outlined text-[16px]">
-                                        badge
+                                      <span className="material-symbols-outlined text-[15px] text-[#7b766f]">
+                                        content_copy
                                       </span>
-                                      <span>Xét duyệt KYC</span>
-                                    </Link>
-                                  )}
+                                      <span>Sao chép ID</span>
+                                    </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleStatus(user._id)}
-                                    className={`w-full px-3 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2 ${
-                                      user.status === "SUSPENDED"
-                                        ? "text-[#576151]"
-                                        : "text-[#ba1a1a]"
-                                    }`}
-                                  >
-                                    <span className="material-symbols-outlined text-[16px]">
-                                      {user.status === "SUSPENDED"
-                                        ? "check_circle"
-                                        : "block"}
-                                    </span>
-                                    <span>
-                                      {user.status === "SUSPENDED"
-                                        ? "Mở khóa tài khoản"
-                                        : "Tạm khóa tài khoản"}
-                                    </span>
-                                  </button>
-                                </div>
+                                    {user.kycStatus === "PENDING" && (
+                                      <Link
+                                        to="/admin/kyc"
+                                        onClick={() => setActionMenuUserId(null)}
+                                        className="w-full px-3.5 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2.5 text-[#7b5227] transition-colors"
+                                      >
+                                        <span className="material-symbols-outlined text-[15px]">
+                                          badge
+                                        </span>
+                                        <span>Xét duyệt KYC</span>
+                                      </Link>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActionMenuUserId(null);
+                                        handleInitiateLockToggle(user);
+                                      }}
+                                      className={`w-full px-3.5 py-2 text-left hover:bg-[#f1ede6] flex items-center gap-2.5 transition-colors ${
+                                        isAccountLocked
+                                          ? "text-[#576151] font-semibold"
+                                          : "text-[#ba1a1a] font-semibold"
+                                      }`}
+                                    >
+                                      <span className="material-symbols-outlined text-[15px]">
+                                        {isAccountLocked ? "check_circle" : "block"}
+                                      </span>
+                                      <span>
+                                        {isAccountLocked
+                                          ? "Mở khóa tài khoản"
+                                          : "Tạm khóa tài khoản"}
+                                      </span>
+                                    </button>
+                                  </div>
+                                </>
                               )}
                             </div>
                           </div>
@@ -1215,12 +1383,12 @@ export const UserManagement: React.FC = () => {
                 </span>
                 <span
                   className={`px-2.5 py-1 rounded-md text-xs font-bold ${
-                    inspectingUser.status === "SUSPENDED"
+                    inspectingUser.status === "SUSPENDED" || inspectingUser.status === "LOCKED" || inspectingUser.isLocked
                       ? "bg-[#ffdad6] text-[#ba1a1a]"
                       : "bg-[#d8e3ce] text-[#5b6655]"
                   }`}
                 >
-                  Trạng Thái: {inspectingUser.status === "SUSPENDED" ? "TẠM KHÓA" : "HOẠT ĐỘNG"}
+                  Trạng Thái: {inspectingUser.status === "SUSPENDED" || inspectingUser.status === "LOCKED" || inspectingUser.isLocked ? "ĐÃ KHÓA TÀI KHOẢN" : "HOẠT ĐỘNG"}
                 </span>
               </div>
 
@@ -1280,19 +1448,34 @@ export const UserManagement: React.FC = () => {
 
             {/* Modal Actions */}
             <div className="p-4 bg-[#f7f3ec] border-t border-[#ccc5bc]/30 flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => handleToggleStatus(inspectingUser._id)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-                  inspectingUser.status === "SUSPENDED"
-                    ? "bg-[#576151] text-[#fdf9f2] hover:bg-[#485343]"
-                    : "bg-[#ffdad6] text-[#ba1a1a] hover:bg-[#ffcdd2]"
-                }`}
-              >
-                {inspectingUser.status === "SUSPENDED"
-                  ? "Mở Khóa Tài Khoản Này"
-                  : "Tạm Khóa Tài Khoản Này"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleInitiateLockToggle(inspectingUser)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                    inspectingUser.status === "SUSPENDED" || inspectingUser.status === "LOCKED" || inspectingUser.isLocked
+                      ? "bg-[#576151] text-[#fdf9f2] hover:bg-[#485343]"
+                      : "bg-[#ffdad6] text-[#ba1a1a] hover:bg-[#ffcdd2]"
+                  }`}
+                >
+                  {inspectingUser.status === "SUSPENDED" || inspectingUser.status === "LOCKED" || inspectingUser.isLocked
+                    ? "Mở Khóa Tài Khoản Này"
+                    : "Tạm Khóa Tài Khoản Này"}
+                </button>
+
+                {inspectingUser.lockAppeal && inspectingUser.lockAppeal.status === "PENDING" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingUser(null);
+                      handleOpenRespondAppeal(inspectingUser);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-[#f0e0cb] hover:bg-[#e6d3ba] text-[#7b5227] text-xs font-bold transition-colors shadow-xs"
+                  >
+                    Phản Hồi Khiếu Nại &amp; Mở Khóa
+                  </button>
+                )}
+              </div>
 
               <div className="flex items-center gap-2">
                 {inspectingUser.kycStatus === "PENDING" && (
@@ -1311,6 +1494,278 @@ export const UserManagement: React.FC = () => {
                   Đóng
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TẠM KHÓA TÀI KHOẢN VÀ LƯU VÀO DB */}
+      {lockingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#fdf9f2] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#ccc5bc]/50 space-y-4">
+            <div className="flex items-start justify-between pb-3 border-b border-[#ccc5bc]/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#ffdad6] text-[#ba1a1a] flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[20px]">block</span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[#1c1c18]">
+                    Tạm Khóa Tài Khoản
+                  </h3>
+                  <p className="text-xs text-[#7b766f]">
+                    Cập nhật trạng thái LOCKED vào MongoDB cho thành viên
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLockingUser(null)}
+                className="w-8 h-8 rounded-full bg-[#f1ede6] hover:bg-[#ebe8e1] flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-white border border-[#ccc5bc]/30 space-y-1 text-xs">
+              <div className="text-[10px] uppercase font-bold text-[#7b766f]">Tài khoản:</div>
+              <div className="font-bold text-sm text-[#1c1c18]">{lockingUser.fullName}</div>
+              <div className="text-xs text-[#7b766f] font-mono">{lockingUser.email}</div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <label className="block font-bold text-[#1c1c18]">
+                Chọn hoặc nhập lý do tạm khóa:
+              </label>
+              <select
+                value={lockReasonInput}
+                onChange={(e) => setLockReasonInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#ccc5bc]/40 text-xs focus:ring-1 focus:ring-[#141310] focus:outline-none cursor-pointer"
+              >
+                <option value="Tài khoản bị tạm khóa để kiểm tra bảo mật hoặc rà soát giao dịch">
+                  1. Kiểm tra bảo mật / rà soát an toàn giao dịch
+                </option>
+                <option value="Vi phạm quy tắc bảo quản trang phục và quy chuẩn hoàn trả hiện vật">
+                  2. Vi phạm quy tắc bảo quản / hoàn trả trang phục
+                </option>
+                <option value="Chưa hoàn tất xác thực thông tin định danh KYC theo yêu cầu sàn">
+                  3. Chưa hoàn tất xác thực KYC theo quy định sàn
+                </option>
+                <option value="Tạm phong tỏa để rà soát khiếu nại tranh chấp đơn hàng đang giải quyết">
+                  4. Rà soát giải quyết khiếu nại tranh chấp đơn hàng
+                </option>
+                <option value="Tài khoản có dấu hiệu đăng nhập từ vị trí bất thường">
+                  5. Nghi ngờ đăng nhập từ thiết bị lạ / vị trí bất thường
+                </option>
+              </select>
+
+              <textarea
+                rows={2}
+                value={lockReasonInput}
+                onChange={(e) => setLockReasonInput(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-white border border-[#ccc5bc]/40 text-xs focus:ring-1 focus:ring-[#141310] focus:outline-none placeholder:text-[#7b766f]"
+                placeholder="Nhập lý do chi tiết..."
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#ccc5bc]/30">
+              <button
+                type="button"
+                onClick={() => setLockingUser(null)}
+                className="px-4 py-2 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] text-xs font-semibold"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingLock}
+                onClick={handleConfirmLock}
+                className="px-5 py-2 rounded-lg bg-[#ba1a1a] hover:bg-[#931515] text-white text-xs font-bold transition-all shadow-sm disabled:opacity-60"
+              >
+                {isSubmittingLock ? "Đang lưu DB..." : "Xác Nhận Tạm Khóa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PHẢN HỒI KHIẾU NẠI & MỞ KHÓA TÀI KHOẢN (GỬI GMAIL THẬT) */}
+      {respondingAppealUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#fdf9f2] rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-[#ccc5bc]/50 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-3 border-b border-[#ccc5bc]/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#d8e3ce] text-[#576151] flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[22px]">quickreply</span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[#1c1c18]">
+                    Phản Hồi Khiếu Nại &amp; Mở Khóa Tài Khoản
+                  </h3>
+                  <p className="text-xs text-[#7b766f]">
+                    Gửi phản hồi chính thức qua Gmail và cập nhật trạng thái trong MongoDB
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRespondingAppealUser(null)}
+                className="w-8 h-8 rounded-full bg-[#f1ede6] hover:bg-[#ebe8e1] flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Chi Tiết Đơn Khiếu Nại Của Người Dùng (Hiển thị rõ ràng các lý do user chọn và ghi chú) */}
+            <div className="p-4 rounded-xl bg-white border border-[#ccc5bc]/40 space-y-3 text-xs shadow-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-[#f1ede6]">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-[#141310]">{respondingAppealUser.fullName}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#f0e0cb] text-[#7b5227] text-[10px] font-bold">
+                    Đã gửi đơn khiếu nại
+                  </span>
+                </div>
+                <span className="text-[#7b766f] font-mono text-[11px]">{respondingAppealUser.email}</span>
+              </div>
+
+              {/* 1. Lý do người dùng chọn từ danh sách câu hỏi có sẵn */}
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-[#4a463f] flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[15px] text-[#7b5227]">help_outline</span>
+                  Lý do người dùng đã chọn (câu hỏi có sẵn):
+                </span>
+                <div className="p-3 rounded-lg bg-[#fbf9f5] border border-[#d6c2a8]/60 text-xs font-semibold text-[#1c1c18] leading-relaxed">
+                  "{respondingAppealUser.lockAppeal?.question || "Tôi không vi phạm quy tắc cộng đồng, đề nghị kiểm tra lại lý do khóa."}"
+                </div>
+              </div>
+
+              {/* 2. Thông tin giải trình người dùng tự ghi bổ sung */}
+              <div className="space-y-1">
+                <span className="text-[11px] font-bold text-[#4a463f] flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[15px] text-[#576151]">edit_note</span>
+                  Thông tin / Lời giải trình người dùng ghi:
+                </span>
+                {respondingAppealUser.lockAppeal?.details ? (
+                  <div className="p-3 rounded-lg bg-[#f7f3ec] border border-[#ccc5bc]/40 text-xs text-[#1c1c18] italic leading-relaxed whitespace-pre-wrap">
+                    "{respondingAppealUser.lockAppeal.details}"
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-lg bg-[#f7f3ec]/60 border border-[#ccc5bc]/20 text-xs text-[#7b766f] italic">
+                    (Người dùng không ghi thêm thông tin chi tiết ngoài lý do chọn có sẵn)
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Lý do ban đầu hệ thống đã tạm khóa */}
+              <div className="pt-2 border-t border-[#f1ede6] flex items-center gap-2 text-[11px]">
+                <span className="font-bold text-[#ba1a1a] flex items-center gap-1 shrink-0">
+                  <span className="material-symbols-outlined text-[14px]">lock</span>
+                  Lý do bị khóa trước đó:
+                </span>
+                <span className="text-[#4a463f] font-medium truncate">
+                  {respondingAppealUser.lockReason || "Tài khoản bị tạm khóa để kiểm tra bảo mật hoặc rà soát giao dịch"}
+                </span>
+              </div>
+            </div>
+
+            {/* Form phản hồi của Admin */}
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold text-[#1c1c18] mb-1">
+                  Lý do tài khoản từng bị khóa (hiển thị trong Email gửi User):
+                </label>
+                <select
+                  value={appealLockReason}
+                  onChange={(e) => setAppealLockReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#ccc5bc]/40 text-xs focus:ring-1 focus:ring-[#141310] focus:outline-none mb-1.5 cursor-pointer font-medium"
+                >
+                  <option value={respondingAppealUser.lockReason || "Tài khoản bị tạm khóa để kiểm tra bảo mật hoặc rà soát giao dịch"}>
+                    {respondingAppealUser.lockReason ? `Lý do đã lưu: ${respondingAppealUser.lockReason}` : "1. Tạm khóa để kiểm tra bảo mật / rà soát giao dịch"}
+                  </option>
+                  <option value="Tài khoản bị tạm khóa để kiểm tra bảo mật hoặc rà soát giao dịch">
+                    1. Tạm khóa để kiểm tra bảo mật / rà soát giao dịch
+                  </option>
+                  <option value="Vi phạm quy tắc bảo quản trang phục và quy chuẩn hoàn trả hiện vật">
+                    2. Vi phạm quy tắc bảo quản / hoàn trả trang phục
+                  </option>
+                  <option value="Chưa hoàn tất xác thực thông tin định danh KYC theo yêu cầu sàn">
+                    3. Chưa hoàn tất xác thực KYC theo quy định sàn
+                  </option>
+                  <option value="Tạm phong tỏa để rà soát khiếu nại tranh chấp đơn hàng đang giải quyết">
+                    4. Rà soát giải quyết khiếu nại tranh chấp đơn hàng
+                  </option>
+                  <option value="Tài khoản có dấu hiệu đăng nhập từ vị trí bất thường">
+                    5. Nghi ngờ đăng nhập từ thiết bị lạ / vị trí bất thường
+                  </option>
+                  <option value="Hoạt động bất thường hoặc nghi ngờ vi phạm chính sách cộng đồng">
+                    6. Hoạt động bất thường hoặc vi phạm chính sách cộng đồng
+                  </option>
+                </select>
+                <textarea
+                  rows={2}
+                  value={appealLockReason}
+                  onChange={(e) => setAppealLockReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#ccc5bc]/40 text-xs focus:ring-1 focus:ring-[#141310] focus:outline-none placeholder:text-[#7b766f]"
+                  placeholder="Nhập hoặc chỉnh sửa chi tiết lý do từng bị tạm khóa..."
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#1c1c18] mb-1">
+                  Nội dung phản hồi chính thức từ Quản trị viên (gửi kèm trong Email):
+                </label>
+                <textarea
+                  rows={3}
+                  value={adminReplyText}
+                  onChange={(e) => setAdminReplyText(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-[#ccc5bc]/40 text-xs focus:ring-1 focus:ring-[#141310] focus:outline-none"
+                  placeholder="Nhập nội dung phản hồi, kết luận kiểm tra và thông báo mở khóa cho người dùng..."
+                />
+              </div>
+
+              {/* Tích chọn mở khóa & gửi mail */}
+              <div className="p-3 bg-[#f1ede6] rounded-xl space-y-2 border border-[#ccc5bc]/30">
+                <label className="flex items-center gap-2 cursor-pointer font-bold text-[#1c1c18]">
+                  <input
+                    type="checkbox"
+                    checked={shouldUnlock}
+                    onChange={(e) => setShouldUnlock(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#141310] accent-[#141310] cursor-pointer"
+                  />
+                  <span>Xác nhận Mở Khóa Tài Khoản ngay lập tức (Chuyển trạng thái sang ACTIVE trong MongoDB)</span>
+                </label>
+                <div className="text-[11px] text-[#576151] pl-6 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">mail</span>
+                  <span>Hệ thống sẽ gửi email thật với form chuyên nghiệp đến: <strong>{respondingAppealUser.email}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#ccc5bc]/30">
+              <button
+                type="button"
+                onClick={() => setRespondingAppealUser(null)}
+                className="px-4 py-2 rounded-lg bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#1c1c18] text-xs font-semibold"
+              >
+                Hủy Bỏ
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingAppeal}
+                onClick={handleConfirmRespondAppeal}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-[#141310] hover:bg-[#292724] text-white text-xs font-bold transition-all shadow-sm disabled:opacity-60"
+              >
+                {isSubmittingAppeal ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Đang gửi email &amp; cập nhật DB...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[16px]">send</span>
+                    <span>Xác Nhận Mở Khóa &amp; Gửi Mail</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

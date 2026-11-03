@@ -128,6 +128,15 @@ export interface MongoUserAddress {
   detail?: string;
 }
 
+export interface MongoUserLockAppeal {
+  question?: string;
+  details?: string;
+  submittedAt?: string;
+  status?: "PENDING" | "RESOLVED" | "REJECTED";
+  adminReply?: string;
+  resolvedAt?: string;
+}
+
 export interface MongoUserItem {
   _id: string;
   fullName: string;
@@ -136,7 +145,11 @@ export interface MongoUserItem {
   kycStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
   phoneNumber?: string;
   address?: MongoUserAddress | null;
-  status?: "ACTIVE" | "SUSPENDED" | "PENDING";
+  status?: "ACTIVE" | "SUSPENDED" | "LOCKED" | "PENDING" | "lock" | "locked";
+  isLocked?: boolean;
+  lockReason?: string;
+  lockedAt?: string;
+  lockAppeal?: MongoUserLockAppeal | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1041,6 +1054,41 @@ export const fetchPlatformFinanceApi = async (): Promise<PlatformFinanceReport> 
   return res.data?.data || res.data;
 };
 
+// ============================================================================
+// USER LOCKING, SUSPENSION & APPEAL MANAGEMENT
+// ============================================================================
+
+export const toggleUserLockApi = async (
+  userId: string,
+  isLocked: boolean,
+  lockReason?: string
+) => {
+  const status = isLocked ? "lock" : "ACTIVE";
+  const res = await api.patch(`/admin/users/${userId}/status`, {
+    status,
+    isLocked,
+    lockReason,
+  });
+  return res.data?.data || res.data;
+};
+
+export const respondUserAppealApi = async (
+  userId: string,
+  payload: { unlock: boolean; lockReason?: string; adminReply: string }
+) => {
+  const res = await api.post(`/admin/users/${userId}/respond-appeal`, payload);
+  return res.data?.data || res.data;
+};
+
+export const appealAccountLockApi = async (payload: {
+  email: string;
+  question: string;
+  details?: string;
+}) => {
+  const res = await api.post("/auth/appeal-lock", payload);
+  return res.data?.data || res.data;
+};
+
 export default {
   fetchAdminDashboardData,
   fetchAdminUsers,
@@ -1057,4 +1105,7 @@ export default {
   toggleCategoryStatusApi,
   deleteAdminCategoryApi,
   fetchPlatformFinanceApi,
+  toggleUserLockApi,
+  respondUserAppealApi,
+  appealAccountLockApi,
 };
