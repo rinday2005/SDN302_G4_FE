@@ -81,6 +81,7 @@ import CategoryManagement from "./pages/admin/CategoryManagement";
 import DisputeManagement from "./pages/admin/DisputeManagement";
 import DisputeReview from "./pages/admin/DisputeReview";
 import PlatformFinance from "./pages/admin/PlatformFinance";
+import ShopManagement from "./pages/admin/ShopManagement";
 
 import PublicRoutes from "./routes/PublicRoutes";
 import ProtectedRoutes from "./routes/ProtectedRoutes";
@@ -281,6 +282,12 @@ const App = () => {
               <Route path="/admin/user-management" element={<UserManagement />} />
               <Route path="/admin/nguoi-dung" element={<UserManagement />} />
               <Route path="/admin/nguoi-dung/:id" element={<UserDetail />} />
+
+              <Route path="/admin/shops" element={<ShopManagement />} />
+              <Route path="/admin/shops/:id" element={<ShopManagement />} />
+              <Route path="/admin/shop-management" element={<ShopManagement />} />
+              <Route path="/admin/shop-owners" element={<ShopManagement />} />
+              <Route path="/admin/cua-hang" element={<ShopManagement />} />
 
               <Route path="/admin/kyc" element={<KycApproval />} />
               <Route path="/admin/kyc/:id" element={<KycReview />} />

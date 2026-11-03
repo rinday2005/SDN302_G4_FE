@@ -1,3 +1,4 @@
+import { useAuth } from '../../../hooks/useAuth';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/incompatible-library */
 import React, { useState, useEffect, useRef } from 'react';
@@ -32,6 +33,9 @@ const rentProductSchema = z.object({
 type RentProductFormData = z.infer<typeof rentProductSchema>;
 
 export const CreateRentProduct: React.FC = () => {
+  const { user } = useAuth();
+  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const shopLocation = user?.address?.province || user?.shopProfile?.cityRegion || 'Thành phố Đà Nẵng';
   const navigate = useNavigate();
   const { addProduct } = useShop();
 
@@ -244,6 +248,30 @@ export const CreateRentProduct: React.FC = () => {
           </Link>
         </div>
 
+        {!isKycApproved && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3.5 text-amber-900 shadow-xs">
+            <span className="material-symbols-outlined text-amber-600 text-[26px] shrink-0 mt-0.5">
+              warning
+            </span>
+            <div className="flex-1 text-xs space-y-1.5">
+              <p className="font-bold text-sm text-amber-950">
+                Tài khoản Cửa hàng chưa hoàn tất xác thực KYC (hoặc đang chờ xét duyệt)
+              </p>
+              <p className="text-amber-800 leading-relaxed">
+                Bạn cần hoàn tất xác minh danh tính và được Admin phê duyệt để được phép gửi sản phẩm cho thuê lên sàn.
+              </p>
+              <div className="pt-1">
+                <Link
+                  to="/shop/kyc"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-800 text-white font-bold text-xs hover:bg-amber-900 transition-colors shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[15px]">verified</span>
+                  Đến trang xác minh KYC
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit as any)} className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* CỘT TRÁI: FORM NHẬP LIỆU */}
           <div className="lg:col-span-8 space-y-6">
@@ -505,23 +533,38 @@ export const CreateRentProduct: React.FC = () => {
                 </div>
               </div>
 
-              {/* Chi nhánh kho lưu trữ (Đà Nẵng / Hà Nội / TP. Hồ Chí Minh) */}
+              {/* Chi nhánh Kho xuất hàng (Đồng bộ từ hồ sơ Shop Owner) */}
               <div className="p-4 rounded-xl bg-[#f7f3ec] border border-[#e4dfd5]">
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#141310] mb-1">
-                  Chi nhánh Kho / Địa điểm xuất hàng <span className="text-red-500">*</span>
-                </label>
-                <select
-                  {...register('location')}
-                  className="w-full px-3.5 py-2.5 bg-white border border-[#cfc9bd] rounded-lg text-sm font-semibold text-[#141310] focus:outline-none focus:border-[#576151] transition-colors"
-                >
-                  <option value="Đà Nẵng">Chi nhánh Đà Nẵng (Kho Miền Trung)</option>
-                  <option value="Hà Nội">Chi nhánh Hà Nội (Kho Miền Bắc)</option>
-                  <option value="TP. Hồ Chí Minh">Chi nhánh TP. Hồ Chí Minh (Kho Miền Nam)</option>
-                </select>
-                <p className="text-[11px] text-[#576151] mt-1.5">
-                  * Phí Bưu tá chuyên dụng Nanuk (2 chiều) sẽ tự động tính theo khoảng cách từ chi nhánh này đến địa chỉ của khách thuê: Nội tỉnh (25.000₫) • Nội miền (35.000₫) • Liên miền (45.000₫).
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#141310]">
+                    Chi nhánh Kho / Địa điểm xuất hàng <span className="text-red-500">*</span>
+                  </label>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    <span className="material-symbols-outlined text-[13px]">storefront</span> Đồng bộ từ Profile Shop
+                  </span>
+                </div>
+                <div className="p-3 bg-white rounded-lg border border-[#cfc9bd] flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="material-symbols-outlined text-[#576151] text-[20px]">location_on</span>
+                    <div>
+                      <p className="text-sm font-bold text-[#141310]">{shopLocation}</p>
+                      <p className="text-[11px] text-[#7b766f]">
+                        {user?.shopProfile?.businessAddress || user?.address?.street || 'Địa chỉ kinh doanh đã đăng ký'}
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/profile"
+                    className="text-xs font-semibold text-[#576151] hover:underline flex items-center gap-0.5"
+                  >
+                    <span>Cập nhật</span>
+                    <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                  </Link>
+                </div>
+                <input type="hidden" {...register('location')} value={shopLocation} />
+                <p className="text-[11px] text-[#576151] mt-2">
+                  * Phí Bưu tá chuyên dụng Nanuk (2 chiều) sẽ tự động tính theo khoảng cách từ địa chỉ cửa hàng này đến địa chỉ của khách thuê.
                 </p>
-                {errors.location && <p className="text-red-600 text-[11px] mt-1">{errors.location.message as string}</p>}
               </div>
 
               {/* Phụ kiện đi kèm */}
@@ -736,7 +779,7 @@ export const CreateRentProduct: React.FC = () => {
               {/* Nút gửi duyệt */}
               <button
                 type="submit"
-                disabled={isSubmitting || isUploadingCover || isUploadingDetails}
+                disabled={!isKycApproved || isSubmitting || isUploadingCover || isUploadingDetails}
                 className="mt-5 w-full py-3.5 bg-[#141310] hover:bg-[#2b2925] disabled:bg-gray-400 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow transition-all cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (

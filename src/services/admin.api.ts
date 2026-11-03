@@ -1109,3 +1109,96 @@ export default {
   respondUserAppealApi,
   appealAccountLockApi,
 };
+
+export interface ShopOwnerItem {
+  _id: string;
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  avatarUrl?: string;
+  role: "SHOP_OWNER";
+  kycStatus: "PENDING" | "APPROVED" | "REJECTED" | null;
+  isLocked?: boolean;
+  status?: string;
+  lockReason?: string;
+  lockedAt?: string;
+  lockAppeal?: {
+    status?: string;
+    question?: string;
+    reply?: string;
+    submittedAt?: string;
+    respondedAt?: string;
+  } | null;
+  kycRecord?: {
+    _id?: string;
+    idCardNumber?: string;
+    fullName?: string;
+    dob?: string;
+    residentAddress?: string;
+    frontImageUrl?: string;
+    backImageUrl?: string;
+    rejectionReason?: string;
+    status?: string;
+    createdAt?: string;
+  } | null;
+  shopProfile?: {
+    shopName?: string;
+    description?: string;
+    specialization?: string;
+    roleTitle?: string;
+    businessAddress?: string;
+    cityRegion?: string;
+    coverUrl?: string;
+    rating?: number;
+    establishedYear?: number;
+  };
+  address?: {
+    province?: string;
+    district?: string;
+    ward?: string;
+    detail?: string;
+  };
+  kyc?: {
+    citizenId?: string;
+    fullName?: string;
+    dob?: string;
+    residentAddress?: string;
+    cardFrontUrl?: string;
+    cardBackUrl?: string;
+    rejectionReason?: string;
+    verifiedAt?: string;
+    submittedAt?: string;
+  };
+  totalRentProducts?: number;
+  totalThriftProducts?: number;
+  totalProducts?: number;
+  pendingListingsCount?: number;
+  completedOrdersCount?: number;
+  walletBalance?: number;
+  createdAt?: string;
+}
+
+export const getAllShopsApi = async (params?: { kycStatus?: string; search?: string }): Promise<ShopOwnerItem[]> => {
+  const response = await api.get("/admin/shops", { params });
+  if (Array.isArray(response.data?.data)) return response.data.data;
+  if (Array.isArray(response.data?.data?.shops)) return response.data.data.shops;
+  if (Array.isArray(response.data?.shops)) return response.data.shops;
+  if (Array.isArray(response.data)) return response.data;
+  return [];
+};
+
+export const getShopDetailAdminApi = async (shopId: string): Promise<{
+  shop: ShopOwnerItem;
+  rentProducts: Record<string, unknown>[];
+  thriftListings: Record<string, unknown>[];
+  recentOrders: Record<string, unknown>[];
+  stats: { totalRentProducts: number; totalThriftProducts: number; totalOrders: number };
+}> => {
+  const response = await api.get(`/admin/shops/${shopId}`);
+  return response.data?.data || response.data;
+};
+
+export const reviewShopKycApi = async (shopId: string, payload: { status: "APPROVED" | "REJECTED"; rejectionReason?: string }): Promise<Record<string, unknown>> => {
+  const response = await api.patch(`/admin/shops/${shopId}/kyc`, payload);
+  return response.data?.data || response.data;
+};

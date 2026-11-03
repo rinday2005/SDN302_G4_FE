@@ -84,10 +84,10 @@ const mapRawThriftToAdminListing = (item: {
   }
 
   const rawImg = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : "";
-  const shopName =
-    typeof item.ownerId === "object" && item.ownerId?.fullName
-      ? item.ownerId.fullName
-      : "ReUse Official Shop";
+  const owner = typeof item.ownerId === "object" && item.ownerId ? (item.ownerId as Record<string, unknown>) : null;
+  const shopProfile = owner?.shopProfile as Record<string, string> | undefined;
+  const shopName = shopProfile?.shopName || (owner?.fullName as string) || "ReUse Official Shop";
+  const isKycVerified = (owner?.kycStatus as string) === "APPROVED";
 
   return {
     id: item._id,
@@ -106,7 +106,7 @@ const mapRawThriftToAdminListing = (item: {
         : "Ký gửi thanh lý xưởng",
     shopName,
     ownerName: shopName,
-    ownerKycVerified: true,
+    ownerKycVerified: isKycVerified,
     submittedAtDisplay: item.createdAt
       ? new Date(item.createdAt).toLocaleDateString("vi-VN")
       : "Hôm nay",

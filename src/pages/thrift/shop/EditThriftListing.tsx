@@ -7,6 +7,7 @@ import {
 } from '../../data/shop/thriftListingsData';
 import { getPublicThriftListingByIdApi, updateThriftListingApi } from '../../../services/thrift.api';
 import { normalizeShopBranch } from '../../../utils/address';
+import { useAuth } from '../../../hooks/useAuth';
 
 interface InspectionPhotoItem {
   id: string;
@@ -27,6 +28,8 @@ const DEFAULT_EDIT_PHOTOS: InspectionPhotoItem[] = [
 export const EditThriftListing: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isKycApproved = user?.kycStatus === 'APPROVED';
 
   // Load target item from storage or fallback
   const [initialItem] = useState<ThriftListingItem>(() => {
@@ -46,7 +49,8 @@ export const EditThriftListing: React.FC = () => {
   // Form states
   const [title, setTitle] = useState(initialItem.title);
   const [category, setCategory] = useState('Quần áo & Giày dép Nữ');
-  const [brand, setBrand] = useState('ReUse Studio');
+  void category;
+  const [brand] = useState('ReUse Studio');
   const [location, setLocation] = useState<string>(normalizeShopBranch((initialItem as { location?: string }).location || 'Đà Nẵng'));
   const [sku, setSku] = useState(initialItem.sku || (id ? `TL-${id.slice(-6).toUpperCase()}` : 'TL-SPECIMEN'));
   const [batchYear, setBatchYear] = useState('2024');
@@ -276,11 +280,17 @@ export const EditThriftListing: React.FC = () => {
               </Link>
               <button
                 type="button"
+                disabled={!isKycApproved}
                 onClick={() => handleSave()}
-                className="px-5 py-1.5 bg-primary text-on-primary hover:bg-tertiary transition-colors rounded-DEFAULT font-label-md text-label-md uppercase tracking-wider flex items-center gap-2 font-semibold shadow-sm cursor-pointer"
+                className={`px-5 py-1.5 transition-colors rounded-DEFAULT font-label-md text-label-md uppercase tracking-wider flex items-center gap-2 font-semibold shadow-sm ${
+                  isKycApproved
+                    ? 'bg-primary text-on-primary hover:bg-tertiary cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+                title={isKycApproved ? "Lưu thay đổi" : "Tài khoản cần hoàn tất KYC"}
               >
-                <span className="material-symbols-outlined text-[16px]">save</span>
-                Lưu thay đổi
+                <span className="material-symbols-outlined text-[16px]">{isKycApproved ? "save" : "lock"}</span>
+                {isKycApproved ? "Lưu thay đổi" : "Khóa KYC"}
               </button>
             </div>
           </div>
@@ -481,56 +491,7 @@ export const EditThriftListing: React.FC = () => {
                       >
                         Phân loại danh mục <span className="text-error">*</span>
                       </label>
-                      <select
-                        id="listing-category"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="w-full px-4 py-3 bg-surface rounded-DEFAULT font-body-md text-body-md text-on-surface focus:outline-none cursor-pointer border border-surface-dim"
-                      >
-                        <option value="Camera & Quang học / Medium Format Digital">
-                          Camera &amp; Quang học / Medium Format Digital
-                        </option>
-                        <option value="Camera & Quang học / Rangefinder 35mm">
-                          Camera &amp; Quang học / Rangefinder 35mm
-                        </option>
-                        <option value="Ống kính quang học / Hasselblad XCD System">
-                          Ống kính quang học / Hasselblad XCD System
-                        </option>
-                        <option value="Phụ kiện giám định phòng tối">Phụ kiện giám định phòng tối</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label
-                        className="block font-label-md text-label-md uppercase tracking-wider text-on-surface mb-2 font-semibold"
-                        htmlFor="listing-brand"
-                      >
-                        Thương hiệu &amp; Xuất xứ
-                      </label>
-                      <input
-                        id="listing-brand"
-                        type="text"
-                        value={brand}
-                        onChange={(e) => setBrand(e.target.value)}
-                        className="w-full px-4 py-3 bg-surface rounded-DEFAULT font-body-md text-body-md text-on-surface focus:outline-none border border-surface-dim"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-2">
-                        Chi nhánh Kho Lưu Ký / Địa điểm xuất hàng <span className="text-error">*</span>
-                      </label>
-                      <select
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        className="w-full px-4 py-3 bg-surface rounded-DEFAULT font-body-md text-body-md font-semibold text-on-surface focus:outline-none cursor-pointer border border-surface-dim mb-4"
-                      >
-                        <option value="Đà Nẵng">Chi nhánh Đà Nẵng (Kho Miền Trung)</option>
-                        <option value="Hà Nội">Chi nhánh Hà Nội (Kho Miền Bắc)</option>
-                        <option value="TP. Hồ Chí Minh">Chi nhánh TP. Hồ Chí Minh (Kho Miền Nam)</option>
-                      </select>
+                      <div className="p-3 bg-[#f7f8f5] rounded-lg border border-[#576151]/20 text-sm font-semibold text-[#141310]">Đồng bộ từ Địa chỉ Hồ sơ Cửa hàng</div>
                       <label className="block font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-2">
                         Mã SKU nội bộ (Custom SKU)
                       </label>

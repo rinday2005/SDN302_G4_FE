@@ -30,6 +30,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       icon: "group",
     },
     {
+      name: "Quản Lý Shop Owner",
+      path: "/admin/shops",
+      icon: "storefront",
+    },
+    {
       name: "Xét Duyệt KYC",
       path: "/admin/kyc",
       icon: "badge",
@@ -145,7 +150,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                         location.pathname.startsWith("/admin/duyet-thrift"))) ||
                     (item.path === "/admin/users" &&
                       (location.pathname.startsWith("/admin/user") ||
-                        location.pathname.startsWith("/admin/nguoi-dung")));
+                        location.pathname.startsWith("/admin/nguoi-dung"))) ||
+                    (item.path === "/admin/shops" &&
+                      (location.pathname.startsWith("/admin/shop") ||
+                        location.pathname.startsWith("/admin/cua-hang")));
 
                   return `flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all group ${
                     isCurrentActive

@@ -1,3 +1,4 @@
+import ShopManagement from "../pages/admin/ShopManagement";
 import React from "react";
 import { Route, Routes, Navigate } from "react-router-dom";
 import AdminLayout from "../components/layout/admin/AdminLayout";
@@ -22,6 +23,8 @@ export const AdminRoutes: React.FC = () => {
         <Route index element={<Dashboard />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="users" element={<UserManagement />} />
+        <Route path="shops" element={<ShopManagement />} />
+        <Route path="shop-management" element={<ShopManagement />} />
         <Route path="kyc" element={<Dashboard />} />
         <Route path="rent/listings" element={<Dashboard />} />
         <Route path="thrift/listings" element={<Dashboard />} />

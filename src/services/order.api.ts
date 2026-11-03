@@ -359,3 +359,31 @@ export default {
   updateOrderStatusApi,
   createRentalDisputeApi,
 };
+
+export interface GroupCheckoutPayload {
+  shippingAddress: ShippingAddressApi;
+  paymentMethod?: "VNPAY" | "COD" | "MOMO" | "BANK_TRANSFER";
+  rentDates?: {
+    startDate?: string;
+    endDate?: string;
+  };
+  selectedRentItemIds?: string[];
+  selectedThriftItemIds?: string[];
+  note?: string;
+}
+
+export interface GroupCheckoutResponse {
+  orderGroup: Record<string, unknown>;
+  childOrders: Record<string, unknown>[];
+  paymentUrl?: string | null;
+}
+
+export const groupCheckoutApi = async (data: GroupCheckoutPayload): Promise<GroupCheckoutResponse> => {
+  const response = await api.post("/orders/group-checkout", data);
+  return response.data.data;
+};
+
+export const getOrderGroupByIdApi = async (groupId: string): Promise<Record<string, unknown>> => {
+  const response = await api.get(`/orders/group/${groupId}`);
+  return response.data.data;
+};
