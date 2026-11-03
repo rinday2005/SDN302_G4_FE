@@ -14,8 +14,22 @@ import {
   Lock,
   Mail,
   ShieldCheck,
+  HelpCircle,
+  Send,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
+import { appealAccountLockApi } from "../../services/admin.api";
+
+const PRESET_APPEAL_QUESTIONS = [
+  "Tôi không vi phạm quy tắc cộng đồng ReUse Hub, đề nghị kiểm tra lại lý do khóa.",
+  "Tôi đã hoàn tất đơn hàng và trả đồ đúng hạn, tại sao tài khoản bị tạm ngưng?",
+  "Tài khoản của tôi có dấu hiệu bị nghi ngờ đăng nhập bất thường không?",
+  "Tôi muốn cập nhật bổ sung giấy tờ định danh KYC để mở khóa tài khoản.",
+  "Tôi muốn đối soát lại tranh chấp hoặc khoản ký quỹ đơn hàng của mình.",
+  "Khác: Tôi muốn gửi giải trình trực tiếp cho Ban Quản Trị xem xét...",
+];
 
 const loginSchema = z.object({
   email: z
@@ -42,6 +56,20 @@ const Login = () => {
   const [apiError, setApiError] = useState("");
   const [loginSuccess, setLoginSuccess] = useState(false);
 
+  // Account Locked & Appeal State
+  const [showLockedModal, setShowLockedModal] = useState(false);
+  const [lockedAccountInfo, setLockedAccountInfo] = useState<{
+    email: string;
+    fullName?: string;
+    lockReason?: string;
+    lockAppeal?: Record<string, unknown> | null;
+  } | null>(null);
+  const [selectedQuestion, setSelectedQuestion] = useState(PRESET_APPEAL_QUESTIONS[0]);
+  const [appealDetails, setAppealDetails] = useState("");
+  const [isSendingAppeal, setIsSendingAppeal] = useState(false);
+  const [appealSuccess, setAppealSuccess] = useState(false);
+  const [appealError, setAppealError] = useState("");
+
   const {
     register,
     handleSubmit,
@@ -67,8 +95,41 @@ const Login = () => {
         const dest = redirectUrl && redirectUrl !== "/" ? redirectUrl : "/user/dashboard";
         navigate(dest);
       }
-    } catch {
-      setApiError("Email hoặc mật khẩu không chính xác.");
+    } catch (err: unknown) {
+      const errObj = err as {
+        response?: {
+          status?: number;
+          data?: {
+            errorCode?: string;
+            message?: string;
+            data?: {
+              email?: string;
+              fullName?: string;
+              lockReason?: string;
+              lockedAt?: string;
+              lockAppeal?: Record<string, unknown> | null;
+              isLocked?: boolean;
+            };
+          };
+        };
+        message?: string;
+      };
+      const resData = errObj?.response?.data;
+      if (resData?.errorCode === "ACCOUNT_LOCKED" || resData?.data?.isLocked) {
+        setLockedAccountInfo({
+          email: resData?.data?.email || data.email,
+          fullName: resData?.data?.fullName || "",
+          lockReason: resData?.data?.lockReason || resData?.message || "Tài khoản bị tạm khóa để kiểm tra bảo mật hoặc rà soát giao dịch",
+          lockAppeal: resData?.data?.lockAppeal || null,
+        });
+        setSelectedQuestion(PRESET_APPEAL_QUESTIONS[0]);
+        setAppealDetails("");
+        setAppealSuccess(false);
+        setAppealError("");
+        setShowLockedModal(true);
+      } else {
+        setApiError(resData?.message || "Email hoặc mật khẩu không chính xác.");
+      }
     }
   };
 
@@ -382,6 +443,161 @@ const Login = () => {
           </section>
         </div>
       </div>
+      {/* MODAL THÔNG BÁO TÀI KHOẢN BỊ KHÓA & FORM ĐỀ NGHỊ ADMIN MỞ KHÓA */}
+      {showLockedModal && lockedAccountInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-xl rounded-2xl bg-[#fdf9f2] p-6 sm:p-8 shadow-2xl border border-[#ccc5bc]/50 text-[#1c1c18]">
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setShowLockedModal(false)}
+              className="absolute right-5 top-5 p-1 rounded-full bg-[#f1ede6] hover:bg-[#e6e2db] text-[#4a463f] hover:text-[#1c1c18] transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Header Alert */}
+            <div className="flex items-start gap-4 pb-5 border-b border-[#ccc5bc]/30">
+              <div className="w-12 h-12 rounded-full bg-[#ffdad6] text-[#ba1a1a] flex items-center justify-center shrink-0 shadow-sm">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#ffdad6] text-[#ba1a1a]">
+                  TÀI KHOẢN ĐANG BỊ TẠM KHÓA
+                </span>
+                <h3 className="font-serif text-xl font-bold text-[#141310] mt-1">
+                  Thông Báo Tạm Ngưng Quyền Truy Cập
+                </h3>
+                <p className="text-xs text-[#7b766f] mt-0.5">
+                  Tài khoản <strong className="text-[#1c1c18]">{lockedAccountInfo.email}</strong> hiện không thể đăng nhập.
+                </p>
+              </div>
+            </div>
+
+            {/* Lý do bị khóa từ Quản Trị Viên */}
+            <div className="my-4 p-4 rounded-xl bg-white border border-[#ccc5bc]/40 space-y-1.5">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-[#7b766f]">
+                Lý Do Tạm Khóa Ghi Nhận Trong Hệ Thống:
+              </div>
+              <p className="text-sm font-semibold text-[#ba1a1a] leading-relaxed">
+                "{lockedAccountInfo.lockReason}"
+              </p>
+              <div className="text-[11px] text-[#7b766f] pt-1">
+                Quản trị viên đã tạm phong tỏa tài khoản để bảo vệ quyền lợi giao dịch và tính minh bạch của sàn ReUse Hub.
+              </div>
+            </div>
+
+            {/* Form đề nghị xem xét mở khóa */}
+            {appealSuccess ? (
+              <div className="p-5 rounded-xl bg-[#d8e3ce]/60 border border-[#bfcab6] text-center space-y-3 my-2">
+                <div className="w-10 h-10 rounded-full bg-[#576151] text-white flex items-center justify-center mx-auto">
+                  <CheckCircle className="h-6 w-6" />
+                </div>
+                <h4 className="font-serif text-base font-bold text-[#2e352b]">
+                  Đã Gửi Đề Nghị Xem Xét Mở Khóa Thành Công!
+                </h4>
+                <p className="text-xs text-[#4a463f] leading-relaxed max-w-md mx-auto">
+                  Ban Quản Trị đã nhận được câu hỏi và lời giải trình của bạn. Sau khi kiểm tra đối soát, chúng tôi sẽ cập nhật trạng thái và <strong>gửi thông báo kèm phản hồi chi tiết về Gmail của bạn ({lockedAccountInfo.email})</strong>.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowLockedModal(false)}
+                  className="mt-2 px-5 py-2 rounded-lg bg-[#141310] text-[#fdf9f2] text-xs font-semibold hover:bg-[#292724] transition-colors"
+                >
+                  Đã Hiểu &amp; Đóng
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setIsSendingAppeal(true);
+                  setAppealError("");
+                  try {
+                    await appealAccountLockApi({
+                      email: lockedAccountInfo.email,
+                      question: selectedQuestion,
+                      details: appealDetails,
+                    });
+                    setAppealSuccess(true);
+                  } catch (err: unknown) {
+                    const errObj = err as { response?: { data?: { message?: string } }; message?: string };
+                    setAppealError(errObj?.response?.data?.message || errObj?.message || "Không thể gửi đề nghị mở khóa. Vui lòng thử lại!");
+                  } finally {
+                    setIsSendingAppeal(false);
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-bold text-[#141310] mb-1.5 flex items-center gap-1.5">
+                    <HelpCircle className="h-4 w-4 text-[#576151]" />
+                    <span>Chọn câu hỏi để hỏi lý do &amp; đề nghị Admin xem xét mở khóa:</span>
+                  </label>
+                  <select
+                    value={selectedQuestion}
+                    onChange={(e) => setSelectedQuestion(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white text-[#1c1c18] text-xs border border-[#ccc5bc]/50 focus:outline-none focus:ring-1 focus:ring-[#141310] shadow-sm cursor-pointer"
+                  >
+                    {PRESET_APPEAL_QUESTIONS.map((q, idx) => (
+                      <option key={idx} value={q}>
+                        {q}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-[#4a463f] mb-1.5">
+                    Lời nhắn / Thông tin giải trình bổ sung cho Quản trị viên (tùy chọn):
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={appealDetails}
+                    onChange={(e) => setAppealDetails(e.target.value)}
+                    placeholder="Nhập thông tin xác thực, mã đơn hàng liên quan hoặc cam kết tuân thủ quy tắc của bạn..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-white text-[#1c1c18] text-xs border border-[#ccc5bc]/50 focus:outline-none focus:ring-1 focus:ring-[#141310] shadow-sm placeholder:text-[#7b766f]"
+                  />
+                </div>
+
+                {appealError && (
+                  <div className="p-3 rounded-lg bg-[#ffdad6] text-[#ba1a1a] text-xs font-medium">
+                    {appealError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLockedModal(false)}
+                    className="px-4 py-2.5 rounded-lg bg-[#f1ede6] hover:bg-[#e6e2db] text-[#1c1c18] text-xs font-semibold transition-colors"
+                  >
+                    Hủy Bỏ
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSendingAppeal}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#141310] hover:bg-[#292724] text-[#fdf9f2] text-xs font-semibold shadow-sm transition-all disabled:opacity-60"
+                  >
+                    {isSendingAppeal ? (
+                      <>
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        <span>Đang gửi đề nghị...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-3.5 w-3.5" />
+                        <span>Gửi Đề Nghị Admin Xem Xét</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 };

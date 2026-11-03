@@ -128,6 +128,15 @@ export interface MongoUserAddress {
   detail?: string;
 }
 
+export interface MongoUserLockAppeal {
+  question?: string;
+  details?: string;
+  submittedAt?: string;
+  status?: "PENDING" | "RESOLVED" | "REJECTED";
+  adminReply?: string;
+  resolvedAt?: string;
+}
+
 export interface MongoUserItem {
   _id: string;
   fullName: string;
@@ -136,7 +145,11 @@ export interface MongoUserItem {
   kycStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
   phoneNumber?: string;
   address?: MongoUserAddress | null;
-  status?: "ACTIVE" | "SUSPENDED" | "PENDING";
+  status?: "ACTIVE" | "SUSPENDED" | "LOCKED" | "PENDING" | "lock" | "locked";
+  isLocked?: boolean;
+  lockReason?: string;
+  lockedAt?: string;
+  lockAppeal?: MongoUserLockAppeal | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -957,6 +970,125 @@ export const deleteAdminCategoryApi = async (id: string) => {
   return res.data?.data || res.data;
 };
 
+// ============================================================================
+// PLATFORM FINANCE REPORTING (MATCH DIRECT WITH LIVE MONGODB)
+// ============================================================================
+
+export interface FinancialOverview {
+  totalPlatformGmv: number;
+  totalPlatformRevenue: number;
+  netMarginPercent: number;
+  lockedEscrowAmount: number;
+  totalDepositsRefunded: number;
+  rentGmv: number;
+  thriftGmv: number;
+  totalOrdersCount: number;
+}
+
+export interface RentFinancialSector {
+  rentalFeesCollected: number;
+  escrowProcessed: number;
+  depositsReleased: number;
+  activeRetention: number;
+  penalties: number;
+  platformRentFee: number;
+  rentFeePercent: number;
+  totalOrders: number;
+}
+
+export interface ThriftFinancialSector {
+  salesVolume: number;
+  disbursed: number;
+  platformTakeRate: number;
+  takeRatePercent: number;
+  completedLots: number;
+  disputeRefunds: number;
+  totalOrders: number;
+}
+
+export interface FinancialAiInsights {
+  projectedNextMonthGmv: number;
+  projectedNextMonthRevenue: number;
+  growthRate: number;
+  escrowSafetyRatio: number;
+  disputeRate: number;
+  aiHealthScore: number;
+  executiveSummary: string;
+}
+
+export interface PlatformAuditTransaction {
+  id: string;
+  vnpayRef: string;
+  orderCode: string;
+  orderSubtitle: string;
+  orderType: "RENT" | "THRIFT";
+  type: string;
+  typeLabel: string;
+  typeBadgeColor: string;
+  amount: number;
+  amountPrefix: string;
+  amountBadge: string;
+  amountBadgeColor: string;
+  gatewayName: string;
+  gatewaySub: string;
+  gatewayIndicatorColor: string;
+  dateDisplay: string;
+  timeDisplay: string;
+  status: string;
+  statusLabel: string;
+  shaSignature: string;
+  bankAccount: string;
+  rawDate: string;
+}
+
+export interface PlatformFinanceReport {
+  overview: FinancialOverview;
+  rentSector: RentFinancialSector;
+  thriftSector: ThriftFinancialSector;
+  aiInsights: FinancialAiInsights;
+  transactions: PlatformAuditTransaction[];
+}
+
+export const fetchPlatformFinanceApi = async (): Promise<PlatformFinanceReport> => {
+  const res = await api.get("/admin/finance");
+  return res.data?.data || res.data;
+};
+
+// ============================================================================
+// USER LOCKING, SUSPENSION & APPEAL MANAGEMENT
+// ============================================================================
+
+export const toggleUserLockApi = async (
+  userId: string,
+  isLocked: boolean,
+  lockReason?: string
+) => {
+  const status = isLocked ? "lock" : "ACTIVE";
+  const res = await api.patch(`/admin/users/${userId}/status`, {
+    status,
+    isLocked,
+    lockReason,
+  });
+  return res.data?.data || res.data;
+};
+
+export const respondUserAppealApi = async (
+  userId: string,
+  payload: { unlock: boolean; lockReason?: string; adminReply: string }
+) => {
+  const res = await api.post(`/admin/users/${userId}/respond-appeal`, payload);
+  return res.data?.data || res.data;
+};
+
+export const appealAccountLockApi = async (payload: {
+  email: string;
+  question: string;
+  details?: string;
+}) => {
+  const res = await api.post("/auth/appeal-lock", payload);
+  return res.data?.data || res.data;
+};
+
 export default {
   fetchAdminDashboardData,
   fetchAdminUsers,
@@ -972,4 +1104,8 @@ export default {
   updateAdminCategoryApi,
   toggleCategoryStatusApi,
   deleteAdminCategoryApi,
+  fetchPlatformFinanceApi,
+  toggleUserLockApi,
+  respondUserAppealApi,
+  appealAccountLockApi,
 };
