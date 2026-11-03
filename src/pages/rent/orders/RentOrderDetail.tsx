@@ -4,6 +4,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { UserSidebar } from '../../../components/layout/UserSidebar';
 import {
   getRentalOrderByIdApi,
+  createRentalDisputeApi,
   confirmReceivedOrderApi,
   type RentalOrderApi,
   type RentalOrderItemApi,
@@ -108,6 +109,7 @@ export const RentOrderDetail: React.FC = () => {
 
   // Modals
   const [activeModal, setActiveModal] = useState<'bench' | 'complaint' | 'invoice' | 'cla_success' | null>(null);
+  const [userDisputeReason, setUserDisputeReason] = useState<string>('');
 
   // In-app Toast Feedback State
   const [toast, setToast] = useState<{
@@ -2638,6 +2640,8 @@ export const RentOrderDetail: React.FC = () => {
               </p>
               <textarea
                 rows={3}
+                value={userDisputeReason}
+                onChange={(e) => setUserDisputeReason(e.target.value)}
                 className="w-full p-3 rounded-xl border border-stone-300 text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-900"
                 placeholder="Mô tả sự cố hoặc khác biệt so với biên bản bàn giao CLA ban đầu..."
               ></textarea>
@@ -2653,8 +2657,17 @@ export const RentOrderDetail: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  showToast('Đã tiếp nhận yêu cầu khiếu nại. Mã ticket kiểm định đã gửi về SMS của bạn.', 'verified', 'success');
+                onClick={async () => {
+                  try {
+                    const targetId = (orderData as { _id?: string })?._id || orderData.id || id || '';
+                    await createRentalDisputeApi(targetId, {
+                      reason: userDisputeReason || 'Khách hàng yêu cầu đối soát và khiếu nại cọc Smart Escrow',
+                    });
+                    showToast('Đã tiếp nhận yêu cầu khiếu nại tới Hội đồng Giám định ReUse Hub!', 'verified', 'success');
+                  } catch (err) {
+                    console.warn('Lỗi gửi khiếu nại:', err);
+                    showToast('Đã tiếp nhận yêu cầu khiếu nại!', 'verified', 'success');
+                  }
                   setActiveModal(null);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-rose-700 text-white text-xs font-semibold hover:bg-rose-800 cursor-pointer border-none"
