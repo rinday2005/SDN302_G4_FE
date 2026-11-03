@@ -957,6 +957,90 @@ export const deleteAdminCategoryApi = async (id: string) => {
   return res.data?.data || res.data;
 };
 
+// ============================================================================
+// PLATFORM FINANCE REPORTING (MATCH DIRECT WITH LIVE MONGODB)
+// ============================================================================
+
+export interface FinancialOverview {
+  totalPlatformGmv: number;
+  totalPlatformRevenue: number;
+  netMarginPercent: number;
+  lockedEscrowAmount: number;
+  totalDepositsRefunded: number;
+  rentGmv: number;
+  thriftGmv: number;
+  totalOrdersCount: number;
+}
+
+export interface RentFinancialSector {
+  rentalFeesCollected: number;
+  escrowProcessed: number;
+  depositsReleased: number;
+  activeRetention: number;
+  penalties: number;
+  platformRentFee: number;
+  rentFeePercent: number;
+  totalOrders: number;
+}
+
+export interface ThriftFinancialSector {
+  salesVolume: number;
+  disbursed: number;
+  platformTakeRate: number;
+  takeRatePercent: number;
+  completedLots: number;
+  disputeRefunds: number;
+  totalOrders: number;
+}
+
+export interface FinancialAiInsights {
+  projectedNextMonthGmv: number;
+  projectedNextMonthRevenue: number;
+  growthRate: number;
+  escrowSafetyRatio: number;
+  disputeRate: number;
+  aiHealthScore: number;
+  executiveSummary: string;
+}
+
+export interface PlatformAuditTransaction {
+  id: string;
+  vnpayRef: string;
+  orderCode: string;
+  orderSubtitle: string;
+  orderType: "RENT" | "THRIFT";
+  type: string;
+  typeLabel: string;
+  typeBadgeColor: string;
+  amount: number;
+  amountPrefix: string;
+  amountBadge: string;
+  amountBadgeColor: string;
+  gatewayName: string;
+  gatewaySub: string;
+  gatewayIndicatorColor: string;
+  dateDisplay: string;
+  timeDisplay: string;
+  status: string;
+  statusLabel: string;
+  shaSignature: string;
+  bankAccount: string;
+  rawDate: string;
+}
+
+export interface PlatformFinanceReport {
+  overview: FinancialOverview;
+  rentSector: RentFinancialSector;
+  thriftSector: ThriftFinancialSector;
+  aiInsights: FinancialAiInsights;
+  transactions: PlatformAuditTransaction[];
+}
+
+export const fetchPlatformFinanceApi = async (): Promise<PlatformFinanceReport> => {
+  const res = await api.get("/admin/finance");
+  return res.data?.data || res.data;
+};
+
 export default {
   fetchAdminDashboardData,
   fetchAdminUsers,
@@ -972,4 +1056,5 @@ export default {
   updateAdminCategoryApi,
   toggleCategoryStatusApi,
   deleteAdminCategoryApi,
+  fetchPlatformFinanceApi,
 };
