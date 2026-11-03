@@ -70,6 +70,16 @@ export interface RentalOrderApi {
     damagePenaltyAmount?: number;
     reason?: string;
   } | null;
+  dispute?: {
+    status?: string;
+    reason?: string;
+    damageImages?: string[];
+    resolution?: string;
+    refundToRenter?: number;
+    payoutToShop?: number;
+    adminNotes?: string;
+    resolvedAt?: string | null;
+  };
   createdAt: string;
   updatedAt?: string;
 }
@@ -317,6 +327,24 @@ export const updateOrderStatusApi = async (
   }
 };
 
+/**
+ * [BE-DISPUTE] Khởi tạo khiếu nại tranh chấp đơn thuê (Renter / Shop Owner / Admin)
+ * POST /api/rent/orders/:id/dispute
+ */
+export const createRentalDisputeApi = async (
+  orderId: string,
+  payload: { reason: string; damageImages?: string[] }
+): Promise<RentalOrderApi | null> => {
+  try {
+    const cleanId = orderId.replace(/^#/, "");
+    const res = await api.post(`/rent/orders/${cleanId}/dispute`, payload);
+    return res.data?.data || res.data || null;
+  } catch (error) {
+    console.error(`Lỗi khi mở khiếu nại đơn thuê ${orderId}:`, error);
+    throw error;
+  }
+};
+
 export default {
   getMyRentalOrdersApi,
   getShopRentalOrdersApi,
@@ -329,5 +357,5 @@ export default {
   createRentalOrderApi,
   inspectAndRefundOrderApi,
   updateOrderStatusApi,
+  createRentalDisputeApi,
 };
-

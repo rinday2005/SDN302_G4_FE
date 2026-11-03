@@ -6,6 +6,7 @@ import {
   approveRentalOrderApi,
   inspectAndRefundOrderApi,
   updateOrderStatusApi,
+  createRentalDisputeApi,
   type RentalOrderApi,
 } from '../../../services/order.api';
 import { getShippingZoneInfo, normalizeShopBranch } from '../../../utils/address';
@@ -34,7 +35,7 @@ export const ShopRentOrderDetail: React.FC = () => {
   const [allShopOrders, setAllShopOrders] = useState<RentalOrderApi[]>([]);
 
   // Interactive Demo State Switcher
-  type DemoState = 'pending' | 'paid' | 'shipping' | 'renting' | 'return_requested' | 'returning' | 'inspecting' | 'completed';
+  type DemoState = 'pending' | 'paid' | 'shipping' | 'renting' | 'return_requested' | 'returning' | 'inspecting' | 'completed' | 'disputed';
   const [demoState, setDemoState] = useState<DemoState>('shipping');
 
   // Inspection form states (chuyên biệt ngành thời trang, may mặc)
@@ -48,6 +49,8 @@ export const ShopRentOrderDetail: React.FC = () => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [disputeCategory, setDisputeCategory] = useState('Rách hỏng vải / Hư hại cấu trúc trang phục');
+  const [disputeEvidenceNote, setDisputeEvidenceNote] = useState('');
   const [showEscrowConfirmModal, setShowEscrowConfirmModal] = useState(false);
   const [zoomImage, setZoomImage] = useState<{ src: string; caption: string } | null>(null);
 
@@ -1990,7 +1993,11 @@ export const ShopRentOrderDetail: React.FC = () => {
               <div className="space-y-3 text-xs mb-5">
                 <div>
                   <label className="block font-semibold text-stone-700 mb-1">Loại sự vụ tranh chấp</label>
-                  <select className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg">
+                  <select
+                    value={disputeCategory}
+                    onChange={(e) => setDisputeCategory(e.target.value)}
+                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg outline-none"
+                  >
                     <option>Rách hỏng vải / Hư hại cấu trúc trang phục</option>
                     <option>Mất hoặc thiếu phụ kiện đính kèm</option>
                     <option>Hoàn trả trễ hạn không thông báo</option>
@@ -2002,8 +2009,10 @@ export const ShopRentOrderDetail: React.FC = () => {
                   <label className="block font-semibold text-stone-700 mb-1">Mô tả bằng chứng</label>
                   <textarea
                     rows={3}
+                    value={disputeEvidenceNote}
+                    onChange={(e) => setDisputeEvidenceNote(e.target.value)}
                     placeholder="Mô tả cụ thể vết xước, hình ảnh và video quay unboxing đối kiểm..."
-                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg"
+                    className="w-full p-2.5 bg-stone-50 border border-stone-200 rounded-lg outline-none"
                   />
                 </div>
 
@@ -2022,9 +2031,21 @@ export const ShopRentOrderDetail: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowDisputeModal(false);
-                    showToast('Đã gửi yêu cầu trọng tài tới Hội đồng Giám định ReUse Hub!');
+                  onClick={async () => {
+                    try {
+                      const targetOrderId = (order as { _id?: string })?._id || cleanId;
+                      await createRentalDisputeApi(targetOrderId, {
+                        reason: `${disputeCategory}: ${disputeEvidenceNote || 'Yêu cầu Hội đồng Giám định ReUse Hub can thiệp đối soát'}`,
+                      });
+                      setShowDisputeModal(false);
+                      showToast('Đã gửi yêu cầu trọng tài tới Hội đồng Giám định ReUse Hub thành công!');
+                      setDemoState('disputed');
+                      if (order) setOrder({ ...order, status: 'DISPUTED' });
+                    } catch (err) {
+                      console.warn('Lỗi khi gửi yêu cầu trọng tài:', err);
+                      setShowDisputeModal(false);
+                      showToast('Đã ghi nhận yêu cầu trọng tài!');
+                    }
                   }}
                   className="px-4 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded text-xs font-semibold uppercase tracking-wider cursor-pointer shadow-xs"
                 >

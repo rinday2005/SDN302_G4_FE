@@ -13,7 +13,8 @@ export type DisputeType = "RENT" | "THRIFT" | "PAYMENT" | "DELIVERY";
 export type DisputeSort = "sla-asc" | "date-desc" | "date-asc" | "escrow-desc";
 
 export interface DisputeItem {
-  id: string; // e.g., "#RH-D4091"
+  id: string;
+  rawId?: string; // e.g., "#RH-D4091"
   orderCode: string; // e.g., "RENT #RO-8821" or "THRIFT #TO-4412"
   orderUrl: string;
   productName: string;
@@ -40,147 +41,11 @@ export interface DisputeItem {
   payoutToShop?: number;
 }
 
-const INITIAL_DISPUTES: DisputeItem[] = [
-  {
-    id: "#RH-D4091",
-    orderCode: "RENT #RO-8821",
-    orderUrl: "/rent/orders/RO-8821",
-    productName: "Leica M6 Classic 0.72x Kit",
-    orderPriceNote: "850,000 ₫/ngày • Cọc: 18,000,000 ₫",
-    customerName: "Lê Minh Khoa",
-    customerUrl: "/admin/users",
-    customerTrust: "KYC T2 • 98% Tín Nhiệm",
-    shopName: "Kyoto Archival Optics",
-    shopOwner: "Phạm Thùy Dương (Chủ xưởng)",
-    shopUrl: "/admin/users",
-    categoryTag: "RENT • DEPOSIT DISPUTE",
-    description: "Tranh chấp khấu trừ cọc 2,500,000 ₫ do nghi vấn hao mòn màn trập vải sau chuyến thuê 3 ngày.",
-    createdAtDisplay: "24/10/2026",
-    createdAtTime: "08:30 sáng",
-    slaDisplay: "SLA: 1h 45m (12:00 hôm nay)",
-    isUrgentSla: true,
-    status: "OPEN",
-    disputeType: "RENT",
-    escrowAmount: 2500000,
-  },
-  {
-    id: "#RH-D3882",
-    orderCode: "RENT #RO-9104",
-    orderUrl: "/rent/orders/RO-9104",
-    productName: "Hasselblad 503CX + Planar 80mm",
-    orderPriceNote: "1,200,000 ₫/ngày • Cọc: 25,000,000 ₫",
-    customerName: "Đoàn Thị Mai",
-    customerUrl: "/admin/users",
-    customerTrust: "KYC Verified Tier-1",
-    shopName: "Saigon Cinema Vault",
-    shopOwner: "Anh Nguyen Le (Lab Lead)",
-    shopUrl: "/admin/users",
-    categoryTag: "RENT • RETURN DAMAGE",
-    description: "Nghi vấn trầy xước ngàm ống kính Carl Zeiss bayonet trong quá trình tháo lắp khi tác nghiệp thực địa.",
-    createdAtDisplay: "23/10/2026",
-    createdAtTime: "14:15 chiều",
-    slaDisplay: "SLA: Còn 18h",
-    isUrgentSla: false,
-    status: "UNDER_REVIEW",
-    disputeType: "RENT",
-    escrowAmount: 6000000,
-    labNote: "LAB-OPT-33: Đang đo kiểm độ chuẩn trục vi sai tại phòng lab.",
-  },
-  {
-    id: "#RH-D3710",
-    orderCode: "THRIFT #TO-4412",
-    orderUrl: "/thrift/orders/TO-4412",
-    productName: "Contax T2 Titanium Champagne",
-    orderPriceNote: "Giá mua: 28,500,000 ₫ (Escrow Giữ)",
-    customerName: "Trần Văn An",
-    customerUrl: "/admin/users",
-    customerTrust: "Người sưu tầm lưu trữ",
-    shopName: "Heritage Audio & Optics",
-    shopOwner: "Store Verified Top Seller",
-    shopUrl: "/admin/users",
-    categoryTag: "THRIFT • CONDITION ISSUE",
-    description: "Sai lệch mô tả: Khách báo viền thấu kính Carl Zeiss Sonnar có mảng ố rễ tre nhẹ chưa được ghi trong biên bản lab.",
-    createdAtDisplay: "22/10/2026",
-    createdAtTime: "11:20 trưa",
-    slaDisplay: "SLA: Còn 8h",
-    isUrgentSla: true,
-    status: "OPEN",
-    disputeType: "THRIFT",
-    escrowAmount: 28500000,
-  },
-  {
-    id: "#RH-D3644",
-    orderCode: "THRIFT #TO-3901",
-    orderUrl: "/thrift/orders/TO-3901",
-    productName: "Ghế Eames LCW Walnut Plywood",
-    orderPriceNote: "Giá trị: 16,800,000 ₫",
-    customerName: "Nguyễn Lan",
-    customerUrl: "/admin/users",
-    customerTrust: "Kiến trúc sư • Hà Nội",
-    shopName: "Saigon Mid-Century Vault",
-    shopOwner: "Chuyên gia nội thất cổ điển",
-    shopUrl: "/admin/users",
-    categoryTag: "DELIVERY • SEAL TAMPERING",
-    description: "Rách tem niêm phong vận chuyển gỗ, xước nhẹ phần chân đế uốn cong lúc vận chuyển liên tỉnh.",
-    createdAtDisplay: "20/10/2026",
-    createdAtTime: "16:00 chiều",
-    slaDisplay: "Hoàn tất giải trình",
-    isUrgentSla: false,
-    status: "RESOLVED",
-    disputeType: "DELIVERY",
-    escrowAmount: 3200000,
-    arbitrationVerdict: "Bảo hiểm lưu thông Circularity B-Corp đã chi trả 3,200,000 ₫ phí phục chế xi sáp cho xưởng.",
-  },
-  {
-    id: "#RH-D3502",
-    orderCode: "RENT #RO-7731",
-    orderUrl: "/rent/orders/RO-7731",
-    productName: "Sony FX3 Cinema Rig + XLR Handle",
-    orderPriceNote: "1,400,000 ₫/ngày",
-    customerName: "Trần Hoàng",
-    customerUrl: "/admin/users",
-    customerTrust: "Đạo diễn hình ảnh độc lập",
-    shopName: "Hanoi Cinematic Hub",
-    shopOwner: "Đối tác kho thiết bị RENT",
-    shopUrl: "/admin/users",
-    categoryTag: "RENT • MISSING ITEM",
-    description: "Thiếu hood che sáng carbon và 1 ốc khóa nato rail khi nhận trả thiết bị tại kho lưu ký.",
-    createdAtDisplay: "18/10/2026",
-    createdAtTime: "09:40 sáng",
-    slaDisplay: "Đã ký biên bản bù",
-    isUrgentSla: false,
-    status: "CLOSED",
-    disputeType: "RENT",
-    escrowAmount: 850000,
-    arbitrationVerdict: "Khách hàng đã hoàn trả bổ sung phụ kiện nguyên vẹn sau 24h. Hoàn trả 100% cọc.",
-  },
-  {
-    id: "#RH-D3419",
-    orderCode: "RENT #RO-6512",
-    orderUrl: "/rent/orders/RO-6512",
-    productName: "Teenage Engineering OP-1 Synthesizer",
-    orderPriceNote: "Ký quỹ hoàn trả: 12,000,000 ₫",
-    customerName: "Phạm Gia Bảo",
-    customerUrl: "/admin/users",
-    customerTrust: "Nghệ sĩ âm thanh",
-    shopName: "Bauhaus Sound Lab",
-    shopOwner: "Audio Archival Hub",
-    shopUrl: "/admin/users",
-    categoryTag: "PAYMENT • ESCROW DELAY",
-    description: "Cổng VNPay ghi nhận độ trễ hoàn cọc sau khi chủ xưởng đã ký biên bản bàn giao an toàn 24h.",
-    createdAtDisplay: "15/10/2026",
-    createdAtTime: "10:15 sáng",
-    slaDisplay: "Hạch toán thủ công",
-    isUrgentSla: false,
-    status: "RESOLVED",
-    disputeType: "PAYMENT",
-    escrowAmount: 12000000,
-    arbitrationVerdict: "Đối soát kế toán xác nhận lệnh hoàn tiền tự động đã chuyển khoản thành công.",
-  },
-];
+const INITIAL_DISPUTES: DisputeItem[] = [];
 
 interface RawDisputeApiItem {
   id?: string;
+  _id?: string;
   orderCode?: string;
   items?: Array<{ productId?: { name?: string }; name?: string }>;
   escrowLocked?: number;
@@ -227,13 +92,17 @@ export const DisputeManagement: React.FC = () => {
       .then((data) => {
         if (!isMounted || !data) return;
         const rawList = data.disputes || (Array.isArray(data) ? data : []);
-        if (Array.isArray(rawList) && rawList.length > 0) {
-          const dbDisputes: DisputeItem[] = rawList.map((d: RawDisputeApiItem) => ({
-            id: d.id ? (d.id.startsWith("#") ? d.id : `#RH-${String(d.id).slice(-4).toUpperCase()}`) : `#RH-D${Math.floor(Math.random() * 8999 + 1000)}`,
-            orderCode: d.orderCode || `RENT #RO-${String(d.id || "").slice(-4).toUpperCase()}`,
-            orderUrl: `/rent/orders/${d.id || ""}`,
+        const dbDisputes: DisputeItem[] = (Array.isArray(rawList) ? rawList : []).map((d: RawDisputeApiItem) => {
+          const rawId = String(d.id || d._id || "");
+          const isThrift = d.orderType === "THRIFT";
+          const orderCode = d.orderCode || (isThrift ? `#TO-${rawId.slice(-4).toUpperCase()}` : `#RO-${rawId.slice(-4).toUpperCase()}`);
+          return {
+            id: rawId.startsWith("#") ? rawId : `#RH-D${rawId.slice(-4).toUpperCase() || Math.floor(Math.random() * 8999 + 1000)}`,
+            rawId,
+            orderCode,
+            orderUrl: isThrift ? `/thrift/orders/${rawId}` : `/rent/orders/${rawId}`,
             productName: d.items?.[0]?.productId?.name || d.items?.[0]?.name || "Hiện vật đối soát",
-            orderPriceNote: `Ký quỹ: ${(Number(d.escrowLocked || d.depositAmount) || 0).toLocaleString("vi-VN")} ₫`,
+            orderPriceNote: `Ký quỹ: ${(Number(d.escrowLocked ?? d.depositAmount) || 0).toLocaleString("vi-VN")} ₫`,
             customerName: d.renter?.fullName || "Khách hàng ReUse",
             customerUrl: "/admin/users",
             customerTrust: "KYC Verified Tier",
@@ -246,20 +115,19 @@ export const DisputeManagement: React.FC = () => {
             createdAtTime: new Date(d.reportedAt || Date.now()).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
             slaDisplay: d.disputeStatus === "RESOLVED" ? "Đã giải quyết" : "SLA: Trong 24h",
             isUrgentSla: d.disputeStatus !== "RESOLVED",
-            status: d.disputeStatus === "RESOLVED" ? "RESOLVED" : "OPEN",
+            status: (d.disputeStatus === "RESOLVED" ? "RESOLVED" : "OPEN") as DisputeStatus,
             disputeType: (d.orderType || "RENT") as DisputeType,
-            escrowAmount: Number(d.escrowLocked ?? d.depositAmount) || 2000000,
+            escrowAmount: Number(d.escrowLocked ?? d.depositAmount) || 0,
             arbitrationVerdict: d.resolution || undefined,
             damageImages: Array.isArray(d.damageImages) ? d.damageImages : [],
-          }));
-
-          setDisputes((prev) => {
-            const existingIds = new Set(dbDisputes.map((x) => x.id));
-            return [...dbDisputes, ...prev.filter((p) => !existingIds.has(p.id))];
-          });
-        }
+          };
+        });
+        setDisputes(dbDisputes);
       })
-      .catch((err) => console.warn("Lỗi tải danh sách tranh chấp từ API:", err));
+      .catch((err) => {
+        console.warn("Lỗi tải danh sách tranh chấp từ API:", err);
+        setDisputes([]);
+      });
 
     return () => {
       isMounted = false;
@@ -315,30 +183,33 @@ export const DisputeManagement: React.FC = () => {
     const openCount = disputes.filter((d) => d.status === "OPEN").length;
     const underReviewCount = disputes.filter((d) => d.status === "UNDER_REVIEW").length;
     const resolvedCount = disputes.filter((d) => d.status === "RESOLVED").length;
+    const closedCount = disputes.filter((d) => d.status === "CLOSED").length;
     const urgentCount = disputes.filter((d) => d.status === "OPEN" && d.isUrgentSla).length;
 
     const escrowUnderDispute = disputes
       .filter((d) => d.status === "OPEN" || d.status === "UNDER_REVIEW")
-      .reduce((sum, d) => sum + d.escrowAmount, 0);
+      .reduce((sum, d) => sum + (Number(d.escrowAmount) || 0), 0);
 
     return {
-      total: 28,
-      open: openCount > 0 ? openCount : 6,
-      underReview: underReviewCount > 0 ? underReviewCount : 4,
-      resolved: resolvedCount > 0 ? resolvedCount : 18,
-      urgent: urgentCount > 0 ? urgentCount : 3,
-      escrowAmountDisplay: (escrowUnderDispute / 1000000).toFixed(2),
+      total: disputes.length,
+      open: openCount,
+      underReview: underReviewCount,
+      resolved: resolvedCount,
+      closed: closedCount,
+      urgent: urgentCount,
+      escrowAmount: escrowUnderDispute,
+      escrowAmountDisplay: (escrowUnderDispute / 1000000).toLocaleString("vi-VN", { maximumFractionDigits: 2 }),
     };
   }, [disputes]);
 
   // Tab counts
   const tabCounts = useMemo(() => {
     return {
-      ALL: 28,
-      OPEN: disputes.filter((d) => d.status === "OPEN").length || 6,
-      UNDER_REVIEW: disputes.filter((d) => d.status === "UNDER_REVIEW").length || 4,
-      RESOLVED: disputes.filter((d) => d.status === "RESOLVED").length || 15,
-      CLOSED: disputes.filter((d) => d.status === "CLOSED").length || 3,
+      ALL: disputes.length,
+      OPEN: disputes.filter((d) => d.status === "OPEN").length,
+      UNDER_REVIEW: disputes.filter((d) => d.status === "UNDER_REVIEW").length,
+      RESOLVED: disputes.filter((d) => d.status === "RESOLVED").length,
+      CLOSED: disputes.filter((d) => d.status === "CLOSED").length,
     };
   }, [disputes]);
 
@@ -428,8 +299,8 @@ export const DisputeManagement: React.FC = () => {
 
     setIsResolving(true);
     try {
-      const cleanId = selectedDispute.id.replace("#RH-", "").replace("#", "");
-      await resolveDisputeApi(cleanId, {
+      const targetId = selectedDispute.rawId || selectedDispute.id.replace("#RH-", "").replace("#", "");
+      await resolveDisputeApi(targetId, {
         resolution: verdictText,
         refundToRenter,
         payoutToShop,
@@ -653,8 +524,7 @@ export const DisputeManagement: React.FC = () => {
                   Ký Quỹ Đang Phong Tỏa
                 </span>
                 <span className="text-3xl font-serif text-[#1c1b19] mt-1 font-bold">
-                  {metrics.escrowAmountDisplay}M{" "}
-                  <span className="text-xs font-sans font-normal text-[#4c463c]">₫</span>
+                  {metrics.escrowAmount > 0 ? `${metrics.escrowAmount.toLocaleString("vi-VN")} ₫` : "0 ₫"}
                 </span>
               </div>
               <span className="p-2 bg-[#caebc9]/50 rounded-lg text-[#48654b]">
@@ -1013,24 +883,30 @@ export const DisputeManagement: React.FC = () => {
               <tbody className="divide-y divide-[#ece7e4]">
                 {filteredDisputes.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-[#7e766a]">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <span className="material-symbols-outlined text-4xl text-[#cfc5b8]">
-                          balance
-                        </span>
-                        <p className="text-sm font-semibold text-[#1c1b19]">
-                          Không tìm thấy tranh chấp nào phù hợp
+                    <td colSpan={8} className="py-14 text-center text-[#7e766a]">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-14 h-14 rounded-2xl bg-[#ece7e4] text-[#4c463c] flex items-center justify-center shadow-xs">
+                          <span className="material-symbols-outlined text-3xl text-[#48654b]">
+                            check_circle
+                          </span>
+                        </div>
+                        <p className="text-base font-serif font-bold text-[#1c1b19]">
+                          {disputes.length === 0 ? "Hiện tại không có tranh chấp nào" : "Không tìm thấy tranh chấp phù hợp bộ lọc"}
                         </p>
-                        <p className="text-xs text-[#7e766a]">
-                          Bộ lọc hiện tại không có hồ sơ tranh chấp hoặc khiếu nại nào tương ứng.
+                        <p className="text-xs text-[#7e766a] max-w-md mx-auto leading-relaxed">
+                          {disputes.length === 0
+                            ? "Toàn bộ đơn hàng thuê (RENT) và thanh lý (THRIFT) trong hệ thống đều đang vận hành bình thường. Khoản ký quỹ Smart Escrow và tiền bảo lãnh được kiểm soát an toàn."
+                            : "Vui lòng chuyển trạng thái hoặc xóa từ khóa tìm kiếm để xem các hồ sơ tranh chấp khác."}
                         </p>
-                        <button
-                          type="button"
-                          onClick={handleResetFilters}
-                          className="mt-2 px-3.5 py-1.5 rounded-lg bg-[#1c1b19] text-white text-xs font-semibold"
-                        >
-                          Đặt Lại Bộ Lọc
-                        </button>
+                        {disputes.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleResetFilters}
+                            className="mt-2 px-4 py-2 rounded-xl bg-[#1c1b19] text-white text-xs font-semibold hover:bg-black transition-colors"
+                          >
+                            Đặt Lại Bộ Lọc
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
