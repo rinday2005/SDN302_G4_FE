@@ -11,7 +11,6 @@ import {
 } from '../../data/shop/thriftOrdersData';
 import {
   getShopThriftOrdersApi,
-  getMyThriftOrdersApi,
   updateThriftOrderStatusApi,
 } from '../../../services/thriftOrder.api';
 import type { ThriftOrderApi } from '../../../services/thriftOrder.api';
@@ -211,59 +210,20 @@ export const ShopThriftOrders: React.FC = () => {
   const [notesInput, setNotesInput] = useState('');
   const [isSubmittingShipment, setIsSubmittingShipment] = useState(false);
 
-  // Load orders hoàn toàn từ DB thực MongoDB API
+  // Load orders hoàn toàn từ DB thực MongoDB API của chính Shop Owner
   const loadOrders = useCallback(async () => {
     setLoading(true);
     let apiList: ThriftOrderApi[] = [];
     try {
       const res = await getShopThriftOrdersApi();
       apiList = res?.orders || (Array.isArray(res) ? res : []);
-      if (apiList.length === 0) {
-        const myRes = await getMyThriftOrdersApi();
-        apiList = myRes?.orders || (Array.isArray(myRes) ? myRes : []);
-      }
     } catch (e) {
       console.warn('Lỗi khi tải đơn THRIFT từ backend API:', e);
     }
 
-    const localMerged: ExtendedThriftOrder[] = [];
-    // Kiểm tra user_thrift_orders lưu tạm từ phiên checkout của khách
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (key === 'user_thrift_orders' || key.startsWith('user_thrift_orders_'))) {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              parsed.forEach((po) => {
-                const mapped = mapApiThriftOrder(po);
-                if (!localMerged.some((ex) => ex.id.replace('#', '') === mapped.id.replace('#', ''))) {
-                  localMerged.push(mapped);
-                }
-              });
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Lỗi kiểm tra user_thrift_orders:', e);
-    }
-
-    const combinedMap = new Map<string, ExtendedThriftOrder>();
-    localMerged.forEach((o) => {
-      const cleanKey = o.id.replace('#', '').trim();
-      if (cleanKey) combinedMap.set(cleanKey, o);
-    });
-    apiList.forEach((apiO) => {
-      const mapped = mapApiThriftOrder(apiO);
-      const cleanKey = mapped.id.replace('#', '').trim();
-      if (cleanKey) combinedMap.set(cleanKey, mapped);
-    });
-
-    const finalOrders = Array.from(combinedMap.values());
-    finalOrders.sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a));
-    setOrders(finalOrders);
+    const mappedApi = apiList.map(mapApiThriftOrder);
+    mappedApi.sort((a, b) => getOrderTimestamp(b) - getOrderTimestamp(a));
+    setOrders(mappedApi);
     setLoading(false);
   }, []);
 

@@ -199,8 +199,10 @@ export const MyRentOrders: React.FC = () => {
       statusVal = 'PAID';
     } else if (['HANDED_OVER', 'SHIPPING'].includes(rawStatus)) {
       statusVal = hasClaSigned ? 'RENTING' : 'SHIPPING';
-    } else if (rawStatus === 'DELIVERED' || rawStatus === 'RENTING') {
-      statusVal = hasClaSigned ? 'RENTING' : 'SHIPPING';
+    } else if (rawStatus === 'DELIVERED') {
+      statusVal = hasClaSigned ? 'RENTING' : 'DELIVERED';
+    } else if (rawStatus === 'RENTING') {
+      statusVal = 'RENTING';
     }
 
     if (statusVal === 'PENDING') {
@@ -808,8 +810,11 @@ export const MyRentOrders: React.FC = () => {
     const pendingWaitingCount = orders.filter((o) =>
       ['PENDING', 'WAITING_PAYMENT', 'PENDING_PAYMENT'].includes(o.status)
     ).length;
+    const shippingCount = orders.filter((o) =>
+      ['PAID', 'PREPARING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING'].includes(o.status)
+    ).length;
     const deliveredCount = orders.filter((o) => (o.status === 'DELIVERED' || o.needsClaSign) && !o.claSigned).length;
-    const rentingCount = orders.filter((o) => o.status === 'RENTING' && o.claSigned && !['RETURN_REQUESTED', 'RETURNING', 'RETURNED', 'COMPLETED', 'CANCELLED'].includes(o.status)).length;
+    const rentingCount = orders.filter((o) => (o.status === 'RENTING' || (o.claSigned && !['RETURN_REQUESTED', 'RETURNING', 'RETURNED', 'COMPLETED', 'CANCELLED'].includes(o.status)))).length;
     const returningCount = orders.filter((o) =>
       ['RETURN_REQUESTED', 'RETURNING', 'RETURNED'].includes(o.status)
     ).length;
@@ -827,6 +832,15 @@ export const MyRentOrders: React.FC = () => {
             },
           ]
         : []),
+      ...(shippingCount > 0
+        ? [
+            {
+              key: 'SHIPPING',
+              label: `Đang giao bưu tá (${String(shippingCount).padStart(2, '0')})`,
+              dot: 'bg-blue-500 animate-pulse',
+            },
+          ]
+        : []),
       { key: 'DELIVERED', label: `Chờ ký đơn CLA (Bước 5) (${String(deliveredCount).padStart(2, '0')})`, dot: deliveredCount > 0 ? 'bg-[#EA580C] animate-ping' : undefined },
       { key: 'RENTING', label: `Đang thuê & Lưu ký (Bước 6) (${String(rentingCount).padStart(2, '0')})`, dot: 'bg-[#4A6B53]' },
       { key: 'RETURNING', label: `Hoàn trả & Bench Lab (Bước 7-8) (${String(returningCount).padStart(2, '0')})`, dot: returningCount > 0 ? 'bg-[#7A4FA0]' : undefined },
@@ -840,11 +854,13 @@ export const MyRentOrders: React.FC = () => {
     return orders.filter((order) => {
       if (activeTab === 'PENDING_WAITING') {
         if (!['PENDING', 'WAITING_PAYMENT', 'PENDING_PAYMENT'].includes(order.status)) return false;
+      } else if (activeTab === 'SHIPPING' || activeTab === 'DELIVERING') {
+        if (!['PAID', 'PREPARING', 'READY_FOR_HANDOVER', 'HANDED_OVER', 'SHIPPING'].includes(order.status)) return false;
       } else if (activeTab === 'DELIVERED') {
         if (order.claSigned || (order.status !== 'DELIVERED' && !order.needsClaSign)) return false;
       } else if (activeTab === 'RENTING') {
-        if (!order.claSigned || order.status !== 'RENTING') return false;
-        if (['RETURN_REQUESTED', 'RETURNING', 'RETURNED', 'COMPLETED', 'CANCELLED'].includes(order.status)) return false;
+        const isRenting = order.status === 'RENTING' || (order.claSigned && !['RETURN_REQUESTED', 'RETURNING', 'RETURNED', 'COMPLETED', 'CANCELLED', 'PAID', 'PREPARING', 'SHIPPING'].includes(order.status));
+        if (!isRenting) return false;
       } else if (activeTab === 'ACTIVE') {
         const isActive = ['PENDING', 'WAITING_PAYMENT', 'PENDING_PAYMENT', 'DELIVERED', 'RENTING', 'PAID', 'SHIPPING', 'HANDED_OVER', 'READY_FOR_HANDOVER', 'PREPARING'].includes(order.status);
         if (!isActive) return false;

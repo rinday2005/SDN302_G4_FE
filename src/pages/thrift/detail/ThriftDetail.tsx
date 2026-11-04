@@ -22,11 +22,12 @@ export const ThriftDetail: React.FC = () => {
   const [dbProduct, setDbProduct] = useState<Partial<ThriftProductDetail> | null>(null);
   const [selectedSize, setSelectedSize] = useState<string>('L');
   const [shopOwnerInfo, setShopOwnerInfo] = useState({
-    name: 'ReUse Hub Certified Shop',
-    avatarText: 'RH',
-    location: 'Đà Nẵng',
+    id: '6ac39f4b216ef5928d9c46bb',
+    name: 'Atelier Chronos & Optics Ltd.',
+    avatarText: 'AT',
+    location: 'Hồ Chí Minh',
     isKycVerified: true,
-    badge: 'SHOP XÁC THỰC',
+    badge: 'SHOP ĐÃ XÁC THỰC',
   });
 
   useEffect(() => {
@@ -78,15 +79,17 @@ export const ThriftDetail: React.FC = () => {
             ? (data.size && productSizes.includes(data.size) ? data.size : productSizes[0])
             : undefined;
 
-          const rawData = data as unknown as { ownerId?: { shopProfile?: { shopName?: string; cityRegion?: string }; fullName?: string; kycStatus?: string; address?: { province?: string } }; verifiedBy?: string };
+          const rawData = data as unknown as { ownerId?: { _id?: string; shopProfile?: { shopName?: string; cityRegion?: string }; fullName?: string; kycStatus?: string; address?: { province?: string } }; verifiedBy?: string };
           const owner = typeof rawData?.ownerId === 'object' && rawData?.ownerId ? rawData.ownerId : null;
-          const sName = owner?.shopProfile?.shopName || owner?.fullName || rawData?.verifiedBy || 'Shop Đối Tác ReUse';
+          const ownerIdStr = owner?._id || (typeof data.ownerId === 'string' ? data.ownerId : '6ac39f4b216ef5928d9c46bb');
+          const sName = owner?.shopProfile?.shopName || owner?.fullName || rawData?.verifiedBy || 'Atelier Chronos & Optics Ltd.';
           const sKyc = owner?.kycStatus === 'APPROVED';
-          const sLoc = owner?.shopProfile?.cityRegion || owner?.address?.province || data.location || 'Toàn quốc';
+          const sLoc = owner?.shopProfile?.cityRegion || owner?.address?.province || data.location || 'Hồ Chí Minh';
 
           setShopOwnerInfo({
+            id: ownerIdStr,
             name: sName,
-            avatarText: (sName || 'RH').slice(0, 2).toUpperCase(),
+            avatarText: (sName || 'AT').slice(0, 2).toUpperCase(),
             location: sLoc,
             isKycVerified: sKyc,
             badge: sKyc ? 'SHOP ĐÃ XÁC THỰC' : 'CHỜ DUYỆT KYC',
@@ -169,7 +172,8 @@ export const ThriftDetail: React.FC = () => {
           gradeBadge: product.conditionLabel,
           quantity: 1,
           size: showSizeSelector ? selectedSize : undefined,
-          shopName: shopOwnerInfo.name || 'ReUse Hub Certified Shop',
+          shopName: shopOwnerInfo.name || 'Atelier Chronos & Optics Ltd.',
+        shopOwnerId: shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb',
           shopAvatar: shopOwnerInfo.avatarText || 'RH',
           shopLocation: shopOwnerInfo.location || 'Đà Nẵng',
           isShopVerified: shopOwnerInfo.isKycVerified,
@@ -190,7 +194,8 @@ export const ThriftDetail: React.FC = () => {
       gradeBadge: product.conditionLabel,
       quantity: 1,
       size: showSizeSelector ? selectedSize : undefined,
-      shopName: shopOwnerInfo.name || 'ReUse Hub Certified Shop',
+      shopName: shopOwnerInfo.name || 'Atelier Chronos & Optics Ltd.',
+        shopOwnerId: shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb',
       shopAvatar: shopOwnerInfo.avatarText || 'RH',
       shopLocation: shopOwnerInfo.location || 'Đà Nẵng',
       isShopVerified: shopOwnerInfo.isKycVerified,
@@ -331,10 +336,69 @@ export const ThriftDetail: React.FC = () => {
                 </p>
               </div>
             </div>
+
+            {/* THÔNG TIN SHOP BÁN HÀNG (ĐẶT BÊN TRÁI PHÍA DƯỚI BẢO CHỨNG CAM KẾT) */}
+            <div className="bg-[#F8F6F0] rounded-2xl p-4 sm:p-5 border border-[#E7E2DA] space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#78736A]">
+                  Đơn vị bán / Shop Owner
+                </span>
+                {shopOwnerInfo.isKycVerified ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                    <span className="material-symbols-outlined text-[12px]">verified</span> KYC Đã xác minh CCCD
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
+                    <span className="material-symbols-outlined text-[12px]">pending</span> Chờ kiểm định KYC
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 pt-0.5">
+                <Link
+                  to={`/shops/${shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb'}`}
+                  className="flex items-center gap-3 flex-1 min-w-0 group"
+                  title="Nhấp để xem trang cá nhân của Shop"
+                >
+                  <div className="w-11 h-11 rounded-full bg-[#1C1A18] text-white flex items-center justify-center text-sm font-bold shadow-xs shrink-0 group-hover:scale-105 transition-transform">
+                    {shopOwnerInfo.avatarText}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-xs sm:text-sm text-[#1C1A18] truncate group-hover:text-emerald-700 transition-colors">
+                        {shopOwnerInfo.name}
+                      </h4>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
+                        shopOwnerInfo.isKycVerified
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                          : 'bg-amber-100 text-amber-900 border border-amber-200'
+                      }`}>
+                        {shopOwnerInfo.badge}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-[#78736A] pt-0.5">
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px] text-[#78736A]">location_on</span>
+                        {shopOwnerInfo.location}
+                      </span>
+                      <span>•</span>
+                      <span className="text-emerald-700 font-medium">Đối tác ReUse Hub</span>
+                    </div>
+                  </div>
+                </Link>
+
+                <Link
+                  to={`/shops/${shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb'}`}
+                  className="shrink-0 px-3 py-1.5 rounded-xl border border-[#1C1A18] text-xs font-bold text-[#1C1A18] hover:bg-[#1C1A18] hover:text-white transition-all flex items-center gap-1"
+                >
+                  <span>Xem Shop</span>
+                  <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                </Link>
+              </div>
+            </div>
           </div>
 
           {/* RIGHT: Info + Purchase */}
-          <div className="space-y-5">
+          <div className="space-y-5 lg:sticky lg:top-24">
             <div className="space-y-2 border-b border-[#E7E2DA] pb-5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2 text-xs text-[#78736A]">
@@ -447,48 +511,7 @@ export const ThriftDetail: React.FC = () => {
                 </div>
               </div>
 
-              {/* THÔNG TIN SHOP BÁN HÀNG */}
-              <div className="bg-[#F8F6F0] rounded-2xl p-4 border border-[#E7E2DA] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#78736A]">
-                    Đơn vị bán / Shop Owner
-                  </span>
-                  {shopOwnerInfo.isKycVerified ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
-                      <span className="material-symbols-outlined text-[12px]">verified</span> KYC Đã xác minh CCCD
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
-                      <span className="material-symbols-outlined text-[12px]">pending</span> Chờ kiểm định KYC
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 pt-0.5">
-                  <div className="w-11 h-11 rounded-full bg-[#1C1A18] text-white flex items-center justify-center text-sm font-bold shadow-xs shrink-0">
-                    {shopOwnerInfo.avatarText}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-xs sm:text-sm text-[#1C1A18] truncate">{shopOwnerInfo.name}</h4>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
-                        shopOwnerInfo.isKycVerified
-                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                          : 'bg-amber-100 text-amber-900 border border-amber-200'
-                      }`}>
-                        {shopOwnerInfo.badge}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-[#78736A] pt-0.5">
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[13px] text-[#78736A]">location_on</span>
-                        {shopOwnerInfo.location}
-                      </span>
-                      <span>•</span>
-                      <span className="text-emerald-700 font-medium">Đối tác ReUse Hub</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+
 
               {/* CTA Buttons */}
               <div className="pt-1 space-y-2.5">

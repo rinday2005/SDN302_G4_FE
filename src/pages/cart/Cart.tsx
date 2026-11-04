@@ -19,6 +19,7 @@ import {
   normalizeShopBranch,
 } from '../../utils/address';
 import { createRentalOrderApi } from '../../services/order.api';
+import { getShopProfileApi } from '../../services/shop.api';
 
 const formatDisplayDateVN = (ymd?: string) => {
   if (!ymd) return '--/--/----';
@@ -75,6 +76,47 @@ export const Cart: React.FC = () => {
     return cart.map((item) => item.id).filter((id) => !deselectedIds.includes(id));
   }, [cart, deselectedIds]);
 
+  // Lấy thông tin Shop sống động từ DB để đồng bộ tên Shop trong giỏ hàng
+  const [liveShopInfo, setLiveShopInfo] = useState<{ shopName?: string; cityRegion?: string; avatarUrl?: string } | null>(() => {
+    try {
+      const stored = localStorage.getItem('shop_profile');
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    getShopProfileApi()
+      .then((data) => {
+        if (!isMounted || !data) return;
+        setLiveShopInfo({
+          shopName: data.shopName,
+          cityRegion: data.cityRegion || (data.addressObject?.province),
+          avatarUrl: data.avatarUrl,
+        });
+      })
+      .catch(() => null);
+
+    const handleShopUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ shopName?: string; cityRegion?: string; avatarUrl?: string }>;
+      if (customEvent.detail) {
+        setLiveShopInfo((prev) => ({
+          ...prev,
+          ...customEvent.detail,
+        }));
+      }
+    };
+
+    window.addEventListener('shop_profile_updated', handleShopUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('shop_profile_updated', handleShopUpdate);
+    };
+  }, []);
+
   // Cấu trúc nhóm sản phẩm theo từng Cửa Hàng (Shopee Style)
   interface ShopGroup {
     shopKey: string;
@@ -87,19 +129,29 @@ export const Cart: React.FC = () => {
 
   const shopGroups = useMemo<ShopGroup[]>(() => {
     const map = new Map<string, ShopGroup>();
+    const activeShopName = liveShopInfo?.shopName?.trim() || 'Light&Night Shop';
+    const activeShopLocation = liveShopInfo?.cityRegion?.trim() || 'Thành phố Đà Nẵng';
+    const activeShopAvatar = liveShopInfo?.avatarUrl || '';
 
     cart.forEach((item) => {
-      const sName =
-        item.shopName?.trim() ||
-        (item.mode === 'rent' ? 'ReUse Official Shop' : 'ReUse Hub Certified Shop');
+      let sName = item.shopName?.trim();
+      if (
+        !sName ||
+        sName === 'Atelier Chronos & Optics Ltd.' ||
+        sName === 'ReUse Official Shop' ||
+        sName === 'ReUse Hub Certified Shop' ||
+        item.shopOwnerId === '6ac39f4b216ef5928d9c46bb'
+      ) {
+        sName = activeShopName;
+      }
       const sKey = sName.toLowerCase();
 
       if (!map.has(sKey)) {
         map.set(sKey, {
           shopKey: sKey,
           shopName: sName,
-          shopAvatar: item.shopAvatar || sName.slice(0, 2).toUpperCase(),
-          shopLocation: item.shopLocation || item.location || 'Đà Nẵng',
+          shopAvatar: item.shopAvatar || activeShopAvatar || sName.slice(0, 2).toUpperCase(),
+          shopLocation: item.shopLocation || activeShopLocation || item.location || 'Thành phố Đà Nẵng',
           isShopVerified: item.isShopVerified ?? true,
           items: [],
         });
@@ -109,7 +161,7 @@ export const Cart: React.FC = () => {
     });
 
     return Array.from(map.values());
-  }, [cart]);
+  }, [cart, liveShopInfo]);
 
   // Toggle toàn bộ sản phẩm của một Cửa Hàng
   const handleToggleShop = (groupItems: CartItem[], selectAll: boolean) => {
@@ -511,7 +563,8 @@ export const Cart: React.FC = () => {
 
   // Wishlist toggle
   const handleWishlistToggle = (item: CartItem) => {
-    toggleWishlist(item.id);
+    const itemType = item.mode === 'thrift' ? 'THRIFT' : 'RENT';
+    toggleWishlist(item.id, itemType);
     const added = !isWishlisted(item.id);
     showToast(
       added ? `Đã lưu "${item.title}" vào yêu thích` : `Đã bỏ lưu "${item.title}"`,
@@ -839,15 +892,16 @@ export const Cart: React.FC = () => {
                             title="Chọn tất cả sản phẩm của Shop này"
                           />
                           <div className="flex items-center gap-2">
-                            <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[10px] font-bold uppercase tracking-wider shrink-0">
-                              Yêu thích
-                            </span>
                             <span className="material-symbols-outlined text-[18px] text-[#576151]">
                               storefront
                             </span>
-                            <span className="font-bold text-sm text-[#141310] hover:text-[#576151] transition-colors">
+                            <Link
+                              to="/shops/6ac39f4b216ef5928d9c46bb"
+                              className="font-bold text-sm text-[#141310] hover:text-[#576151] hover:underline transition-colors"
+                              title="Xem trang cá nhân của Shop"
+                            >
                               {group.shopName}
-                            </span>
+                            </Link>
                             {group.isShopVerified && (
                               <span
                                 className="material-symbols-outlined text-[15px] text-emerald-600"
@@ -890,170 +944,180 @@ export const Cart: React.FC = () => {
                           return (
                             <div
                               key={item.id}
-                              className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-[#FAF8F5]/60 transition-colors"
+                              className="p-4 sm:p-5 flex items-start gap-3.5 sm:gap-4 hover:bg-[#FAF8F5]/60 transition-colors border-b border-[#F1EDE6] last:border-b-0"
                             >
-                              {/* Cột trái: Checkbox + Ảnh + Tiêu đề & Thuộc tính */}
-                              <div className="flex items-start gap-3.5 flex-1 min-w-0 w-full sm:w-auto">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => handleToggleItem(item.id)}
-                                  className="w-4 h-4 accent-[#141310] rounded cursor-pointer mt-1 sm:mt-0 shrink-0"
+                              {/* Checkbox */}
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleItem(item.id)}
+                                className="w-4 h-4 accent-[#141310] rounded cursor-pointer mt-1.5 shrink-0"
+                              />
+
+                              {/* Thumbnail */}
+                              <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-[#EBE8E1] border border-[#E7E2DA]">
+                                <img
+                                  src={getItemImage(item)}
+                                  alt={item.title}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    const resolved = resolveWishlistProduct(item.id);
+                                    if (resolved?.image && e.currentTarget.src !== resolved.image) {
+                                      e.currentTarget.src = resolved.image;
+                                    }
+                                  }}
                                 />
+                                <span
+                                  className={`absolute bottom-1 left-1 px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${
+                                    isRent
+                                      ? 'bg-[#141310]/85 text-white'
+                                      : 'bg-amber-900/90 text-white'
+                                  }`}
+                                >
+                                  {isRent ? 'CHO THUÊ' : 'THANH LÝ'}
+                                </span>
+                              </div>
 
-                                <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-[#EBE8E1] border border-[#E7E2DA]">
-                                  <img
-                                    src={getItemImage(item)}
-                                    alt={item.title}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      const resolved = resolveWishlistProduct(item.id);
-                                      if (resolved?.image && e.currentTarget.src !== resolved.image) {
-                                        e.currentTarget.src = resolved.image;
-                                      }
-                                    }}
-                                  />
-                                  <span
-                                    className={`absolute bottom-1 left-1 px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${
-                                      isRent
-                                        ? 'bg-[#141310]/85 text-white'
-                                        : 'bg-amber-900/90 text-white'
-                                    }`}
-                                  >
-                                    {isRent ? 'CHO THUÊ' : 'THANH LÝ'}
-                                  </span>
-                                </div>
-
-                                <div className="flex-1 min-w-0">
+                              {/* Toàn bộ thông tin sản phẩm (Chia 2 tầng: Tầng trên & Tầng dưới) */}
+                              <div className="flex-1 min-w-0 flex flex-col justify-between gap-3">
+                                {/* TẦNG 1 (Ở TRÊN): Tiêu đề trải dài ra & Bên cạnh là Ngày thuê trải ra */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
                                   <Link
-                                    to={isRent ? `/rent/products/${item.id}` : `/thrift/${item.id}`}
-                                    className="text-xs sm:text-sm font-bold text-[#141310] hover:text-[#576151] transition-colors line-clamp-2 leading-snug"
+                                    to={isRent ? `/rent/detail/${item.id}` : `/thrift/detail/${item.id}`}
+                                    className="text-sm sm:text-base font-bold text-[#141310] hover:text-[#576151] transition-colors leading-snug flex-1 min-w-0 pr-2"
                                   >
                                     {item.title}
                                   </Link>
 
-                                  {/* Phân loại / Size / Ngày thuê */}
-                                  <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-[#7B766F]">
+                                  {/* Ngày thuê ngày trả trải ra ngang ở trên */}
+                                  {isRent && (
+                                    <div className="flex items-center gap-2 bg-[#F6F3EE] border border-[#E7E2DA] px-3 py-1.5 rounded-xl text-xs shrink-0 self-start sm:self-auto shadow-2xs">
+                                      <span className="material-symbols-outlined text-[15px] text-[#576151]">
+                                        calendar_today
+                                      </span>
+                                      <span className="font-semibold text-[#1C1C18]">
+                                        {formatDisplayDateVN(item.startDate)} → {formatDisplayDateVN(item.endDate)}
+                                      </span>
+                                      <span className="px-1.5 py-0.5 rounded bg-white text-[11px] font-bold text-[#576151] border border-[#E7E2DA]">
+                                        {days} ngày
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const validDates = getValidRentalDates(item);
+                                          setEditingRentItem(item);
+                                          setEditStartDate(validDates.startDate);
+                                          setEditEndDate(validDates.endDate);
+                                          setEditDays(validDates.days);
+                                        }}
+                                        className="ml-1 text-[#576151] hover:underline font-bold text-xs cursor-pointer"
+                                      >
+                                        Sửa ngày
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* TẦNG 2 (CÁCH XUỐNG DÒNG): Đơn giá, Cọc bên trái; Số lượng, Thành tiền, Tim, Xóa bên phải */}
+                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-[#F1EDE6] w-full">
+                                  {/* Bên trái: Đơn giá, Size, Cọc */}
+                                  <div className="flex flex-wrap items-center gap-3 text-xs text-[#7B766F]">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[11px] text-[#7B766F]">Đơn giá:</span>
+                                      <span className="font-bold text-xs sm:text-sm text-[#141310]">
+                                        {formatCurrency(item.price)}{isRent ? '/ngày' : ''}
+                                      </span>
+                                    </div>
+
                                     {item.size && (
                                       <span className="bg-[#F1EDE6] px-2 py-0.5 rounded text-[11px] font-medium text-[#1C1C18]">
                                         Phân loại: {item.size}
                                       </span>
                                     )}
 
-                                    {isRent ? (
-                                      <div className="flex items-center gap-1.5 bg-[#F1EDE6] px-2 py-0.5 rounded text-[11px]">
-                                        <span className="material-symbols-outlined text-[13px] text-[#576151]">
-                                          calendar_today
-                                        </span>
-                                        <span className="font-semibold text-[#1C1C18]">
-                                          {formatDisplayDateVN(item.startDate)} →{' '}
-                                          {formatDisplayDateVN(item.endDate)} ({days} ngày)
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const validDates = getValidRentalDates(item);
-                                            setEditingRentItem(item);
-                                            setEditStartDate(validDates.startDate);
-                                            setEditEndDate(validDates.endDate);
-                                            setEditDays(validDates.days);
-                                          }}
-                                          className="ml-1 text-[#576151] hover:underline font-bold text-[10px] cursor-pointer"
-                                        >
-                                          Sửa ngày
-                                        </button>
-                                      </div>
-                                    ) : (
+                                    {!isRent && (
                                       <span className="text-[11px] text-[#7B766F]">
                                         Tình trạng:{' '}
                                         <strong className="text-[#141310] font-medium">
-                                          {item.gradeBadge || 'Grade A+ (95%)'}
+                                          {item.gradeBadge || 'Đã kiểm định 95%'}
                                         </strong>
                                       </span>
                                     )}
+
+                                    {isRent && depositAmount > 0 && (
+                                      <div className="text-[11px] text-[#7B766F]">
+                                        • Cọc Smart Escrow:{' '}
+                                        <span className="font-medium text-[#141310]">
+                                          {formatCurrency(depositAmount)}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
 
-                                  {isRent && depositAmount > 0 && (
-                                    <div className="text-[11px] text-[#7B766F] mt-1">
-                                      Cọc Smart Escrow:{' '}
-                                      <span className="font-medium text-[#141310]">
-                                        {formatCurrency(depositAmount)}
+                                  {/* Bên phải: Stepper số lượng (CHỈ DÀNH CHO THRIFT) + Thành tiền + Nút xóa / Yêu thích */}
+                                  <div className="flex items-center gap-4 sm:gap-6 shrink-0 ml-auto">
+                                    {/* Stepper số lượng: CHỈ DÀNH CHO THRIFT, ĐƠN THUÊ KHÔNG CẦN SỐ LƯỢNG */}
+                                    {!isRent && (
+                                      <div className="flex items-center border border-[#ccc5bc]/60 rounded-lg overflow-hidden bg-white shadow-2xs">
+                                        <button
+                                          type="button"
+                                          disabled={item.quantity <= 1}
+                                          onClick={() => updateCartQuantity(item.id, -1)}
+                                          className="w-7 h-7 flex items-center justify-center text-xs font-bold hover:bg-[#F1EDE6] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                          title="Giảm số lượng"
+                                        >
+                                          −
+                                        </button>
+                                        <span className="w-8 text-center text-xs font-bold text-[#141310]">
+                                          {item.quantity || 1}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => updateCartQuantity(item.id, 1)}
+                                          className="w-7 h-7 flex items-center justify-center text-xs font-bold hover:bg-[#F1EDE6] transition-colors cursor-pointer"
+                                          title="Tăng số lượng"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    )}
+
+                                    {/* Thành tiền */}
+                                    <div className="flex items-baseline gap-1.5">
+                                      <span className="text-[10px] text-[#7B766F]">Thành tiền:</span>
+                                      <span className="font-serif text-sm sm:text-base font-bold text-rose-700">
+                                        {formatCurrency(itemTotal)}
                                       </span>
                                     </div>
-                                  )}
-                                </div>
-                              </div>
 
-                              {/* Cột phải: Đơn giá + Số lượng + Thành tiền + Nút xóa */}
-                              <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-[#F1EDE6]">
-                                {/* Đơn giá */}
-                                <div className="text-left sm:text-right">
-                                  <div className="text-[10px] text-[#7B766F]">Đơn giá</div>
-                                  <div className="text-xs font-semibold text-[#141310]">
-                                    {formatCurrency(item.price)}
-                                    {isRent ? '/ngày' : ''}
+                                    {/* Hành động: Nút Tim & Nút Xóa */}
+                                    <div className="flex items-center gap-1 border-l border-[#F1EDE6] pl-2 sm:pl-3">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleWishlistToggle(item)}
+                                        className={`p-1.5 rounded-lg hover:bg-[#F1EDE6] transition-colors cursor-pointer ${
+                                          isSaved
+                                            ? 'text-rose-600'
+                                            : 'text-[#7B766F] hover:text-[#141310]'
+                                        }`}
+                                        title={isSaved ? 'Xóa khỏi yêu thích' : 'Lưu vào yêu thích'}
+                                      >
+                                        <span className="material-symbols-outlined text-[20px]">
+                                          {isSaved ? 'favorite' : 'favorite_border'}
+                                        </span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveSingle(item.id, item.title)}
+                                        className="p-1.5 rounded-lg text-[#7B766F] hover:text-rose-600 hover:bg-[#F1EDE6] transition-colors cursor-pointer"
+                                        title="Xóa sản phẩm khỏi giỏ"
+                                      >
+                                        <span className="material-symbols-outlined text-[20px]">
+                                          delete_outline
+                                        </span>
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-
-                                {/* Stepper số lượng */}
-                                <div className="flex items-center border border-[#ccc5bc]/60 rounded-lg overflow-hidden bg-white shadow-2xs">
-                                  <button
-                                    type="button"
-                                    disabled={item.quantity <= 1 || !isRent}
-                                    onClick={() => updateCartQuantity(item.id, -1)}
-                                    className="w-7 h-7 flex items-center justify-center text-xs font-bold hover:bg-[#F1EDE6] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                                    title="Giảm số lượng"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="w-8 text-center text-xs font-bold text-[#141310]">
-                                    {item.quantity || 1}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    disabled={!isRent}
-                                    onClick={() => updateCartQuantity(item.id, 1)}
-                                    className="w-7 h-7 flex items-center justify-center text-xs font-bold hover:bg-[#F1EDE6] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                                    title="Tăng số lượng"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-
-                                {/* Thành tiền */}
-                                <div className="text-right min-w-[95px]">
-                                  <div className="text-[10px] text-[#7B766F]">Thành tiền</div>
-                                  <div className="font-serif text-sm sm:text-base font-bold text-rose-700">
-                                    {formatCurrency(itemTotal)}
-                                  </div>
-                                </div>
-
-                                {/* Hành động */}
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleWishlistToggle(item)}
-                                    className={`p-1.5 rounded-lg hover:bg-white transition-colors cursor-pointer ${
-                                      isSaved
-                                        ? 'text-rose-600'
-                                        : 'text-[#7B766F] hover:text-[#141310]'
-                                    }`}
-                                    title="Lưu vào yêu thích"
-                                  >
-                                    <span className="material-symbols-outlined text-[18px]">
-                                      {isSaved ? 'favorite' : 'favorite_border'}
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveSingle(item.id, item.title)}
-                                    className="p-1.5 rounded-lg text-[#7B766F] hover:text-rose-600 hover:bg-white transition-colors cursor-pointer"
-                                    title="Xóa sản phẩm khỏi giỏ"
-                                  >
-                                    <span className="material-symbols-outlined text-[18px]">
-                                      delete_outline
-                                    </span>
-                                  </button>
                                 </div>
                               </div>
                             </div>

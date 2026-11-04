@@ -1,12 +1,42 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useShop } from '../../../context/ShopContext';
 import { useAuth } from '../../../hooks/useAuth';
+import { getKycStatusApi } from '../../../services/kyc.api';
 
 export const ManageRentProducts: React.FC = () => {
   const { products, deleteProduct, toggleVisibility } = useShop();
   const { user } = useAuth();
-  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const [kycOverride, setKycOverride] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.kycStatus === 'APPROVED') return;
+    getKycStatusApi()
+      .then((res) => {
+        const st = res?.kycStatus || (res as unknown as { status?: string })?.status;
+        if (st === 'APPROVED') {
+          setKycOverride('APPROVED');
+          const saved = localStorage.getItem('user');
+          if (saved) {
+            try {
+              const u = JSON.parse(saved);
+              u.kycStatus = 'APPROVED';
+              localStorage.setItem('user', JSON.stringify(u));
+              window.dispatchEvent(new Event('user_profile_updated'));
+            } catch {}
+          }
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const isKycApproved =
+    kycOverride === 'APPROVED' ||
+    Boolean(user?.isKycVerified) ||
+    user?.kycStatus === 'APPROVED' ||
+    user?.kycStatus === 'VERIFIED' ||
+    user?.role === 'ADMIN';
 
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
