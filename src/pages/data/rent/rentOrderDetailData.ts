@@ -57,6 +57,8 @@ export interface RentProductDetailData {
   bookedDates?: BookedDateRange[];
   size?: string;
   sizes?: string[];
+  sizeColor?: string;
+  mountSensor?: string;
   shopOwner?: ShopOwnerInfo;
   ownerId?: string;
 }
@@ -847,6 +849,8 @@ export function createRentProductDetail(source: Partial<RentProductDetailData> &
     maxQuantity: source.maxQuantity || 2,
     size: source.size || 'L',
     sizes: source.sizes && source.sizes.length > 0 ? source.sizes : ['S', 'M', 'L', 'XL'],
+    sizeColor: source.sizeColor || source.mountSensor || (source.size ? `Size ${source.size}` : ''),
+    mountSensor: source.mountSensor || source.sizeColor || '',
     auditCode: source.auditCode || `#RH-${idStr.slice(-6).toUpperCase()}`,
     images: source.images && source.images.length > 0 ? source.images : [
       { src: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80', alt: source.title, caption: source.title }

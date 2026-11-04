@@ -29,6 +29,7 @@ export interface RentProductItem {
   categoryId?: string;
   brand: string;
   mountSensor?: string;
+  sizeColor?: string;
   pricePerDay: number;
   deposit: number;
   replacementValue?: number;
@@ -284,6 +285,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         location: normalizeShopBranch(data.location || 'Đà Nẵng'),
         totalQuantity: Number(data.totalUnits) || 1,
         rentalRules: data.accessoriesIncluded || 'Vali Nanuk đối kiểm 3 góc',
+        mountSensor: data.mountSensor || data.sizeColor || '',
+        sizeColor: data.sizeColor || data.mountSensor || '',
       };
 
       const created = await createRentProductApi(payload as Partial<RentalProductApi>);
@@ -330,6 +333,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.totalUnits) payload.totalQuantity = Number(data.totalUnits);
         if (data.location) payload.location = normalizeShopBranch(data.location);
         if (data.coverImage) payload.images = [data.coverImage, ...(data.inspectionImages || [])];
+        if (data.mountSensor !== undefined) payload.mountSensor = data.mountSensor;
+        if (data.sizeColor !== undefined) payload.sizeColor = data.sizeColor;
         await updateRentProductApi(sku, payload as Partial<RentalProductApi>);
       } catch (err) {
         console.warn('Lỗi gọi API cập nhật sản phẩm:', err);

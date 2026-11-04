@@ -104,7 +104,16 @@ export const ThriftMarketplace: React.FC = () => {
                             title: item.name || item.title || 'Sản phẩm THRIFT',
                             category: catSlug as ThriftProduct['category'],
                             categoryLabel: catName,
-                            location: item.location || 'TP. Hồ Chí Minh',
+                            location: (function() {
+                                const seller = typeof item.sellerId === 'object' && item.sellerId ? item.sellerId : null;
+                                const owner = typeof item.ownerId === 'object' && item.ownerId ? item.ownerId : null;
+                                const rawLoc = item.location || seller?.shopProfile?.cityRegion || seller?.address?.province || owner?.shopProfile?.cityRegion || owner?.address?.province || 'Đà Nẵng';
+                                const lower = String(rawLoc).toLowerCase();
+                                if (lower.includes('hồ chí minh') || lower.includes('ho chi minh') || lower.includes('hcm') || lower.includes('sài gòn')) return 'TP. Hồ Chí Minh';
+                                if (lower.includes('hà nội') || lower.includes('ha noi')) return 'Hà Nội';
+                                if (lower.includes('đà nẵng') || lower.includes('da nang')) return 'Đà Nẵng';
+                                return rawLoc;
+                            })(),
                             rating: 5.0,
                             reviewCount: 1,
                             condition: item.condition === 'LIKE_NEW' ? 'Grade Mint (99%)' : item.condition === 'GOOD' ? 'Tốt (90%)' : item.condition || 'Rất tốt (95%)',

@@ -270,7 +270,15 @@ const RentMarketplace: React.FC = () => {
               reviewCount: 1,
               condition: cond === 'LIKE_NEW' ? 'Như mới' : 'Rất tốt',
               conditionLabel: condLabel,
-              location: item.location || 'Đà Nẵng',
+              location: (function() {
+                const owner = typeof item.ownerId === 'object' && item.ownerId ? item.ownerId : null;
+                const rawLoc = item.location || owner?.shopProfile?.cityRegion || owner?.address?.province || 'Đà Nẵng';
+                const lower = String(rawLoc).toLowerCase();
+                if (lower.includes('hồ chí minh') || lower.includes('ho chi minh') || lower.includes('hcm') || lower.includes('sài gòn')) return 'TP. Hồ Chí Minh';
+                if (lower.includes('hà nội') || lower.includes('ha noi')) return 'Hà Nội';
+                if (lower.includes('đà nẵng') || lower.includes('da nang')) return 'Đà Nẵng';
+                return rawLoc;
+              })(),
               deposit: dep,
               available: (item.totalQuantity || 1) > 0,
               href: `/rent/products/${item._id}`,

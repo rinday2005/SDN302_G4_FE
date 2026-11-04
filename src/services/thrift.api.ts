@@ -11,6 +11,7 @@ export interface ThriftListingItemApi {
   images: string[];
   location?: string;
   ownerId?: string | { _id?: string; shopProfile?: { shopName?: string; cityRegion?: string }; fullName?: string; kycStatus?: string; address?: { province?: string } };
+  sellerId?: string | { _id?: string; shopProfile?: { shopName?: string; cityRegion?: string }; fullName?: string; kycStatus?: string; address?: { province?: string } };
   categoryId?: { _id: string; name: string; slug: string } | string;
   category?: { _id: string; name: string; slug: string } | string;
   categoryLabel?: string;

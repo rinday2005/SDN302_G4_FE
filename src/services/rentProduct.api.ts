@@ -19,6 +19,11 @@ export interface ShopOwnerInfo {
     ward?: string;
     detail?: string;
   };
+  shopProfile?: {
+    shopName?: string;
+    cityRegion?: string;
+    businessAddress?: string;
+  };
 }
 
 export interface RentalProductApi {
@@ -38,6 +43,8 @@ export interface RentalProductApi {
   category?: CategoryInfo | string;
   size?: string;
   sizes?: string[];
+  sizeColor?: string;
+  mountSensor?: string;
   createdAt?: string;
   updatedAt?: string;
 }
