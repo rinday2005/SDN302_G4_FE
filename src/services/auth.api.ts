@@ -21,6 +21,12 @@ export interface User {
     district?: string;
     ward?: string;
     detail?: string;
+    street?: string;
+  };
+  shopProfile?: {
+    shopName?: string;
+    cityRegion?: string;
+    businessAddress?: string;
   };
   name?: string;
   username?: string;
@@ -45,6 +51,9 @@ export interface RegisterRequest {
   fullName: string;
   phoneNumber?: string;
   role: "USER" | "SHOP_OWNER";
+  shopName?: string;
+  businessAddress?: string;
+  province?: string;
 }
 
 export interface RegisterResponse {

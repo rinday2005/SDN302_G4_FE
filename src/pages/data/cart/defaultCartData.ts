@@ -1,4 +1,57 @@
 import type { CartItem } from '../../../context/CartWishlistContext';
 
-export const DEFAULT_DEMO_CART_ITEMS: CartItem[] = [];
+export const DEFAULT_DEMO_CART_ITEMS: CartItem[] = [
+  {
+    id: 'demo-rent-1',
+    title: 'Leica M6 Classic Rangefinder (Silver Chrome Edition)',
+    price: 320000,
+    image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80',
+    quantity: 1,
+    mode: 'rent',
+    deposit: 1600000,
+    location: 'Hồ Chí Minh',
+    rentalDays: 3,
+    startDate: '2026-11-10',
+    endDate: '2026-11-13',
+    shopName: 'ReUse Official Shop',
+    shopAvatar: 'RE',
+    shopLocation: 'TP. Hồ Chí Minh',
+    isShopVerified: true,
+    gradeBadge: 'Grade Mint 98%',
+    categoryLabel: 'Thiết Bị & Máy Ảnh',
+  },
+  {
+    id: 'demo-thrift-1',
+    title: 'Vintage Oversized Tweed Blazer 1994 (Archival Piece)',
+    price: 850000,
+    image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=600&q=80',
+    quantity: 1,
+    mode: 'thrift',
+    location: 'Hà Nội',
+    size: 'L',
+    shopName: 'Vintage Seoul Studio',
+    shopAvatar: 'VS',
+    shopLocation: 'Hà Nội',
+    isShopVerified: true,
+    gradeBadge: 'Rất tốt 95%',
+    categoryLabel: 'Trang Phục Cổ Điển',
+  },
+  {
+    id: 'demo-thrift-2',
+    title: 'Silk Ribbon Midi Skirt Autumn Palette',
+    price: 490000,
+    image: 'https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?auto=format&fit=crop&w=600&q=80',
+    quantity: 1,
+    mode: 'thrift',
+    location: 'Hồ Chí Minh',
+    size: 'M',
+    shopName: 'ReUse Official Shop',
+    shopAvatar: 'RE',
+    shopLocation: 'TP. Hồ Chí Minh',
+    isShopVerified: true,
+    gradeBadge: 'Như mới 99%',
+    categoryLabel: 'Váy & Đầm',
+  },
+];
+
 export default DEFAULT_DEMO_CART_ITEMS;

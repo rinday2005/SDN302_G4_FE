@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../hooks/useAuth';
 import type {
   ThriftListingItem,
   ThriftListingSource,
@@ -71,6 +72,8 @@ const mapApiThriftListingToItem = (apiItem: ThriftListingItemApi): ThriftListing
 
 export const ShopThriftListings: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isKycApproved = user?.kycStatus === 'APPROVED';
 
   // State with persistent storage + MongoDB sync
   const [listings, setListings] = useState<ThriftListingItem[]>(() => {
@@ -393,13 +396,25 @@ export const ShopThriftListings: React.FC = () => {
               <span className="material-symbols-outlined text-[18px]">receipt_long</span>
               Xem Đơn Bán THRIFT
             </Link>
-            <Link
-              to="/shop/thrift/listings/create"
-              className="inline-flex items-center gap-2 px-space-lg py-2.5 bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md uppercase tracking-wider font-semibold transition-all shadow-md rounded-DEFAULT"
-            >
-              <span className="material-symbols-outlined text-[18px]">add_circle</span>
-              + Tạo Mục Đăng THRIFT Mới
-            </Link>
+            {isKycApproved ? (
+              <Link
+                to="/shop/thrift/listings/create"
+                className="inline-flex items-center gap-2 px-space-lg py-2.5 bg-primary hover:bg-primary-container text-on-primary font-label-md text-label-md uppercase tracking-wider font-semibold transition-all shadow-md rounded-DEFAULT"
+              >
+                <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                + Tạo Mục Đăng THRIFT Mới
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="Yêu cầu hoàn tất KYC để đăng bán THRIFT"
+                className="inline-flex items-center gap-2 px-space-lg py-2.5 bg-gray-300 text-gray-500 font-label-md text-label-md uppercase tracking-wider font-semibold rounded-DEFAULT cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-[18px]">lock</span>
+                + Tạo Mục Đăng (Khóa KYC)
+              </button>
+            )}
           </div>
         </div>
 
@@ -431,6 +446,32 @@ export const ShopThriftListings: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Cảnh báo KYC */}
+        {!isKycApproved && (
+          <div className="bg-amber-50 border border-amber-200 p-space-md rounded-DEFAULT flex items-start gap-space-sm text-amber-900 shadow-xs">
+            <span className="material-symbols-outlined text-amber-600 text-[24px] shrink-0 mt-0.5">
+              warning
+            </span>
+            <div className="flex-1 text-xs space-y-1">
+              <div className="font-bold text-sm text-amber-950">
+                Tài khoản Cửa hàng chưa hoàn tất xác thực KYC (hoặc đang chờ xét duyệt)
+              </div>
+              <p className="text-amber-800 leading-relaxed">
+                Để đăng bài bán dứt điểm (THRIFT), Cửa hàng cần hoàn tất quy trình thẩm định danh tính pháp lý CCCD với Quản trị viên sàn.
+              </p>
+              <div className="pt-1">
+                <Link
+                  to="/shop/kyc"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-800 text-white font-bold text-xs hover:bg-amber-900 transition-colors shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[15px]">verified</span>
+                  Nộp hồ sơ KYC Cửa Hàng
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Metrics Overview Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-space-sm">

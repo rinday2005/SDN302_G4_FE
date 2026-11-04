@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../hooks/useAuth';
 import type { ThriftListingItem } from '../../data/shop/thriftListingsData';
 import {
   THRIFT_LISTINGS_STORAGE_KEY,
@@ -20,6 +21,9 @@ const DEFAULT_PRESET_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'FreeSize'];
 
 export const CreateThriftListing: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const shopLocation = user?.shopProfile?.cityRegion || user?.address?.province || 'Đà Nẵng';
 
   // Categories từ MongoDB
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -47,7 +51,7 @@ export const CreateThriftListing: React.FC = () => {
     }
     setCustomSizeInput('');
   };
-  const [branchLocation, setBranchLocation] = useState<'Đà Nẵng' | 'Hà Nội' | 'TP. Hồ Chí Minh'>('Đà Nẵng');
+  const [branchLocation, _setBranchLocation] = useState<string>(shopLocation);
   const [skuCode, setSkuCode] = useState(`TH-CLO-${Date.now().toString().slice(-6)}`);
   const [conditionGrade, setConditionGrade] = useState<'like_new' | 'good' | 'fair'>('like_new');
   const [forensicNotes, setForensicNotes] = useState('');
@@ -771,21 +775,36 @@ export const CreateThriftListing: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#141310] mb-1.5">
-                  Chi nhánh kho xuất hàng <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={branchLocation}
-                  onChange={(e) => setBranchLocation(e.target.value as 'Đà Nẵng' | 'Hà Nội' | 'TP. Hồ Chí Minh')}
-                  className="w-full px-3.5 py-2.5 bg-[#fbf9f4] border border-[#e4dfd5] rounded-lg text-sm text-[#141310] font-semibold focus:outline-none focus:border-[#576151] focus:bg-white transition-colors cursor-pointer"
-                >
-                  <option value="Đà Nẵng">Chi nhánh Đà Nẵng (Kho Miền Trung)</option>
-                  <option value="Hà Nội">Chi nhánh Hà Nội (Kho Miền Bắc)</option>
-                  <option value="TP. Hồ Chí Minh">Chi nhánh TP. Hồ Chí Minh (Kho Miền Nam)</option>
-                </select>
-                <p className="text-[11px] text-[#7b766f] mt-1">
-                  Hệ thống tự động tính cước vận chuyển giao nhận bảo chứng tới người mua dựa trên chi nhánh kho này.
+              {/* Chi nhánh kho xuất hàng (Đồng bộ từ hồ sơ Shop Owner) */}
+              <div className="p-3.5 rounded-xl bg-[#f7f3ec] border border-[#e4dfd5]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-[#141310]">
+                    Kho xuất hàng <span className="text-red-500">*</span>
+                  </label>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    <span className="material-symbols-outlined text-[13px]">storefront</span> Đồng bộ từ Profile Shop
+                  </span>
+                </div>
+                <div className="p-2.5 bg-white rounded-lg border border-[#cfc9bd] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#576151] text-[18px]">location_on</span>
+                    <div>
+                      <p className="text-xs font-bold text-[#141310]">{shopLocation}</p>
+                      <p className="text-[10px] text-[#7b766f]">
+                        {user?.shopProfile?.businessAddress || user?.address?.street || 'Địa chỉ kinh doanh đã đăng ký'}
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/profile"
+                    className="text-xs font-semibold text-[#576151] hover:underline flex items-center gap-0.5"
+                  >
+                    <span>Cập nhật</span>
+                    <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                  </Link>
+                </div>
+                <p className="text-[11px] text-[#7b766f] mt-1.5">
+                  Hệ thống tự động tính cước vận chuyển giao nhận bảo chứng tới người mua dựa trên địa chỉ cửa hàng này.
                 </p>
               </div>
             </div>
@@ -1054,7 +1073,7 @@ export const CreateThriftListing: React.FC = () => {
               {/* Nút gửi phê duyệt */}
               <button
                 type="submit"
-                disabled={isSubmitting || isUploadingCover || isUploadingDetails}
+                disabled={!isKycApproved || isSubmitting || isUploadingCover || isUploadingDetails}
                 className="mt-5 w-full py-3.5 bg-[#141310] hover:bg-[#2b2925] disabled:bg-gray-400 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow transition-all cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (

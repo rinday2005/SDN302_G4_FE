@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
+import { useAuth } from '../../../hooks/useAuth';
 
 export const ManageRentProducts: React.FC = () => {
   const { products, deleteProduct, toggleVisibility } = useShop();
+  const { user } = useAuth();
+  const isKycApproved = user?.kycStatus === 'APPROVED';
 
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -48,13 +51,51 @@ export const ManageRentProducts: React.FC = () => {
             </h1>
             <p className="text-xs text-[#7b766f] mt-1">Danh mục sản phẩm thuộc Shop Owner hiện tại ({products.length} sản phẩm)</p>
           </div>
-          <Link
-            to="/shop/rent/create"
-            className="px-5 py-2.5 rounded bg-[#141310] text-white text-xs uppercase tracking-wider font-semibold shadow hover:bg-[#292724] transition-all"
-          >
-            + Tạo sản phẩm mới
-          </Link>
+          {isKycApproved ? (
+            <Link
+              to="/shop/rent/create"
+              className="px-5 py-2.5 rounded bg-[#141310] text-white text-xs uppercase tracking-wider font-semibold shadow hover:bg-[#292724] transition-all"
+            >
+              + Tạo sản phẩm mới
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title="Cần hoàn tất xác thực KYC để tạo sản phẩm"
+              className="px-5 py-2.5 rounded bg-gray-300 text-gray-500 text-xs uppercase tracking-wider font-semibold cursor-not-allowed flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[16px]">lock</span>
+              + Tạo sản phẩm mới (Khóa KYC)
+            </button>
+          )}
         </div>
+
+        {/* Cảnh báo KYC nếu chưa được duyệt */}
+        {!isKycApproved && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3.5 text-amber-900 shadow-xs">
+            <span className="material-symbols-outlined text-amber-600 text-[26px] shrink-0 mt-0.5">
+              warning
+            </span>
+            <div className="flex-1 text-xs space-y-1.5">
+              <p className="font-bold text-sm text-amber-950">
+                Tài khoản Cửa hàng chưa hoàn tất xác thực KYC (hoặc đang chờ xét duyệt)
+              </p>
+              <p className="text-amber-800 leading-relaxed">
+                Theo quy định sàn thương mại điện tử ReUse Hub, đối tác Shop Owner phải hoàn tất xác minh danh tính pháp lý (CCCD) và được Quản trị viên phê duyệt trước khi có thể đăng bài, chỉnh sửa hoặc xóa sản phẩm.
+              </p>
+              <div className="pt-1">
+                <Link
+                  to="/shop/kyc"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-800 text-white font-bold text-xs hover:bg-amber-900 transition-colors shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[15px]">verified</span>
+                  Nộp hồ sơ KYC Cửa Hàng
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tab & Tìm kiếm */}
         <div className="p-4 bg-[#f7f3ec] rounded border border-[#ebe8e1] space-y-3">

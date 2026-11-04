@@ -46,6 +46,20 @@ export const RentProductDetail: React.FC = () => {
         const price = Number(p.pricePerDay) || 100000;
         const deposit = Number(p.depositAmount) || (price * 5);
 
+        const rawProduct = p as unknown as {
+          ownerId?: {
+            fullName?: string;
+            kycStatus?: string;
+            address?: { province?: string };
+            shopProfile?: { shopName?: string; cityRegion?: string };
+          };
+        };
+        const owner = typeof rawProduct.ownerId === 'object' && rawProduct.ownerId ? rawProduct.ownerId : null;
+        const shopName = owner?.shopProfile?.shopName || owner?.fullName || 'Shop Đối Tác ReUse';
+        const isKyc = owner?.kycStatus === 'APPROVED';
+        const shopLocation = owner?.shopProfile?.cityRegion || owner?.address?.province || p.location || 'Đà Nẵng';
+        const avatarLetters = (shopName || 'Shop').slice(0, 2).toUpperCase();
+
         const detailed: RentProductDetailData = createRentProductDetail({
           id: p._id,
           slug: p._id,
@@ -66,10 +80,18 @@ export const RentProductDetail: React.FC = () => {
           sizes: (p.category === 'camera' || /canon|sony|nikon|fujifilm|dji|lens/i.test(p.name || '')) ? [] : (Array.isArray(p.sizes) && p.sizes.length > 0 ? p.sizes : ['S', 'M', 'L', 'XL']),
           images,
           overview: [
-            p.description || `${p.name} là sản phẩm lưu ký cao cấp được niêm phong tại kho ${p.location || 'Đà Nẵng'}.`,
+            p.description || `${p.name} là sản phẩm lưu ký cao cấp thuộc ${shopName} tại ${shopLocation}.`,
             p.rentalRules ? `Quy tắc thuê: ${p.rentalRules}` : 'Sản phẩm đã qua khử trùng y tế tia UV-C và dán tem kiểm định ReUse Standard.'
           ],
           allowedConditions: p.rentalRules || 'Sử dụng đúng mục đích, trong môi trường an toàn, khô ráo, tránh va đập mạnh hoặc ngập nước.',
+          shopOwner: {
+            name: shopName,
+            avatarText: avatarLetters,
+            badge: isKyc ? 'SHOP ĐÃ XÁC THỰC' : 'ĐANG XÉT DUYỆT',
+            successOrders: `Cửa hàng tại ${shopLocation}`,
+            responseTime: 'Phản hồi trong 5 phút',
+            isKycVerified: isKyc,
+          },
         });
         setApiProduct(detailed);
       })
@@ -233,6 +255,11 @@ export const RentProductDetail: React.FC = () => {
         startDate: startDate,
         endDate: endDate,
         gradeBadge: product.grade,
+        size: product.size || 'L',
+        shopName: product.shopOwner?.name || 'ReUse Official Shop',
+        shopAvatar: product.shopOwner?.avatarText || 'RE',
+        shopLocation: product.shopOwner?.successOrders || 'Hồ Chí Minh',
+        isShopVerified: product.shopOwner?.isKycVerified ?? true,
       });
       navigate('/cart');
     });
@@ -260,6 +287,11 @@ export const RentProductDetail: React.FC = () => {
       startDate: startDate,
       endDate: endDate,
       gradeBadge: product.grade,
+      size: product.size || 'L',
+      shopName: product.shopOwner?.name || 'ReUse Official Shop',
+      shopAvatar: product.shopOwner?.avatarText || 'RE',
+      shopLocation: product.shopOwner?.successOrders || 'Hồ Chí Minh',
+      isShopVerified: product.shopOwner?.isKycVerified ?? true,
     });
     showToast('Đã thêm sản phẩm vào giỏ hàng thuê tuần hoàn!', 'check_circle', 'success');
   };
@@ -727,25 +759,35 @@ export const RentProductDetail: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#78736A]">
                   Đơn vị sở hữu thiết bị
                 </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">
-                  <span className="material-symbols-outlined text-[12px]">verified</span> KYC Đã xác minh CCCD
-                </span>
+                {(product.shopOwner?.isKycVerified ?? true) ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                    <span className="material-symbols-outlined text-[12px]">verified</span> KYC Đã xác minh CCCD
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
+                    <span className="material-symbols-outlined text-[12px]">pending</span> Chờ kiểm định KYC
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3.5 pt-1">
                 <div className="w-12 h-12 rounded-full bg-[#1C1A18] text-white flex items-center justify-center text-lg font-bold shadow-sm shrink-0">
-                  {SHOP_OWNER_DATA.avatarText}
+                  {product.shopOwner?.avatarText || SHOP_OWNER_DATA.avatarText}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-sm text-[#1C1A18] truncate">{SHOP_OWNER_DATA.name}</h4>
-                    <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-bold shrink-0">
-                      {SHOP_OWNER_DATA.badge}
+                    <h4 className="font-bold text-sm text-[#1C1A18] truncate">{product.shopOwner?.name || SHOP_OWNER_DATA.name}</h4>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
+                      product.shopOwner?.isKycVerified
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                        : 'bg-amber-100 text-amber-900 border border-amber-200'
+                    }`}>
+                      {product.shopOwner?.badge || SHOP_OWNER_DATA.badge}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#78736A] pt-0.5">
-                    <span>{SHOP_OWNER_DATA.successOrders}</span>
+                    <span>{product.shopOwner?.successOrders || SHOP_OWNER_DATA.successOrders}</span>
                     <span>•</span>
-                    <span className="text-emerald-700 font-medium">{SHOP_OWNER_DATA.responseTime}</span>
+                    <span className="text-emerald-700 font-medium">{product.shopOwner?.responseTime || SHOP_OWNER_DATA.responseTime}</span>
                   </div>
                 </div>
               </div>

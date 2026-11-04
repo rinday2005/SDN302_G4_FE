@@ -44,6 +44,11 @@ export interface CartItem {
   stock?: number;
   size?: string;
   sizes?: string[];
+  shopId?: string;
+  shopName?: string;
+  shopAvatar?: string;
+  shopLocation?: string;
+  isShopVerified?: boolean;
 }
 
 interface CartWishlistContextType {

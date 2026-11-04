@@ -41,6 +41,9 @@ const registerSchema = z
       .min(1, "Vui lòng xác nhận mật khẩu"),
 
     role: z.enum(["USER", "SHOP_OWNER"]),
+    shopName: z.string().optional(),
+    businessAddress: z.string().optional(),
+    province: z.string().optional(),
 
     agreement: z.boolean().refine((value) => value, {
       message: "Bạn phải đồng ý với điều khoản để tiếp tục",
@@ -65,6 +68,7 @@ const Register = () => {
     control,
     register,
     handleSubmit,
+    setValue,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
@@ -77,6 +81,7 @@ const Register = () => {
   });
 
   const password = useWatch({ control, name: "password", defaultValue: "" });
+  const selectedRole = useWatch({ control, name: "role", defaultValue: "USER" });
 
   const getPasswordStrength = () => {
     if (!password) {
@@ -119,6 +124,9 @@ const Register = () => {
         phoneNumber: data.phoneNumber || undefined,
         password: data.password,
         role: data.role,
+        shopName: data.role === "SHOP_OWNER" ? (data.shopName || data.fullName) : undefined,
+        businessAddress: data.role === "SHOP_OWNER" ? data.businessAddress : undefined,
+        province: data.role === "SHOP_OWNER" ? data.province : undefined,
       });
 
       setRegisterSuccess(true);
@@ -386,14 +394,109 @@ const Register = () => {
                   </p>
                 </div>
 
-                {/* Role */}
-                <div className="space-y-2">
+                {/* LỰA CHỌN VAI TRÒ ĐĂNG KÝ (Khách Hàng vs Chủ Shop) */}
+                <div className="space-y-2 pt-1 pb-1">
+                  <label className="block text-[13px] font-semibold text-[#1c1c18]">
+                    Bạn tham gia ReUse Hub với vai trò nào? <span className="text-[#ba1a1a]">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setValue("role", "USER")}
+                      className={`p-3.5 rounded-xl border-2 text-left flex items-start gap-3 transition-all cursor-pointer ${
+                        selectedRole === "USER"
+                          ? "border-[#141310] bg-[#141310]/5 ring-1 ring-[#141310]"
+                          : "border-[#e5e0d8] hover:border-[#ccc5bc] bg-[#fdfbf7]"
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        selectedRole === "USER" ? "bg-[#141310] text-white" : "bg-[#ebe8e1] text-[#4a463f]"
+                      }`}>
+                        <User className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-[#141310]">Khách Hàng Cá Nhân</div>
+                        <div className="text-[11px] text-[#7b766f] mt-0.5">Thuê trang phục cao cấp &amp; săn đồ thanh lý độc bản</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setValue("role", "SHOP_OWNER")}
+                      className={`p-3.5 rounded-xl border-2 text-left flex items-start gap-3 transition-all cursor-pointer ${
+                        selectedRole === "SHOP_OWNER"
+                          ? "border-[#141310] bg-[#141310]/5 ring-1 ring-[#141310]"
+                          : "border-[#e5e0d8] hover:border-[#ccc5bc] bg-[#fdfbf7]"
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        selectedRole === "SHOP_OWNER" ? "bg-amber-800 text-white" : "bg-[#ebe8e1] text-[#4a463f]"
+                      }`}>
+                        <span className="material-symbols-outlined text-[18px]">storefront</span>
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-[#141310]">Chủ Cửa Hàng / Shop</div>
+                        <div className="text-[11px] text-[#7b766f] mt-0.5">Mở gian hàng cho thuê &amp; bán đồ thanh lý trên sàn</div>
+                      </div>
+                    </button>
+                  </div>
                   {errors.role && (
-                    <p className="text-xs text-[#ba1a1a]">
-                      {errors.role.message}
-                    </p>
+                    <p className="text-xs text-[#ba1a1a]">{errors.role.message}</p>
                   )}
                 </div>
+
+                {/* THÔNG TIN SHOP BỔ SUNG NẾU LÀ SHOP OWNER */}
+                {selectedRole === "SHOP_OWNER" && (
+                  <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E7E2DA] space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-900 border-b border-[#E7E2DA] pb-2">
+                      <span className="material-symbols-outlined text-[16px]">store</span>
+                      <span>Thông tin gian hàng &amp; cơ sở kinh doanh</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-xs font-semibold text-[#1c1c18]">
+                        Tên Cửa Hàng / Thương Hiệu Shop <span className="text-[#ba1a1a]">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ví dụ: Atelier Chronos, Le Vintage Boutique..."
+                        {...register("shopName")}
+                        className="w-full rounded bg-white border border-[#ccc5bc]/60 px-3 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#141310]"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="block text-xs font-semibold text-[#1c1c18]">
+                          Tỉnh / Thành Phố hoạt động
+                        </label>
+                        <select
+                          {...register("province")}
+                          className="w-full rounded bg-white border border-[#ccc5bc]/60 px-3 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#141310] cursor-pointer"
+                        >
+                          <option value="Hồ Chí Minh">TP. Hồ Chí Minh</option>
+                          <option value="Hà Nội">Hà Nội</option>
+                          <option value="Đà Nẵng">Đà Nẵng</option>
+                          <option value="Cần Thơ">Cần Thơ</option>
+                          <option value="Hải Phòng">Hải Phòng</option>
+                          <option value="Khác">Tỉnh thành khác</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-xs font-semibold text-[#1c1c18]">
+                          Địa chỉ kho xuất hàng
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Số nhà, đường, quận/huyện..."
+                          {...register("businessAddress")}
+                          className="w-full rounded bg-white border border-[#ccc5bc]/60 px-3 py-2.5 text-xs outline-none focus:ring-1 focus:ring-[#141310]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Password */}
                 <div className="space-y-1.5">

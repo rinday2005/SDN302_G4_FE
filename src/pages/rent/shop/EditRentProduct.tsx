@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
+import { useAuth } from '../../../hooks/useAuth';
 import { normalizeShopBranch } from '../../../utils/address';
 
 export const EditRentProduct: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { products, updateProduct } = useShop();
+  const { user } = useAuth();
+  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const shopLocation = user?.shopProfile?.cityRegion || user?.address?.province || 'Đà Nẵng';
 
   // Tìm sản phẩm hiện tại trong context theo id (SKU)
   const currentProduct = products.find((p) => p.sku === id) || products[0];
@@ -40,8 +44,8 @@ export const EditRentProduct: React.FC = () => {
 
   // Đổ dữ liệu của sản phẩm vào form khi mở trang
   useEffect(() => {
-    if (currentProduct) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!currentProduct) return;
+    const timer = setTimeout(() => {
       setProdName(currentProduct.name || '');
       setCategory(currentProduct.category || 'Máy ảnh Medium Format Digital');
       setBrand(currentProduct.brand || '');
@@ -71,7 +75,8 @@ export const EditRentProduct: React.FC = () => {
         'Áp dụng chính sách B-Corp Fair Wear & Tear: Các vết xước dăm siêu nhỏ dưới 1mm trên vỏ hợp kim titan do thao tác gắn chân máy hoặc dây đeo thông thường KHÔNG bị trừ tiền cọc. Trừ cọc hoặc yêu cầu đền bù chỉ áp dụng khi: Trầy xước mặt kính thấu kính XCD, cấn móp méo ngàm kim loại, rơi rớt ngập nước hoặc làm gãy chốt tiếp xúc pin.'
       );
       setListingStatus(currentProduct.isVisible ? 'active' : 'hidden');
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [currentProduct]);
 
   if (!currentProduct) {
@@ -565,27 +570,36 @@ export const EditRentProduct: React.FC = () => {
                 />
               </div>
 
-              {/* Chi nhánh kho lưu trữ */}
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
-                  Chi nhánh Kho / Địa điểm xuất hàng <span className="text-[#ba1a1a]">*</span>
-                </label>
-                <div className="relative">
-                  <select
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full appearance-none px-4 py-3 rounded bg-[#f7f3ec] text-[#141310] font-semibold text-sm focus:bg-white focus:outline-none border border-transparent focus:border-[#ebe8e1] pr-10 cursor-pointer"
-                  >
-                    <option value="Đà Nẵng">Chi nhánh Đà Nẵng (Kho Miền Trung)</option>
-                    <option value="Hà Nội">Chi nhánh Hà Nội (Kho Miền Bắc)</option>
-                    <option value="TP. Hồ Chí Minh">Chi nhánh TP. Hồ Chí Minh (Kho Miền Nam)</option>
-                  </select>
-                  <span className="material-symbols-outlined absolute right-3 top-3 pointer-events-none text-[#7b766f] text-[20px]">
-                    expand_more
+              {/* Chi nhánh Kho xuất hàng (Đồng bộ từ hồ sơ Shop Owner) */}
+              <div className="space-y-2 md:col-span-2 p-4 rounded-xl bg-[#f7f3ec] border border-[#e4dfd5]">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs uppercase tracking-wider text-[#141310] font-semibold">
+                    Chi nhánh Kho / Địa điểm xuất hàng <span className="text-[#ba1a1a]">*</span>
+                  </label>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <span className="material-symbols-outlined text-[13px]">storefront</span> Đồng bộ từ Profile Shop
                   </span>
                 </div>
-                <span className="text-[11px] text-[#576151] block">
-                  Phí vận chuyển 2 chiều sẽ tự động tính dựa trên chi nhánh kho này và tỉnh/thành nhận hàng của khách thuê.
+                <div className="p-3 bg-white rounded-lg border border-[#cfc9bd] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#576151] text-[20px]">location_on</span>
+                    <div>
+                      <p className="text-sm font-bold text-[#141310]">{shopLocation}</p>
+                      <p className="text-[11px] text-[#7b766f]">
+                        {user?.shopProfile?.businessAddress || user?.address?.street || 'Địa chỉ kinh doanh đã đăng ký'}
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/profile"
+                    className="text-xs font-semibold text-[#576151] hover:underline flex items-center gap-0.5"
+                  >
+                    <span>Cập nhật</span>
+                    <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                  </Link>
+                </div>
+                <span className="text-[11px] text-[#576151] block mt-1">
+                  Phí vận chuyển 2 chiều sẽ tự động tính dựa trên địa chỉ cửa hàng này và tỉnh/thành nhận hàng của khách thuê.
                 </span>
               </div>
 
@@ -1068,7 +1082,8 @@ export const EditRentProduct: React.FC = () => {
               </Link>
               <button
                 type="submit"
-                className="px-7 py-2.5 rounded bg-[#141310] hover:bg-[#292724] text-white text-xs font-semibold tracking-wide shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2 uppercase cursor-pointer"
+                disabled={!isKycApproved}
+                className="px-7 py-2.5 rounded bg-[#141310] hover:bg-[#292724] disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-xs font-semibold tracking-wide shadow-md hover:shadow-lg transition-all inline-flex items-center gap-2 uppercase cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">done_all</span>
                 <span>Lưu thay đổi &amp; Cập nhật</span>
