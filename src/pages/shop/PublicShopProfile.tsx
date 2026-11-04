@@ -40,7 +40,7 @@ export const PublicShopProfile: React.FC = () => {
       getPublicRentProductsApi({ ownerId: targetId, limit: 100 }).catch(() => []),
       getPublicThriftListingsApi({ ownerId: targetId }).catch(() => []),
     ])
-      .then(([shopData, rentData, thriftData]) => {
+      .then(async ([shopData, rentData, thriftData]) => {
         if (!isMounted) return;
         if (shopData) {
           setShop(shopData);
@@ -64,8 +64,31 @@ export const PublicShopProfile: React.FC = () => {
           });
         }
 
-        if (Array.isArray(rentData)) setRentProducts(rentData);
-        if (Array.isArray(thriftData)) setThriftListings(thriftData);
+        let finalRent = Array.isArray(rentData) ? rentData : [];
+        const finalThrift = Array.isArray(thriftData) ? thriftData : [];
+
+        // Fallback: nếu query theo ownerId rỗng, tìm kiếm toàn bộ sản phẩm của shop
+        if (finalRent.length === 0) {
+          try {
+            const allProducts = await getPublicRentProductsApi({ limit: 100 });
+            finalRent = allProducts.filter((p) => {
+              const pOwner = typeof p.ownerId === 'object' && p.ownerId?._id ? p.ownerId._id : typeof p.ownerId === 'string' ? p.ownerId : '';
+              const pShop = (p as unknown as { shopId?: string }).shopId || '';
+              const pShopName = (p as unknown as { shopName?: string }).shopName || '';
+              return pOwner === targetId || pShop === targetId || (shopData?.shopName && pShopName === shopData.shopName);
+            });
+          } catch {}
+        }
+
+        setRentProducts(finalRent);
+        setThriftListings(finalThrift);
+
+        // Tự động chuyển tab nếu Shop chỉ có đồ Thrift hoặc chỉ có đồ Rent
+        if (finalRent.length === 0 && finalThrift.length > 0) {
+          setActiveTab('thrift');
+        } else {
+          setActiveTab('rent');
+        }
       })
       .finally(() => {
         if (isMounted) setLoading(false);

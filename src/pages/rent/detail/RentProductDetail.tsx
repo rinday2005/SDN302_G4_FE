@@ -45,20 +45,11 @@ export const RentProductDetail: React.FC = () => {
         const price = Number(p.pricePerDay) || 100000;
         const deposit = Number(p.depositAmount) || (price * 5);
 
-        const rawProduct = p as unknown as {
-          ownerId?: {
-            _id?: string;
-            fullName?: string;
-            kycStatus?: string;
-            address?: { province?: string };
-            shopProfile?: { shopName?: string; cityRegion?: string };
-          };
-        };
-        const owner = typeof rawProduct.ownerId === 'object' && rawProduct.ownerId ? rawProduct.ownerId : null;
-        const ownerIdStr = owner?._id || (typeof p.ownerId === 'string' ? p.ownerId : '6ac39f4b216ef5928d9c46bb');
-        const shopName = owner?.shopProfile?.shopName || owner?.fullName || 'Atelier Chronos & Optics Ltd.';
-        const isKyc = owner?.kycStatus === 'APPROVED';
-        const shopLocation = p.location || owner?.shopProfile?.cityRegion || owner?.address?.province || 'Đà Nẵng';
+        const rawOwner = typeof p.ownerId === 'object' && p.ownerId ? (p.ownerId as { _id?: string; fullName?: string; kycStatus?: string; address?: { province?: string }; shopProfile?: { shopName?: string; cityRegion?: string } }) : null;
+        const ownerIdStr = (p as unknown as { shopId?: string }).shopId || rawOwner?._id || (typeof p.ownerId === 'string' ? p.ownerId : '') || '6ac39f4b216ef5928d9c46bb';
+        const shopName = (p as unknown as { shopName?: string }).shopName || rawOwner?.shopProfile?.shopName || rawOwner?.fullName || 'Atelier Chronos & Optics Ltd.';
+        const isKyc = rawOwner?.kycStatus === 'APPROVED' || rawOwner?.kycStatus === 'VERIFIED';
+        const shopLocation = p.location || rawOwner?.shopProfile?.cityRegion || rawOwner?.address?.province || 'Đà Nẵng';
         const avatarLetters = (shopName || 'Shop').slice(0, 2).toUpperCase();
 
         const detailed: RentProductDetailData = createRentProductDetail({
