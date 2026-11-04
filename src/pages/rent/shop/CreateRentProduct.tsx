@@ -89,6 +89,7 @@ export const CreateRentProduct: React.FC = () => {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<RentProductFormData>({
     resolver: zodResolver(rentProductSchema) as any,
@@ -98,7 +99,7 @@ export const CreateRentProduct: React.FC = () => {
       mountSensor: '',
       accessoriesIncluded: 'Kèm bao bọc chống bụi và móc treo cao cấp',
       condition: 'LIKE_NEW',
-      location: 'Đà Nẵng',
+      location: shopLocation || 'Đà Nẵng',
       minDays: 1,
       maxDays: 30,
       totalUnits: 1,
@@ -116,6 +117,13 @@ export const CreateRentProduct: React.FC = () => {
   const watchedMinDays = watch('minDays');
   const watchedSizeColor = watch('mountSensor');
   const watchedLocation = watch('location');
+
+  useEffect(() => {
+    if (shopLocation) {
+      setValue('location', shopLocation);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shopLocation]);
 
   // Xử lý upload ảnh bìa lên Cloudinary
   const handleUploadCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,6 +187,7 @@ export const CreateRentProduct: React.FC = () => {
         categoryId: matchedCat?._id,
         brand: data.brand,
         mountSensor: data.mountSensor, // Dùng lưu Size & Màu sắc
+        sizeColor: data.mountSensor,
         accessoriesIncluded: data.accessoriesIncluded,
         description: data.description,
         pricePerDay: Number(data.pricePerDay),
@@ -193,7 +202,7 @@ export const CreateRentProduct: React.FC = () => {
         maxDays: Number(data.maxDays),
         maintenanceUnits: 0,
         condition: data.condition as any,
-        location: data.location || 'Đà Nẵng',
+        location: shopLocation || data.location || 'Đà Nẵng',
       });
 
       setCreatedName(data.name);

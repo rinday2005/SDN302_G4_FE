@@ -45,20 +45,11 @@ export const RentProductDetail: React.FC = () => {
         const price = Number(p.pricePerDay) || 100000;
         const deposit = Number(p.depositAmount) || (price * 5);
 
-        const rawProduct = p as unknown as {
-          ownerId?: {
-            _id?: string;
-            fullName?: string;
-            kycStatus?: string;
-            address?: { province?: string };
-            shopProfile?: { shopName?: string; cityRegion?: string };
-          };
-        };
-        const owner = typeof rawProduct.ownerId === 'object' && rawProduct.ownerId ? rawProduct.ownerId : null;
-        const ownerIdStr = owner?._id || (typeof p.ownerId === 'string' ? p.ownerId : '6ac39f4b216ef5928d9c46bb');
-        const shopName = owner?.shopProfile?.shopName || owner?.fullName || 'Atelier Chronos & Optics Ltd.';
-        const isKyc = owner?.kycStatus === 'APPROVED';
-        const shopLocation = owner?.shopProfile?.cityRegion || owner?.address?.province || p.location || 'Hồ Chí Minh';
+        const rawOwner = typeof p.ownerId === 'object' && p.ownerId ? (p.ownerId as { _id?: string; fullName?: string; kycStatus?: string; address?: { province?: string }; shopProfile?: { shopName?: string; cityRegion?: string; rating?: number } }) : null;
+        const ownerIdStr = (p as unknown as { shopId?: string }).shopId || rawOwner?._id || (typeof p.ownerId === 'string' ? p.ownerId : '') || '6ac39f4b216ef5928d9c46bb';
+        const shopName = (p as unknown as { shopName?: string }).shopName || rawOwner?.shopProfile?.shopName || rawOwner?.fullName || 'Light&Night Shop';
+        const isKyc = rawOwner?.kycStatus === 'APPROVED' || rawOwner?.kycStatus === 'VERIFIED';
+        const shopLocation = p.location || rawOwner?.shopProfile?.cityRegion || rawOwner?.address?.province || 'Đà Nẵng';
         const avatarLetters = (shopName || 'Shop').slice(0, 2).toUpperCase();
 
         const detailed: RentProductDetailData = createRentProductDetail({
@@ -69,8 +60,8 @@ export const RentProductDetail: React.FC = () => {
           category: catName.toUpperCase(),
           location: shopLocation,
           ownerId: ownerIdStr,
-          rating: 5.0,
-          reviewCount: 1,
+          rating: typeof rawOwner?.shopProfile?.rating === 'number' ? rawOwner.shopProfile.rating : 0,
+          reviewCount: 0,
           condition: condLabel,
           grade: cond === 'NEW' ? 'Grade Mint' : 'Grade A+',
           shutterOrUsage: `Lưu ký xác thực: ${condLabel}`,
@@ -80,6 +71,8 @@ export const RentProductDetail: React.FC = () => {
           maxQuantity: p.totalQuantity || 1,
           size: (p.category === 'camera' || /canon|sony|nikon|fujifilm|dji|lens/i.test(p.name || '')) ? undefined : (p.size || 'L'),
           sizes: (p.category === 'camera' || /canon|sony|nikon|fujifilm|dji|lens/i.test(p.name || '')) ? [] : (Array.isArray(p.sizes) && p.sizes.length > 0 ? p.sizes : ['S', 'M', 'L', 'XL']),
+          sizeColor: p.sizeColor || p.mountSensor || (p as { mountSensor?: string }).mountSensor || (p.size ? `Size ${p.size}` : ''),
+          mountSensor: p.mountSensor || p.sizeColor || '',
           images,
           overview: [
             p.description || `${p.name} là sản phẩm lưu ký cao cấp thuộc ${shopName} tại ${shopLocation}.`,
@@ -258,10 +251,11 @@ export const RentProductDetail: React.FC = () => {
         endDate: endDate,
         gradeBadge: product.grade,
         size: product.size || 'L',
-        shopName: product.shopOwner?.name || 'Atelier Chronos & Optics Ltd.',
+        shopId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
+        shopName: product.shopOwner?.name || 'Light&Night Shop',
         shopOwnerId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
         shopAvatar: product.shopOwner?.avatarText || 'RE',
-        shopLocation: product.shopOwner?.successOrders || 'Hồ Chí Minh',
+        shopLocation: product.location || 'Đà Nẵng',
         isShopVerified: product.shopOwner?.isKycVerified ?? true,
       });
       navigate('/cart');
@@ -291,10 +285,11 @@ export const RentProductDetail: React.FC = () => {
       endDate: endDate,
       gradeBadge: product.grade,
       size: product.size || 'L',
-      shopName: product.shopOwner?.name || 'Atelier Chronos & Optics Ltd.',
-        shopOwnerId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
+      shopId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
+      shopName: product.shopOwner?.name || 'Light&Night Shop',
+      shopOwnerId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
       shopAvatar: product.shopOwner?.avatarText || 'RE',
-      shopLocation: product.shopOwner?.successOrders || 'Hồ Chí Minh',
+      shopLocation: product.location || 'Đà Nẵng',
       isShopVerified: product.shopOwner?.isKycVerified ?? true,
     });
     showToast('Đã thêm sản phẩm vào giỏ hàng thuê tuần hoàn!', 'check_circle', 'success');
@@ -585,10 +580,7 @@ export const RentProductDetail: React.FC = () => {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                   Tình trạng: {product.condition}
                 </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#1C1A18] text-white text-xs font-bold shadow-2xs">
-                  <span className="material-symbols-outlined text-[14px]">straighten</span>
-                  Size: {product.size || 'L'}
-                </span>
+
                 <span className="text-xs text-[#78736A] font-mono">{product.shutterOrUsage}</span>
               </div>
             </div>
@@ -614,24 +606,16 @@ export const RentProductDetail: React.FC = () => {
                 </div>
               </div>
 
-              {/* Thông tin Size sản phẩm chi tiết */}
+              {/* Kích cỡ (Size) & Màu sắc từ Shop Owner */}
               <div className="pt-2.5 border-t border-[#E7E2DA]/80 flex items-center justify-between text-xs flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#1C1A18] text-[17px]">apparel</span>
+                  <span className="material-symbols-outlined text-[#576151] text-[18px]">straighten</span>
                   <span className="text-[#5E5A53]">
-                    Kích cỡ sản phẩm: <strong className="text-[#1C1A18] font-bold">Size {product.size || 'L'}</strong>
+                    Kích cỡ (Size) &amp; Màu sắc: <strong className="text-[#1C1A18] font-bold">{product.sizeColor || product.mountSensor || (product.size ? `Size ${product.size}` : 'Tiêu chuẩn')}</strong>
                   </span>
                 </div>
-                <span className="text-[11px] text-[#78736A] font-medium bg-white px-2 py-0.5 rounded border border-[#E7E2DA]">
-                  {product.size === 'S'
-                    ? 'Phù hợp 1m50 - 1m62 · 42 - 50kg'
-                    : product.size === 'M'
-                    ? 'Phù hợp 1m58 - 1m68 · 48 - 58kg'
-                    : product.size === 'XL'
-                    ? 'Phù hợp 1m70 - 1m85 · 65 - 80kg'
-                    : product.size === 'FREE_SIZE'
-                    ? 'Form rộng đa năng · Free Size'
-                    : 'Phù hợp 1m65 - 1m78 · 55 - 68kg'}
+                <span className="text-[11px] text-[#576151] font-semibold bg-[#576151]/10 px-2.5 py-0.5 rounded border border-[#576151]/20">
+                  Thông số từ Shop
                 </span>
               </div>
             </div>

@@ -16,6 +16,12 @@ export interface Product {
   size?: string;
   sizes?: string[];
   name?: string;
+  shopId?: string;
+  shopOwnerId?: string;
+  shopName?: string;
+  shopAvatar?: string;
+  shopLocation?: string;
+  isShopVerified?: boolean;
 }
 
 export type SortKey = 'recommended' | 'price-asc' | 'price-desc' | 'rating' | 'newest';

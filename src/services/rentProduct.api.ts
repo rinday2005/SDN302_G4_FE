@@ -12,12 +12,20 @@ export interface ShopOwnerInfo {
   email: string;
   fullName: string;
   phoneNumber?: string;
+  avatarUrl?: string;
   role?: string;
   address?: {
     province?: string;
     district?: string;
     ward?: string;
     detail?: string;
+  };
+  shopProfile?: {
+    shopName?: string;
+    cityRegion?: string;
+    businessAddress?: string;
+    avatarUrl?: string;
+    rating?: number;
   };
 }
 
@@ -38,6 +46,8 @@ export interface RentalProductApi {
   category?: CategoryInfo | string;
   size?: string;
   sizes?: string[];
+  sizeColor?: string;
+  mountSensor?: string;
   createdAt?: string;
   updatedAt?: string;
 }

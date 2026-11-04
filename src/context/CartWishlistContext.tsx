@@ -255,6 +255,44 @@ const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUs
               resolved?.gradeBadge ||
               'Grade A+ (Bench Checked)';
 
+            const pOwnerObj =
+              typeof p === 'object' && typeof p.ownerId === 'object' && p.ownerId
+                ? (p.ownerId as {
+                    _id?: string;
+                    id?: string;
+                    fullName?: string;
+                    avatarUrl?: string;
+                    address?: { province?: string };
+                    shopProfile?: { shopName?: string; cityRegion?: string; avatarUrl?: string };
+                    kycStatus?: string;
+                  })
+                : null;
+            const resolvedShopId =
+              (typeof p === 'object' && (p as { shopId?: string }).shopId
+                ? String((p as { shopId?: string }).shopId)
+                : '') ||
+              (pOwnerObj?._id ? String(pOwnerObj._id) : '') ||
+              (typeof p === 'object' && typeof p.ownerId === 'string' ? p.ownerId : '') ||
+              existingLocal?.shopId ||
+              existingLocal?.shopOwnerId ||
+              '';
+            const resolvedShopName =
+              (typeof p === 'object' && (p as { shopName?: string }).shopName) ||
+              pOwnerObj?.shopProfile?.shopName ||
+              pOwnerObj?.fullName ||
+              existingLocal?.shopName ||
+              '';
+            const resolvedShopAvatar =
+              pOwnerObj?.shopProfile?.avatarUrl ||
+              pOwnerObj?.avatarUrl ||
+              existingLocal?.shopAvatar ||
+              '';
+            const resolvedShopLocation =
+              pOwnerObj?.shopProfile?.cityRegion ||
+              pOwnerObj?.address?.province ||
+              existingLocal?.shopLocation ||
+              finalLocation;
+
             serverItems.push({
               id: pId,
               title: finalTitle,
@@ -270,6 +308,12 @@ const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUs
               startDate: existingLocal?.startDate || '2026-11-18',
               endDate: existingLocal?.endDate || '2026-11-21',
               sourceOrigin: existingLocal?.sourceOrigin || 'Nanuk White-Glove Vault',
+              shopId: resolvedShopId || undefined,
+              shopOwnerId: resolvedShopId || undefined,
+              shopName: resolvedShopName || undefined,
+              shopAvatar: resolvedShopAvatar || undefined,
+              shopLocation: resolvedShopLocation || undefined,
+              isShopVerified: existingLocal?.isShopVerified ?? true,
             });
           }
         }
@@ -323,6 +367,44 @@ const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUs
               resolved?.gradeBadge ||
               'Grade Mint (98%)';
 
+            const pOwnerObj =
+              typeof p === 'object' && typeof p.ownerId === 'object' && p.ownerId
+                ? (p.ownerId as {
+                    _id?: string;
+                    id?: string;
+                    fullName?: string;
+                    avatarUrl?: string;
+                    address?: { province?: string };
+                    shopProfile?: { shopName?: string; cityRegion?: string; avatarUrl?: string };
+                    kycStatus?: string;
+                  })
+                : null;
+            const resolvedShopId =
+              (typeof p === 'object' && (p as { shopId?: string }).shopId
+                ? String((p as { shopId?: string }).shopId)
+                : '') ||
+              (pOwnerObj?._id ? String(pOwnerObj._id) : '') ||
+              (typeof p === 'object' && typeof p.ownerId === 'string' ? p.ownerId : '') ||
+              existingLocal?.shopId ||
+              existingLocal?.shopOwnerId ||
+              '';
+            const resolvedShopName =
+              (typeof p === 'object' && (p as { shopName?: string }).shopName) ||
+              pOwnerObj?.shopProfile?.shopName ||
+              pOwnerObj?.fullName ||
+              existingLocal?.shopName ||
+              '';
+            const resolvedShopAvatar =
+              pOwnerObj?.shopProfile?.avatarUrl ||
+              pOwnerObj?.avatarUrl ||
+              existingLocal?.shopAvatar ||
+              '';
+            const resolvedShopLocation =
+              pOwnerObj?.shopProfile?.cityRegion ||
+              pOwnerObj?.address?.province ||
+              existingLocal?.shopLocation ||
+              finalLocation;
+
             serverItems.push({
               id: pId,
               title: finalTitle,
@@ -337,6 +419,12 @@ const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUs
               vaultOrigin:
                 existingLocal?.vaultOrigin || resolved?.origin || 'Provenance Archive Tokyo',
               warranty: existingLocal?.warranty || 'Bảo hành cơ học 12 tháng',
+              shopId: resolvedShopId || undefined,
+              shopOwnerId: resolvedShopId || undefined,
+              shopName: resolvedShopName || undefined,
+              shopAvatar: resolvedShopAvatar || undefined,
+              shopLocation: resolvedShopLocation || undefined,
+              isShopVerified: existingLocal?.isShopVerified ?? true,
             });
           }
         }

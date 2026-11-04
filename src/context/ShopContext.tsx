@@ -29,6 +29,7 @@ export interface RentProductItem {
   categoryId?: string;
   brand: string;
   mountSensor?: string;
+  sizeColor?: string;
   pricePerDay: number;
   deposit: number;
   replacementValue?: number;
@@ -122,6 +123,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Nạp sản phẩm RENT từ MongoDB và tính số lượng tồn kho theo đơn hàng thực tế
   const fetchProductsFromDB = useCallback(async () => {
+    const role = auth?.user?.role;
+    if (role !== 'SHOP_OWNER' && role !== 'ADMIN') {
+      return;
+    }
     try {
       // 1. Lấy danh sách sản phẩm riêng của Shop Owner hiện tại từ MongoDB
       let apiProducts = await getShopRentProductsApi();
@@ -250,7 +255,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.warn('Lỗi nạp sản phẩm RENT từ MongoDB:', err);
     }
-  }, [currentOwnerId]);
+  }, [currentOwnerId, auth?.user?.role]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -284,6 +289,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         location: normalizeShopBranch(data.location || 'Đà Nẵng'),
         totalQuantity: Number(data.totalUnits) || 1,
         rentalRules: data.accessoriesIncluded || 'Vali Nanuk đối kiểm 3 góc',
+        mountSensor: data.mountSensor || data.sizeColor || '',
+        sizeColor: data.sizeColor || data.mountSensor || '',
       };
 
       const created = await createRentProductApi(payload as Partial<RentalProductApi>);
@@ -330,6 +337,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.totalUnits) payload.totalQuantity = Number(data.totalUnits);
         if (data.location) payload.location = normalizeShopBranch(data.location);
         if (data.coverImage) payload.images = [data.coverImage, ...(data.inspectionImages || [])];
+        if (data.mountSensor !== undefined) payload.mountSensor = data.mountSensor;
+        if (data.sizeColor !== undefined) payload.sizeColor = data.sizeColor;
         await updateRentProductApi(sku, payload as Partial<RentalProductApi>);
       } catch (err) {
         console.warn('Lỗi gọi API cập nhật sản phẩm:', err);

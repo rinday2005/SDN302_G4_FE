@@ -28,8 +28,8 @@ export const ScrollRevealManager: React.FC = () => {
     };
 
     const observer = new IntersectionObserver(observerCallback, {
-      threshold: 0.08,
-      rootMargin: '0px 0px -30px 0px',
+      threshold: 0.01,
+      rootMargin: '50px 0px 50px 0px',
     });
 
     // Helper to register elements
@@ -43,6 +43,11 @@ export const ScrollRevealManager: React.FC = () => {
 
         if (!el.classList.contains('reveal-on-scroll')) {
           el.classList.add('reveal-on-scroll');
+        }
+
+        const rect = el.getBoundingClientRect();
+        if (rect.top < window.innerHeight + 50 && rect.bottom > -50) {
+          el.classList.add('is-revealed');
         }
 
         // Apply slight stagger based on grid siblings if not already set

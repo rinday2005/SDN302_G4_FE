@@ -20,6 +20,8 @@ import {
 } from '../../utils/address';
 import { createRentalOrderApi } from '../../services/order.api';
 import { getShopProfileApi } from '../../services/shop.api';
+import { getPublicRentProductsApi } from '../../services/rentProduct.api';
+import { getPublicThriftListingsApi } from '../../services/thrift.api';
 
 const formatDisplayDateVN = (ymd?: string) => {
   if (!ymd) return '--/--/----';
@@ -117,9 +119,120 @@ export const Cart: React.FC = () => {
     };
   }, []);
 
+  // Bản đồ tra cứu Shop theo từng productId để đảm bảo mỗi sản phẩm hiển thị đúng tên Shop của nó
+  const [productShopMap, setProductShopMap] = useState<
+    Record<
+      string,
+      {
+        shopId: string;
+        shopName: string;
+        shopLocation: string;
+        shopAvatar: string;
+        isShopVerified: boolean;
+      }
+    >
+  >({});
+
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([
+      getPublicRentProductsApi({ limit: 200 }).catch(() => []),
+      getPublicThriftListingsApi().catch(() => []),
+    ]).then(([rentList, thriftList]) => {
+      if (!isMounted) return;
+      const nextMap: Record<
+        string,
+        {
+          shopId: string;
+          shopName: string;
+          shopLocation: string;
+          shopAvatar: string;
+          isShopVerified: boolean;
+        }
+      > = {};
+
+      if (Array.isArray(rentList)) {
+        rentList.forEach((p) => {
+          const ownerObj = typeof p.ownerId === 'object' && p.ownerId ? p.ownerId : null;
+          const sId =
+            (p as { shopId?: string }).shopId ||
+            ownerObj?._id ||
+            (typeof p.ownerId === 'string' ? p.ownerId : '') ||
+            '6ac39f4b216ef5928d9c46bb';
+          const sName =
+            (p as { shopName?: string }).shopName ||
+            ownerObj?.shopProfile?.shopName ||
+            ownerObj?.fullName ||
+            'Light&Night Shop';
+          const sLoc =
+            p.location ||
+            ownerObj?.shopProfile?.cityRegion ||
+            ownerObj?.address?.province ||
+            'Thành phố Đà Nẵng';
+          const sAvatar = ownerObj?.shopProfile?.avatarUrl || ownerObj?.avatarUrl || '';
+          if (p._id) {
+            nextMap[String(p._id)] = {
+              shopId: String(sId),
+              shopName: sName,
+              shopLocation: sLoc,
+              shopAvatar: sAvatar,
+              isShopVerified: true,
+            };
+          }
+        });
+      }
+
+      if (Array.isArray(thriftList)) {
+        thriftList.forEach((t) => {
+          const ownerObj = typeof t.ownerId === 'object' && t.ownerId ? t.ownerId : null;
+          const sellerObj = typeof t.sellerId === 'object' && t.sellerId ? t.sellerId : null;
+          const sId =
+            (t as { shopId?: string }).shopId ||
+            ownerObj?._id ||
+            sellerObj?._id ||
+            (typeof t.ownerId === 'string' ? t.ownerId : '') ||
+            (typeof t.sellerId === 'string' ? t.sellerId : '') ||
+            '6ac39f4b216ef5928d9c46bb';
+          const sName =
+            (t as { shopName?: string }).shopName ||
+            ownerObj?.shopProfile?.shopName ||
+            sellerObj?.shopProfile?.shopName ||
+            ownerObj?.fullName ||
+            sellerObj?.fullName ||
+            'Light&Night Shop';
+          const sLoc =
+            t.location ||
+            ownerObj?.shopProfile?.cityRegion ||
+            sellerObj?.shopProfile?.cityRegion ||
+            ownerObj?.address?.province ||
+            sellerObj?.address?.province ||
+            'Thành phố Đà Nẵng';
+          const sAvatar =
+            ownerObj?.shopProfile?.avatarUrl || sellerObj?.shopProfile?.avatarUrl || '';
+          if (t._id) {
+            nextMap[String(t._id)] = {
+              shopId: String(sId),
+              shopName: sName,
+              shopLocation: sLoc,
+              shopAvatar: sAvatar,
+              isShopVerified: true,
+            };
+          }
+        });
+      }
+
+      setProductShopMap(nextMap);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Cấu trúc nhóm sản phẩm theo từng Cửa Hàng (Shopee Style)
   interface ShopGroup {
     shopKey: string;
+    shopId: string;
     shopName: string;
     shopAvatar: string;
     shopLocation: string;
@@ -129,39 +242,65 @@ export const Cart: React.FC = () => {
 
   const shopGroups = useMemo<ShopGroup[]>(() => {
     const map = new Map<string, ShopGroup>();
-    const activeShopName = liveShopInfo?.shopName?.trim() || 'Light&Night Shop';
-    const activeShopLocation = liveShopInfo?.cityRegion?.trim() || 'Thành phố Đà Nẵng';
-    const activeShopAvatar = liveShopInfo?.avatarUrl || '';
 
     cart.forEach((item) => {
-      let sName = item.shopName?.trim();
-      if (
-        !sName ||
-        sName === 'Atelier Chronos & Optics Ltd.' ||
-        sName === 'ReUse Official Shop' ||
-        sName === 'ReUse Hub Certified Shop' ||
-        item.shopOwnerId === '6ac39f4b216ef5928d9c46bb'
-      ) {
-        sName = activeShopName;
-      }
-      const sKey = sName.toLowerCase();
+      const fromMap = productShopMap[String(item.id)];
+      const rawItemName = item.shopName?.trim();
+      const isGenericName =
+        !rawItemName ||
+        rawItemName === 'Atelier Chronos & Optics Ltd.' ||
+        rawItemName === 'ReUse Official Shop' ||
+        rawItemName === 'ReUse Hub Certified Shop';
+
+      const sName =
+        fromMap?.shopName ||
+        (!isGenericName ? rawItemName : '') ||
+        liveShopInfo?.shopName?.trim() ||
+        'Light&Night Shop';
+      const sId =
+        fromMap?.shopId ||
+        item.shopId ||
+        item.shopOwnerId ||
+        '6ac39f4b216ef5928d9c46bb';
+      const sLocation =
+        fromMap?.shopLocation ||
+        item.shopLocation ||
+        item.location ||
+        liveShopInfo?.cityRegion?.trim() ||
+        'Thành phố Đà Nẵng';
+      const sAvatar =
+        fromMap?.shopAvatar ||
+        item.shopAvatar ||
+        liveShopInfo?.avatarUrl ||
+        sName.slice(0, 2).toUpperCase();
+      const isVerified = fromMap?.isShopVerified ?? item.isShopVerified ?? true;
+
+      const sKey = `${sId}_${sName.toLowerCase()}`;
 
       if (!map.has(sKey)) {
         map.set(sKey, {
           shopKey: sKey,
+          shopId: sId,
           shopName: sName,
-          shopAvatar: item.shopAvatar || activeShopAvatar || sName.slice(0, 2).toUpperCase(),
-          shopLocation: item.shopLocation || activeShopLocation || item.location || 'Thành phố Đà Nẵng',
-          isShopVerified: item.isShopVerified ?? true,
+          shopAvatar: sAvatar,
+          shopLocation: sLocation,
+          isShopVerified: isVerified,
           items: [],
         });
       }
 
-      map.get(sKey)!.items.push(item);
+      map.get(sKey)!.items.push({
+        ...item,
+        shopId: sId,
+        shopOwnerId: sId,
+        shopName: sName,
+        shopLocation: sLocation,
+        shopAvatar: sAvatar,
+      });
     });
 
     return Array.from(map.values());
-  }, [cart, liveShopInfo]);
+  }, [cart, liveShopInfo, productShopMap]);
 
   // Toggle toàn bộ sản phẩm của một Cửa Hàng
   const handleToggleShop = (groupItems: CartItem[], selectAll: boolean) => {
@@ -896,7 +1035,7 @@ export const Cart: React.FC = () => {
                               storefront
                             </span>
                             <Link
-                              to="/shops/6ac39f4b216ef5928d9c46bb"
+                              to={`/shops/${group.shopId || '6ac39f4b216ef5928d9c46bb'}`}
                               className="font-bold text-sm text-[#141310] hover:text-[#576151] hover:underline transition-colors"
                               title="Xem trang cá nhân của Shop"
                             >

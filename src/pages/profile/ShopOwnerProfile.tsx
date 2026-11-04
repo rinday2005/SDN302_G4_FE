@@ -72,7 +72,7 @@ export const ShopOwnerProfile: React.FC = () => {
   );
   const [avatarUrl, setAvatarUrl] = useState<string>(DEFAULT_AVATAR_URL);
     const [establishedYear, setEstablishedYear] = useState<number>(2024);
-  const [rating, setRating] = useState<number>(5.0);
+  const [rating, setRating] = useState<number>(0);
   const [walletBalance, setWalletBalance] = useState<number>(0);
 
   // ── Địa chỉ kho hàng (AddressSelector) ──
@@ -156,9 +156,11 @@ export const ShopOwnerProfile: React.FC = () => {
           setAvatarUrl(data.avatarUrl);
           localStorage.setItem('shop_owner_avatar', data.avatarUrl);
         }
-                if (data.establishedYear) setEstablishedYear(data.establishedYear);
-        if (typeof data.rating === 'number') setRating(data.rating);
+        if (data.establishedYear) setEstablishedYear(data.establishedYear);
+        setRating(typeof data.rating === 'number' ? data.rating : 0);
         if (typeof data.walletBalance === 'number') setWalletBalance(data.walletBalance);
+        if (typeof data.rentCount === 'number') setRentCount(data.rentCount);
+        if (typeof data.thriftCount === 'number') setThriftCount(data.thriftCount);
 
         // Nạp địa chỉ cấu trúc
         if (data.addressObject && typeof data.addressObject === 'object') {
@@ -219,22 +221,25 @@ export const ShopOwnerProfile: React.FC = () => {
         setKycStatus(user?.kycStatus || 'APPROVED');
       });
 
-    // 3. Đếm số sản phẩm thật
-    getPublicRentProductsApi()
-      .then((res) => {
-        if (!isMounted) return;
-        const count = Array.isArray(res) ? res.length : 0;
-        setRentCount(count);
-      })
-      .catch(() => {});
+    // 3. Đếm số sản phẩm thật của riêng Shop này
+    const currentShopOwnerId = user?._id || user?.id;
+    if (currentShopOwnerId) {
+      getPublicRentProductsApi({ ownerId: String(currentShopOwnerId) })
+        .then((res) => {
+          if (!isMounted) return;
+          const count = Array.isArray(res) ? res.length : 0;
+          setRentCount(count);
+        })
+        .catch(() => {});
 
-    getPublicThriftListingsApi()
-      .then((res) => {
-        if (!isMounted) return;
-        const count = Array.isArray(res) ? res.length : 0;
-        setThriftCount(count);
-      })
-      .catch(() => {});
+      getPublicThriftListingsApi({ ownerId: String(currentShopOwnerId) })
+        .then((res) => {
+          if (!isMounted) return;
+          const count = Array.isArray(res) ? res.length : 0;
+          setThriftCount(count);
+        })
+        .catch(() => {});
+    }
 
     return () => {
       isMounted = false;

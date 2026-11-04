@@ -23,6 +23,9 @@ export interface ShopProfileData {
   specialization?: string;
   roleTitle?: string;
   rating?: number;
+  reviewCount?: number;
+  rentCount?: number;
+  thriftCount?: number;
   establishedYear?: number;
   walletBalance?: number;
   kycStatus?: string;
