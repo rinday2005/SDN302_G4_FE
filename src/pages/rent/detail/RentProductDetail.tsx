@@ -12,7 +12,6 @@ import {
   QUALITY_COMMITMENTS,
   RENT_8_STEPS_LIFECYCLE,
   RELATED_RENT_PRODUCTS,
-  SHOP_OWNER_DATA,
 } from '../../data/rent/rentOrderDetailData';
 import type { RentProductDetailData } from '../../data/rent/rentOrderDetailData';
 import { getPublicRentProductDetailApi } from '../../../services/rentProduct.api';
@@ -48,6 +47,7 @@ export const RentProductDetail: React.FC = () => {
 
         const rawProduct = p as unknown as {
           ownerId?: {
+            _id?: string;
             fullName?: string;
             kycStatus?: string;
             address?: { province?: string };
@@ -55,9 +55,10 @@ export const RentProductDetail: React.FC = () => {
           };
         };
         const owner = typeof rawProduct.ownerId === 'object' && rawProduct.ownerId ? rawProduct.ownerId : null;
-        const shopName = owner?.shopProfile?.shopName || owner?.fullName || 'Shop Đối Tác ReUse';
+        const ownerIdStr = owner?._id || (typeof p.ownerId === 'string' ? p.ownerId : '6ac39f4b216ef5928d9c46bb');
+        const shopName = owner?.shopProfile?.shopName || owner?.fullName || 'Atelier Chronos & Optics Ltd.';
         const isKyc = owner?.kycStatus === 'APPROVED';
-        const shopLocation = owner?.shopProfile?.cityRegion || owner?.address?.province || p.location || 'Đà Nẵng';
+        const shopLocation = owner?.shopProfile?.cityRegion || owner?.address?.province || p.location || 'Hồ Chí Minh';
         const avatarLetters = (shopName || 'Shop').slice(0, 2).toUpperCase();
 
         const detailed: RentProductDetailData = createRentProductDetail({
@@ -66,7 +67,8 @@ export const RentProductDetail: React.FC = () => {
           title: p.name,
           subtitle: p.description || `${p.name} · Tiêu chuẩn kiểm định ReUse`,
           category: catName.toUpperCase(),
-          location: p.location || 'Đà Nẵng',
+          location: shopLocation,
+          ownerId: ownerIdStr,
           rating: 5.0,
           reviewCount: 1,
           condition: condLabel,
@@ -256,7 +258,8 @@ export const RentProductDetail: React.FC = () => {
         endDate: endDate,
         gradeBadge: product.grade,
         size: product.size || 'L',
-        shopName: product.shopOwner?.name || 'ReUse Official Shop',
+        shopName: product.shopOwner?.name || 'Atelier Chronos & Optics Ltd.',
+        shopOwnerId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
         shopAvatar: product.shopOwner?.avatarText || 'RE',
         shopLocation: product.shopOwner?.successOrders || 'Hồ Chí Minh',
         isShopVerified: product.shopOwner?.isKycVerified ?? true,
@@ -288,7 +291,8 @@ export const RentProductDetail: React.FC = () => {
       endDate: endDate,
       gradeBadge: product.grade,
       size: product.size || 'L',
-      shopName: product.shopOwner?.name || 'ReUse Official Shop',
+      shopName: product.shopOwner?.name || 'Atelier Chronos & Optics Ltd.',
+        shopOwnerId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
       shopAvatar: product.shopOwner?.avatarText || 'RE',
       shopLocation: product.shopOwner?.successOrders || 'Hồ Chí Minh',
       isShopVerified: product.shopOwner?.isKycVerified ?? true,
@@ -482,10 +486,69 @@ export const RentProductDetail: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            {/* 5. THÔNG TIN SHOP OWNER ĐÃ ĐƯỢC XÁC THỰC (ĐẶT DƯỚI BẢO CHỨNG AN TÂM) */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-[#E7E2DA] space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#78736A]">
+                  Đơn vị sở hữu thiết bị
+                </span>
+                {(product.shopOwner?.isKycVerified ?? true) ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                    <span className="material-symbols-outlined text-[12px]">verified</span> KYC Đã xác minh CCCD
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
+                    <span className="material-symbols-outlined text-[12px]">pending</span> Chờ kiểm định KYC
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3.5 pt-1">
+                <Link
+                  to={`/shops/${product.ownerId || '6ac39f4b216ef5928d9c46bb'}`}
+                  className="flex items-center gap-3.5 flex-1 min-w-0 group"
+                  title="Nhấp để xem trang cá nhân của Shop"
+                >
+                  <div className="w-12 h-12 rounded-full bg-[#1C1A18] text-white flex items-center justify-center text-lg font-bold shadow-sm shrink-0 group-hover:scale-105 transition-transform">
+                    {product.shopOwner?.avatarText || 'AT'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm text-[#1C1A18] truncate group-hover:text-emerald-700 transition-colors">
+                        {product.shopOwner?.name || 'Atelier Chronos & Optics Ltd.'}
+                      </h4>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
+                        product.shopOwner?.isKycVerified
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                          : 'bg-amber-100 text-amber-900 border border-amber-200'
+                      }`}>
+                        {product.shopOwner?.badge || 'SHOP ĐÃ XÁC THỰC'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#78736A] pt-0.5">
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px] text-emerald-700">location_on</span>
+                        {product.shopOwner?.successOrders || `Cửa hàng tại ${product.location || 'Hồ Chí Minh'}`}
+                      </span>
+                      <span>•</span>
+                      <span className="text-emerald-700 font-medium">{product.shopOwner?.responseTime || 'Phản hồi trong 5 phút'}</span>
+                    </div>
+                  </div>
+                </Link>
+
+                <Link
+                  to={`/shops/${product.ownerId || '6ac39f4b216ef5928d9c46bb'}`}
+                  className="shrink-0 px-3.5 py-1.5 rounded-xl border border-[#1C1A18] text-xs font-bold text-[#1C1A18] hover:bg-[#1C1A18] hover:text-white transition-all flex items-center gap-1"
+                >
+                  <span>Xem Shop</span>
+                  <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                </Link>
+              </div>
+            </div>
           </div>
 
           {/* CỘT PHẢI (RIGHT COLUMN): SPEC, AVAILABILITY SELECTOR & RENTAL CALCULATOR */}
-          <div className="lg:col-span-5 flex flex-col gap-6">
+          <div className="lg:col-span-5 flex flex-col gap-6 lg:sticky lg:top-24">
             {/* Metadata Header */}
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -753,45 +816,7 @@ export const RentProductDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* THÔNG TIN SHOP OWNER ĐÃ ĐƯỢC XÁC THỰC */}
-            <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[#78736A]">
-                  Đơn vị sở hữu thiết bị
-                </span>
-                {(product.shopOwner?.isKycVerified ?? true) ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
-                    <span className="material-symbols-outlined text-[12px]">verified</span> KYC Đã xác minh CCCD
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full font-semibold border border-amber-200">
-                    <span className="material-symbols-outlined text-[12px]">pending</span> Chờ kiểm định KYC
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3.5 pt-1">
-                <div className="w-12 h-12 rounded-full bg-[#1C1A18] text-white flex items-center justify-center text-lg font-bold shadow-sm shrink-0">
-                  {product.shopOwner?.avatarText || SHOP_OWNER_DATA.avatarText}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-sm text-[#1C1A18] truncate">{product.shopOwner?.name || SHOP_OWNER_DATA.name}</h4>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${
-                      product.shopOwner?.isKycVerified
-                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
-                        : 'bg-amber-100 text-amber-900 border border-amber-200'
-                    }`}>
-                      {product.shopOwner?.badge || SHOP_OWNER_DATA.badge}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#78736A] pt-0.5">
-                    <span>{product.shopOwner?.successOrders || SHOP_OWNER_DATA.successOrders}</span>
-                    <span>•</span>
-                    <span className="text-emerald-700 font-medium">{product.shopOwner?.responseTime || SHOP_OWNER_DATA.responseTime}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+
           </div>
         </section>
 

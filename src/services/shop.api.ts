@@ -145,3 +145,8 @@ export const getShopRevenueApi = async (
   const response = await api.get(`/shop/revenue?timeRange=${timeRange}`);
   return response.data?.data;
 };
+
+export const getPublicShopDetailApi = async (shopId: string): Promise<ShopProfileData> => {
+  const response = await api.get(`/shop/${shopId}`);
+  return response.data?.data;
+};

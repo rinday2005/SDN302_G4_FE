@@ -247,9 +247,32 @@ export const KycReview: React.FC = () => {
             }
           }
 
-          // Tránh trường hợp avatar bị nhầm sang ảnh CCCD
-          if (profileAvatar && profileAvatar.includes("/kyc/")) {
+          // Tránh trường hợp avatar bị nhầm sang ảnh CCCD hoặc giấy tờ KYC
+          const isKycOrCccdImage = (url?: string) => {
+            if (!url) return false;
+            if (url.includes("/kyc/")) return true;
+            if (matched.frontImageUrl && url === matched.frontImageUrl) return true;
+            if (matched.backImageUrl && url === matched.backImageUrl) return true;
+            if (
+              url.includes("ummfxznukjbphjpj0srp") ||
+              url.includes("ljtsypaom0sb8saqy66h") ||
+              url.includes("msimc7gecqcijlv130wo")
+            ) {
+              return true;
+            }
+            return false;
+          };
+
+          if (profileAvatar && isKycOrCccdImage(profileAvatar)) {
             profileAvatar = "";
+          }
+
+          // Lấy ảnh avatar tải lên từ Shop Owner Profile
+          const storedShopAvatar = localStorage.getItem('shop_owner_avatar');
+          if (!profileAvatar && (matched.tier === "Shop Partner Tier" || matched.email === "shopowner@reuse.vn")) {
+            if (storedShopAvatar && !isKycOrCccdImage(storedShopAvatar)) {
+              profileAvatar = storedShopAvatar;
+            }
           }
 
           const finalAvatarUrl =

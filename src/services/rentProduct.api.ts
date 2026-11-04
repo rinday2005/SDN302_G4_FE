@@ -53,6 +53,7 @@ export const getPublicRentProductsApi = async (params?: {
   sortOrder?: "asc" | "desc";
   page?: number;
   limit?: number;
+  ownerId?: string;
 }): Promise<RentalProductApi[]> => {
   try {
     const res = await api.get("/rent/products", { params });

@@ -82,6 +82,7 @@ import DisputeManagement from "./pages/admin/DisputeManagement";
 import DisputeReview from "./pages/admin/DisputeReview";
 import PlatformFinance from "./pages/admin/PlatformFinance";
 import ShopManagement from "./pages/admin/ShopManagement";
+import PublicShopProfile from "./pages/shop/PublicShopProfile";
 
 import PublicRoutes from "./routes/PublicRoutes";
 import ProtectedRoutes from "./routes/ProtectedRoutes";
@@ -149,6 +150,7 @@ const App = () => {
             <Route path="/dashboard" element={<DashboardRouter />} />
             <Route path="/rent" element={<RentMarketplace />} />
             <Route path="/rent/marketplace" element={<RentMarketplace />} />
+            <Route path="/rent/:id" element={<RentProductDetail />} />
             <Route path="/rent/products/:id" element={<RentProductDetail />} />
             <Route path="/rent/detail/:id" element={<RentProductDetail />} />
             <Route path="/rent/orders/:id" element={<RentOrderDetail />} />
@@ -176,6 +178,8 @@ const App = () => {
             <Route path="/categories/:slug" element={<CategoryDetail />} />
             <Route path="/categories/detail/:slug" element={<CategoryDetail />} />
             <Route path="/cart" element={<Cart />} />
+            <Route path="/shops/:shopId" element={<PublicShopProfile />} />
+            <Route path="/shop-view/:shopId" element={<PublicShopProfile />} />
             <Route path="/payment/vnpay-return" element={<PaymentReturn />} />
             <Route path="/payments/vnpay-return" element={<PaymentReturn />} />
             <Route path="/payment-success" element={<PaymentSuccess />} />

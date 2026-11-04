@@ -1,4 +1,5 @@
 import { useAuth } from '../../../hooks/useAuth';
+import { getKycStatusApi } from '../../../services/kyc.api';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/incompatible-library */
 import React, { useState, useEffect, useRef } from 'react';
@@ -34,7 +35,26 @@ type RentProductFormData = z.infer<typeof rentProductSchema>;
 
 export const CreateRentProduct: React.FC = () => {
   const { user } = useAuth();
-  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const [kycOverride, setKycOverride] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.kycStatus === 'APPROVED') return;
+    getKycStatusApi()
+      .then((res) => {
+        const st = res?.kycStatus || (res as unknown as { status?: string })?.status;
+        if (st === 'APPROVED') {
+          setKycOverride('APPROVED');
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const isKycApproved =
+    kycOverride === 'APPROVED' ||
+    Boolean(user?.isKycVerified) ||
+    user?.kycStatus === 'APPROVED' ||
+    user?.kycStatus === 'VERIFIED' ||
+    user?.role === 'ADMIN';
   const shopLocation = user?.address?.province || user?.shopProfile?.cityRegion || 'Thành phố Đà Nẵng';
   const navigate = useNavigate();
   const { addProduct } = useShop();

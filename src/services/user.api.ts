@@ -54,7 +54,37 @@ export const uploadAvatarApi = async (file: File): Promise<string> => {
   }
 };
 
+/**
+ * Upload ảnh chung (KYC, chứng từ, giấy phép...) mà không làm thay đổi avatar của user trong DB
+ */
+export const uploadImageApi = async (file: File, folder = "reuse_hub/kyc"): Promise<string> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("image", file);
+  formData.append("folder", folder);
+
+  const response = await api.post("/upload", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+
+  return (
+    response.data?.url ||
+    response.data?.data?.url ||
+    response.data?.data?.secure_url ||
+    response.data?.secure_url ||
+    response.data?.avatarUrl ||
+    ""
+  );
+};
+
 export const updateProfileApi = async (data: Record<string, unknown>) => {
   const response = await api.put("/users/profile", data);
+  return response.data?.data || response.data;
+};
+
+export const getProfileApi = async () => {
+  const response = await api.get("/users/profile");
   return response.data?.data || response.data;
 };

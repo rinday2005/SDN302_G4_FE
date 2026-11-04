@@ -219,7 +219,7 @@ interface RawPendingThriftItem {
 
 interface RawKycRecord {
   _id: string;
-  userId?: { _id?: string; fullName?: string; email?: string; phoneNumber?: string; role?: string; avatarUrl?: string; dob?: string; kyc?: { dob?: string; residentAddress?: string; citizenId?: string } } | string;
+  userId?: { _id?: string; fullName?: string; email?: string; phoneNumber?: string; role?: string; avatarUrl?: string; shopProfile?: { avatarUrl?: string; shopName?: string }; dob?: string; kyc?: { dob?: string; residentAddress?: string; citizenId?: string } } | string;
   fullName?: string;
   dob?: string;
   residentAddress?: string;
@@ -465,7 +465,7 @@ export const fetchAdminKycListApi = async (): Promise<KycApplicantItem[]> => {
         idCardNumber: r.idCardNumber || "",
         frontImageUrl: r.frontImageUrl || "",
         backImageUrl: r.backImageUrl || "",
-        avatarUrl: userObj?.avatarUrl || "",
+        avatarUrl: userObj?.avatarUrl || userObj?.shopProfile?.avatarUrl || "",
         dob: r.dob || userObj?.kyc?.dob || userObj?.dob || "",
         residentAddress: r.residentAddress || userObj?.kyc?.residentAddress || "",
         docType: "Căn cước công dân gắn chip (CCCD)",

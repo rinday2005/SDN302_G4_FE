@@ -29,7 +29,11 @@ export const EditThriftListing: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const isKycApproved =
+    Boolean(user?.isKycVerified) ||
+    user?.kycStatus === 'APPROVED' ||
+    user?.kycStatus === 'VERIFIED' ||
+    user?.role === 'ADMIN';
 
   // Load target item from storage or fallback
   const [initialItem] = useState<ThriftListingItem>(() => {
@@ -282,11 +286,10 @@ export const EditThriftListing: React.FC = () => {
                 type="button"
                 disabled={!isKycApproved}
                 onClick={() => handleSave()}
-                className={`px-5 py-1.5 transition-colors rounded-DEFAULT font-label-md text-label-md uppercase tracking-wider flex items-center gap-2 font-semibold shadow-sm ${
-                  isKycApproved
+                className={`px-5 py-1.5 transition-colors rounded-DEFAULT font-label-md text-label-md uppercase tracking-wider flex items-center gap-2 font-semibold shadow-sm ${isKycApproved
                     ? 'bg-primary text-on-primary hover:bg-tertiary cursor-pointer'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
+                  }`}
                 title={isKycApproved ? "Lưu thay đổi" : "Tài khoản cần hoàn tất KYC"}
               >
                 <span className="material-symbols-outlined text-[16px]">{isKycApproved ? "save" : "lock"}</span>
@@ -549,8 +552,8 @@ export const EditThriftListing: React.FC = () => {
                     <label
                       onClick={() => setCondition('like-new')}
                       className={`relative p-4 rounded-DEFAULT cursor-pointer shadow-sm flex flex-col justify-between transition-all border ${condition === 'like-new'
-                          ? 'bg-surface border-primary ring-2 ring-primary/40'
-                          : 'bg-surface border-surface-dim hover:bg-surface-container'
+                        ? 'bg-surface border-primary ring-2 ring-primary/40'
+                        : 'bg-surface border-surface-dim hover:bg-surface-container'
                         }`}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -578,8 +581,8 @@ export const EditThriftListing: React.FC = () => {
                     <label
                       onClick={() => setCondition('good')}
                       className={`relative p-4 rounded-DEFAULT cursor-pointer shadow-sm flex flex-col justify-between transition-all border ${condition === 'good'
-                          ? 'bg-surface border-primary ring-2 ring-primary/40'
-                          : 'bg-surface border-surface-dim hover:bg-surface-container'
+                        ? 'bg-surface border-primary ring-2 ring-primary/40'
+                        : 'bg-surface border-surface-dim hover:bg-surface-container'
                         }`}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -607,8 +610,8 @@ export const EditThriftListing: React.FC = () => {
                     <label
                       onClick={() => setCondition('fair')}
                       className={`relative p-4 rounded-DEFAULT cursor-pointer shadow-sm flex flex-col justify-between transition-all border ${condition === 'fair'
-                          ? 'bg-surface border-primary ring-2 ring-primary/40'
-                          : 'bg-surface border-surface-dim hover:bg-surface-container'
+                        ? 'bg-surface border-primary ring-2 ring-primary/40'
+                        : 'bg-surface border-surface-dim hover:bg-surface-container'
                         }`}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -1148,8 +1151,8 @@ export const EditThriftListing: React.FC = () => {
             <span className="text-outline-variant hidden sm:inline">•</span>
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-DEFAULT font-label-sm text-label-sm uppercase tracking-wider font-semibold ${status === 'APPROVED'
-                  ? 'bg-secondary-container/60 text-secondary'
-                  : 'bg-surface-dim text-on-surface-variant'
+                ? 'bg-secondary-container/60 text-secondary'
+                : 'bg-surface-dim text-on-surface-variant'
                 }`}
             >
               <span

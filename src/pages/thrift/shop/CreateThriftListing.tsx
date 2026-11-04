@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../hooks/useAuth';
+import { getKycStatusApi } from '../../../services/kyc.api';
 import type { ThriftListingItem } from '../../data/shop/thriftListingsData';
 import {
   THRIFT_LISTINGS_STORAGE_KEY,
@@ -22,7 +23,26 @@ const DEFAULT_PRESET_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'FreeSize'];
 export const CreateThriftListing: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const [kycOverride, setKycOverride] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.kycStatus === 'APPROVED') return;
+    getKycStatusApi()
+      .then((res) => {
+        const st = res?.kycStatus || (res as unknown as { status?: string })?.status;
+        if (st === 'APPROVED') {
+          setKycOverride('APPROVED');
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const isKycApproved =
+    kycOverride === 'APPROVED' ||
+    Boolean(user?.isKycVerified) ||
+    user?.kycStatus === 'APPROVED' ||
+    user?.kycStatus === 'VERIFIED' ||
+    user?.role === 'ADMIN';
   const shopLocation = user?.shopProfile?.cityRegion || user?.address?.province || 'Đà Nẵng';
 
   // Categories từ MongoDB

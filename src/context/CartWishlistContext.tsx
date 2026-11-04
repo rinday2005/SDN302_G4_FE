@@ -45,6 +45,7 @@ export interface CartItem {
   size?: string;
   sizes?: string[];
   shopId?: string;
+  shopOwnerId?: string;
   shopName?: string;
   shopAvatar?: string;
   shopLocation?: string;
@@ -368,20 +369,46 @@ const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUs
   );
 
   const toggleWishlist = (id: string, type?: "RENT" | "THRIFT"): boolean => {
-    let nextState = false;
+    const isCurrentlySaved = wishlist.includes(id);
+    const nextState = !isCurrentlySaved;
+
     setWishlist((prev) => {
-      if (prev.includes(id)) {
-        nextState = false;
-        return prev.filter((item) => item !== id);
-      } else {
-        nextState = true;
-        return [...prev, id];
+      const updated = prev.includes(id)
+        ? prev.filter((item) => item !== id)
+        : [...prev, id];
+      try {
+        localStorage.setItem(WISHLIST_KEY, JSON.stringify(updated));
+      } catch {
+        // ignore
       }
+      return updated;
     });
+
     // Gọi API đồng bộ với MongoDB
-    toggleWishlistApi(id, type).catch((err) => {
-      console.warn('Could not toggle wishlist on backend:', err);
-    });
+    toggleWishlistApi(id, type)
+      .then((res) => {
+        if (res && Array.isArray((res as Record<string, unknown>).items)) {
+          const itemsArr = (res as Record<string, unknown>).items as Array<Record<string, unknown>>;
+          const ids = itemsArr
+            .map((item) => {
+              const p = item.productId || item.itemId;
+              return typeof p === 'object' && p && (p as { _id?: string })._id
+                ? String((p as { _id: string })._id)
+                : String(p || '');
+            })
+            .filter(Boolean);
+          setWishlist(ids);
+          try {
+            localStorage.setItem(WISHLIST_KEY, JSON.stringify(ids));
+          } catch {
+            // ignore
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not toggle wishlist on backend:', err);
+      });
+
     return nextState;
   };
 
@@ -543,10 +570,9 @@ const CartWishlistProviderInner: React.FC<{ children: React.ReactNode; currentUs
     setCart([]);
   };
 
-  const validWishlist = useMemo(() => {
-    return wishlist.filter((id) => resolveWishlistProduct(id) !== null);
+  const wishlistCount = useMemo(() => {
+    return Array.from(new Set(wishlist.filter(Boolean))).length;
   }, [wishlist]);
-  const wishlistCount = validWishlist.length;
   const cartCount = useMemo(() => {
     return cart.reduce((total, item) => total + (item.quantity || 1), 0);
   }, [cart]);

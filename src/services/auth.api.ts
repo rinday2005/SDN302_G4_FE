@@ -15,6 +15,7 @@ export interface User {
   avatarUrl?: string;
   phoneNumber?: string;
   phone?: string;
+  isKycVerified?: boolean;
   kycStatus?: "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "VERIFIED" | "REJECTED" | null;
   address?: {
     province?: string;

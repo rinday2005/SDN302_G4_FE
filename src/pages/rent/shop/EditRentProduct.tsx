@@ -9,7 +9,11 @@ export const EditRentProduct: React.FC = () => {
   const navigate = useNavigate();
   const { products, updateProduct } = useShop();
   const { user } = useAuth();
-  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const isKycApproved =
+    Boolean(user?.isKycVerified) ||
+    user?.kycStatus === 'APPROVED' ||
+    user?.kycStatus === 'VERIFIED' ||
+    user?.role === 'ADMIN';
   const shopLocation = user?.shopProfile?.cityRegion || user?.address?.province || 'Đà Nẵng';
 
   // Tìm sản phẩm hiện tại trong context theo id (SKU)

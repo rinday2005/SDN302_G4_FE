@@ -7,10 +7,10 @@ import type {
   ThriftListingStatus,
 } from '../../data/shop/thriftListingsData';
 import {
-  INITIAL_THRIFT_LISTINGS,
   THRIFT_LISTINGS_STORAGE_KEY,
 } from '../../data/shop/thriftListingsData';
 import { getShopThriftListingsApi } from '../../../services/thrift.api';
+import { getKycStatusApi } from '../../../services/kyc.api';
 import type { ThriftListingItemApi } from '../../../services/thrift.api';
 import { calculateThriftDiscount } from '../../../utils/thriftPricing';
 
@@ -73,29 +73,51 @@ const mapApiThriftListingToItem = (apiItem: ThriftListingItemApi): ThriftListing
 export const ShopThriftListings: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isKycApproved = user?.kycStatus === 'APPROVED';
+  const [kycOverride, setKycOverride] = useState<string | null>(null);
 
-  // State with persistent storage + MongoDB sync
+  useEffect(() => {
+    if (user?.kycStatus === 'APPROVED') return;
+    getKycStatusApi()
+      .then((res) => {
+        const st = res?.kycStatus || (res as unknown as { status?: string })?.status;
+        if (st === 'APPROVED') {
+          setKycOverride('APPROVED');
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const isKycApproved =
+    kycOverride === 'APPROVED' ||
+    Boolean(user?.isKycVerified) ||
+    user?.kycStatus === 'APPROVED' ||
+    user?.kycStatus === 'VERIFIED' ||
+    user?.role === 'ADMIN';
+
+  const currentShopId = user?._id || user?.id || '';
+  const userStorageKey = currentShopId ? `THRIFT_LISTINGS_${currentShopId}` : THRIFT_LISTINGS_STORAGE_KEY;
+
+  // State with persistent storage + MongoDB sync strictly scoped to current shop owner
   const [listings, setListings] = useState<ThriftListingItem[]>(() => {
     try {
-      const stored = localStorage.getItem(THRIFT_LISTINGS_STORAGE_KEY);
+      const stored = localStorage.getItem(userStorageKey);
       if (stored) {
         return JSON.parse(stored);
       }
     } catch (e) {
       console.error('Lỗi đọc THRIFT listings:', e);
     }
-    return INITIAL_THRIFT_LISTINGS;
+    return [];
   });
 
   useEffect(() => {
     let isMounted = true;
     getShopThriftListingsApi()
       .then((dbListings) => {
-        if (isMounted && dbListings && dbListings.length > 0) {
-          const mapped = dbListings.map(mapApiThriftListingToItem);
+        if (isMounted) {
+          const mapped = Array.isArray(dbListings) ? dbListings.map(mapApiThriftListingToItem) : [];
           setListings(mapped);
-          localStorage.setItem(THRIFT_LISTINGS_STORAGE_KEY, JSON.stringify(mapped));
+          localStorage.setItem(userStorageKey, JSON.stringify(mapped));
         }
       })
       .catch((err) => {
@@ -104,16 +126,16 @@ export const ShopThriftListings: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [userStorageKey]);
 
   // Save to localStorage on change
   useEffect(() => {
     try {
-      localStorage.setItem(THRIFT_LISTINGS_STORAGE_KEY, JSON.stringify(listings));
+      localStorage.setItem(userStorageKey, JSON.stringify(listings));
     } catch (e) {
       console.error('Lỗi ghi THRIFT listings:', e);
     }
-  }, [listings]);
+  }, [listings, userStorageKey]);
 
   // Filters & Search state
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('ALL');

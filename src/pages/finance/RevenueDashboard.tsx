@@ -2,22 +2,19 @@ import React, { useState, useMemo, useEffect, useCallback, useContext } from 're
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../../context/auth-context';
 import {
-  getMyRentalOrdersApi,
   getShopRentalOrdersApi,
   type RentalOrderApi,
 } from '../../services/order.api';
 import {
   getShopThriftOrdersApi,
-  getMyThriftOrdersApi,
   type ThriftOrderApi,
 } from '../../services/thriftOrder.api';
 import {
-  getPublicRentProductsApi,
+  getShopRentProductsApi,
   type RentalProductApi,
 } from '../../services/rentProduct.api';
 import {
   getShopThriftListingsApi,
-  getPublicThriftListingsApi,
   type ThriftListingItemApi,
 } from '../../services/thrift.api';
 import { getShopRevenueApi } from '../../services/shop.api';
@@ -119,24 +116,6 @@ export interface TopProductItem {
 type TimelineFilter = 'all' | 'today' | '7days' | '30days' | 'this_month' | 'custom';
 type LedgerFilter = 'all' | 'rent' | 'thrift' | 'refund';
 
-// Danh sách mã đơn hàng THRIFT (7 đơn) đã hoàn tất đối soát và được giải ngân/rút về ví xưởng
-const DEFAULT_CLAIMED_THRIFT_CODES = [
-  'TRF-2026-6848',
-  'TRF-2026-2144',
-  'TO-1792994374278-T48Q',
-  'TO-1792998117137-5GSN',
-  'TO-1792999329203-LQ0P',
-  'TO-1793002938743-WAQT',
-  'TO-1793008053720-YRCU',
-  '6ad3c0a283fbc0dbdf7dcddd',
-  '6ad5ccecd7c4f1e5ad3a9019',
-  '6adeec46595ad9d59477fa36',
-  '6adefae5b346d193166e667d',
-  '6adeffa1b346d193166e667f',
-  '6adf0dbac5543a96768e1cc7',
-  '6adf21b5823392a73bf54fb5',
-];
-
 export const RevenueDashboard: React.FC = () => {
   const auth = useContext(AuthContext);
   const currentOwnerId =
@@ -173,7 +152,7 @@ export const RevenueDashboard: React.FC = () => {
   const [rentProducts, setRentProducts] = useState<RentalProductApi[]>([]);
   const [thriftListings, setThriftListings] = useState<ThriftListingItemApi[]>([]);
   const [claimedOrderIds, setClaimedOrderIds] = useState<Set<string>>(() => {
-    const initial = new Set<string>(DEFAULT_CLAIMED_THRIFT_CODES);
+    const initial = new Set<string>();
     try {
       const saved = localStorage.getItem(`shop_owner_claimed_orders_${currentOwnerId}`);
       if (saved) {
@@ -198,47 +177,37 @@ export const RevenueDashboard: React.FC = () => {
 
   // ── Load Real MongoDB Data ──────────────────────────────────────────────────
   const fetchAllFinanceData = useCallback(async () => {
-    // 1. Lấy đơn hàng RENT từ MongoDB
+    // 1. Lấy đơn hàng RENT của chính Shop từ MongoDB
     let apiRentList: RentalOrderApi[] = [];
     try {
       apiRentList = await getShopRentalOrdersApi();
-      if (!apiRentList || apiRentList.length === 0) {
-        apiRentList = await getMyRentalOrdersApi();
-      }
     } catch (e) {
       console.warn('Lỗi tải đơn RENT từ backend:', e);
     }
-    setRentOrders(apiRentList || []);
+    setRentOrders(Array.isArray(apiRentList) ? apiRentList : []);
 
-    // 2. Lấy đơn hàng THRIFT từ MongoDB (chuẩn xác 100% DB)
+    // 2. Lấy đơn hàng THRIFT của chính Shop từ MongoDB
     let apiThriftList: ThriftOrderApi[] = [];
     try {
       const res = await getShopThriftOrdersApi();
       apiThriftList = res.orders || (Array.isArray(res) ? res : []);
-      if (apiThriftList.length === 0) {
-        const myRes = await getMyThriftOrdersApi();
-        apiThriftList = myRes.orders || (Array.isArray(myRes) ? myRes : []);
-      }
     } catch (e) {
       console.warn('Lỗi tải đơn THRIFT từ backend:', e);
     }
-    setThriftOrders(apiThriftList || []);
+    setThriftOrders(Array.isArray(apiThriftList) ? apiThriftList : []);
 
-    // 3. Lấy sản phẩm RENT từ MongoDB
+    // 3. Lấy sản phẩm RENT của chính Shop từ MongoDB
     try {
-      const products = await getPublicRentProductsApi({ limit: 50 });
-      setRentProducts(products || []);
+      const products = await getShopRentProductsApi();
+      setRentProducts(Array.isArray(products) ? products : []);
     } catch (e) {
       console.warn('Lỗi tải sản phẩm RENT:', e);
     }
 
-    // 4. Lấy mục đăng bán THRIFT từ MongoDB
+    // 4. Lấy mục đăng bán THRIFT của chính Shop từ MongoDB
     try {
-      let listings = await getShopThriftListingsApi();
-      if (!listings || listings.length === 0) {
-        listings = await getPublicThriftListingsApi();
-      }
-      setThriftListings(listings || []);
+      const listings = await getShopThriftListingsApi();
+      setThriftListings(Array.isArray(listings) ? listings : []);
     } catch (e) {
       console.warn('Lỗi tải listings THRIFT:', e);
     }
@@ -246,7 +215,7 @@ export const RevenueDashboard: React.FC = () => {
     // 5. Đồng bộ doanh thu thật từ MongoDB Aggregation Pipeline (/api/shop/revenue)
     try {
       const revData = await getShopRevenueApi();
-      if (revData?.summary?.walletBalance !== undefined && revData.summary.walletBalance > 0) {
+      if (revData?.summary?.walletBalance !== undefined) {
         setWalletBalance(revData.summary.walletBalance);
       }
     } catch (e) {

@@ -10,6 +10,7 @@ export interface ThriftListingItemApi {
   condition: string;
   images: string[];
   location?: string;
+  ownerId?: string | { _id?: string; shopProfile?: { shopName?: string; cityRegion?: string }; fullName?: string; kycStatus?: string; address?: { province?: string } };
   categoryId?: { _id: string; name: string; slug: string } | string;
   category?: { _id: string; name: string; slug: string } | string;
   categoryLabel?: string;
@@ -27,6 +28,7 @@ export const getPublicThriftListingsApi = async (params: Record<string, unknown>
     const cleanParams: Record<string, unknown> = {};
     if (params.category && params.category !== 'all') cleanParams.category = params.category;
     if (params.status) cleanParams.status = params.status;
+    if (params.ownerId) cleanParams.ownerId = params.ownerId;
     const res = await api.get('/thrift/listings', {
       params: Object.keys(cleanParams).length > 0 ? cleanParams : undefined,
     });

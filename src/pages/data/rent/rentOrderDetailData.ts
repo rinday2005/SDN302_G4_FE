@@ -58,6 +58,7 @@ export interface RentProductDetailData {
   size?: string;
   sizes?: string[];
   shopOwner?: ShopOwnerInfo;
+  ownerId?: string;
 }
 
 export interface RentLifecycleStep {
@@ -868,6 +869,7 @@ export function createRentProductDetail(source: Partial<RentProductDetailData> &
     allowedConditions: source.allowedConditions || 'Sử dụng đúng mục đích, trong môi trường an toàn, khô ráo, tránh va đập mạnh hoặc ngập nước.',
     prohibitedActions: source.prohibitedActions || 'Không tự ý can thiệp phần cứng, tháo mở ốc vít cơ khí hoặc cho bên thứ ba thuê lại khi chưa có văn bản đồng ý.',
     shopOwner: source.shopOwner || SHOP_OWNER_DATA,
+    ownerId: source.ownerId || '6ac39f4b216ef5928d9c46bb',
   };
 }
 

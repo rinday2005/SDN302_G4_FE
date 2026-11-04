@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { AuthContext } from './auth-context';
 import {
   getShopRentProductsApi,
-  getPublicRentProductsApi,
   createRentProductApi,
   updateRentProductApi,
   deleteRentProductApi, type RentalProductApi,
@@ -72,8 +71,9 @@ const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'REUSE_HUB_RENT_PRODUCTS_STORE_V1';
 
-const safeSaveProductsToStorage = (items: ShopProductItem[]) => {
+const safeSaveProductsToStorage = (items: ShopProductItem[], ownerId?: string) => {
   try {
+    const key = ownerId ? `REUSE_HUB_RENT_PRODUCTS_${ownerId}` : STORAGE_KEY;
     const compactItems = items.map((item) => ({
       ...item,
       coverImage:
@@ -84,10 +84,11 @@ const safeSaveProductsToStorage = (items: ShopProductItem[]) => {
         ? item.inspectionImages.filter((img) => !img.startsWith('data:') || img.length <= 2048)
         : [],
     }));
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(compactItems));
+    localStorage.setItem(key, JSON.stringify(compactItems));
   } catch {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+      const key = ownerId ? `REUSE_HUB_RENT_PRODUCTS_${ownerId}` : STORAGE_KEY;
+      localStorage.removeItem(key);
     } catch {
       // Ignore storage quota errors
     }
@@ -104,7 +105,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     'OWNER-01';
 
   const [products, setProducts] = useState<ShopProductItem[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const userKey = currentOwnerId ? `REUSE_HUB_RENT_PRODUCTS_${currentOwnerId}` : STORAGE_KEY;
+    const saved = localStorage.getItem(userKey);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -121,12 +123,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Nạp sản phẩm RENT từ MongoDB và tính số lượng tồn kho theo đơn hàng thực tế
   const fetchProductsFromDB = useCallback(async () => {
     try {
-      // 1. Thử lấy danh sách sản phẩm riêng của Shop Owner hiện tại
+      // 1. Lấy danh sách sản phẩm riêng của Shop Owner hiện tại từ MongoDB
       let apiProducts = await getShopRentProductsApi();
-
-      // 2. Nếu shop chưa có hoặc chưa login, fallback lấy public products
-      if (!apiProducts || apiProducts.length === 0) {
-        apiProducts = await getPublicRentProductsApi();
+      if (!Array.isArray(apiProducts)) {
+        apiProducts = [];
       }
 
       // 3. Lấy danh sách đơn hàng của Shop để tính số lượng đang thuê (Rented)

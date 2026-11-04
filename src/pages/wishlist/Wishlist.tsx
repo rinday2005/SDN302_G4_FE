@@ -3,9 +3,66 @@ import { Link } from 'react-router-dom';
 import { useCartWishlist } from '../../context/CartWishlistContext';
 import { UserSidebar } from '../../components/layout/UserSidebar';
 import { resolveWishlistProduct, type ResolvedWishlistProduct } from '../../services/wishlistProductResolver';
+import { getWishlistApi } from '../../services/wishlist.api';
 
 export const Wishlist: React.FC = () => {
-  const { wishlist, removeFromWishlist, clearWishlist, addToCart } = useCartWishlist();
+  const { wishlist, removeFromWishlist, clearWishlist, addToCart, cart } = useCartWishlist();
+  const [serverWishlistItems, setServerWishlistItems] = useState<ResolvedWishlistProduct[]>([]);
+
+  // Fetch populated wishlist items from MongoDB backend
+  useEffect(() => {
+    let isMounted = true;
+    getWishlistApi()
+      .then((res) => {
+        if (!isMounted || !res || !Array.isArray(res.items)) return;
+        const mapped: ResolvedWishlistProduct[] = [];
+        for (const raw of res.items) {
+          const item = raw as unknown as Record<string, unknown>;
+          const doc = (item.item || item.product) as Record<string, unknown> | undefined;
+          const docId = String(doc?._id || item.itemId || item.productId || '');
+          if (!docId) continue;
+          const isRent = String(item.itemType || item.productType || 'RENT').toUpperCase() === 'RENT';
+          const img = (Array.isArray(doc?.images) && (doc.images as string[])[0]) || '';
+          const name = String(doc?.name || doc?.title || 'Sản phẩm yêu thích');
+          const catObj = doc?.categoryId as Record<string, unknown> | undefined;
+          const catName = (catObj && typeof catObj === 'object' && String(catObj.name)) || (isRent ? 'Thiết bị & Đồ thuê' : 'Thời trang & Đồ thanh lý');
+          const price = isRent
+            ? (typeof doc?.pricePerDay === 'number' ? doc.pricePerDay : 0)
+            : (typeof doc?.price === 'number' ? doc.price : 0);
+          const deposit = typeof doc?.depositAmount === 'number' ? doc.depositAmount : 0;
+          const cond = String(doc?.condition || doc?.gradeBadge || (isRent ? 'Bench Checked A+' : 'Đã kiểm định 95%'));
+          const loc = String(doc?.location || 'Thành phố Đà Nẵng');
+
+          mapped.push({
+            id: docId,
+            mode: isRent ? 'rent' : 'thrift',
+            title: name,
+            description: String(doc?.description || (isRent ? 'Thiết bị công nghệ / trang phục cao cấp bảo chứng Smart Escrow' : 'Món đồ archival độc bản đã qua kiểm định')),
+            image: img || 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80',
+            category: catName,
+            categoryLabel: catName,
+            gradeBadge: cond,
+            price: price,
+            priceUnit: isRent ? '/ ngày' : '',
+            deposit: deposit,
+            available: true,
+            availabilityLabel: isRent ? 'Có sẵn ngay' : '1-OF-1 ARCHIVE',
+            location: loc,
+            origin: 'ReUse Hub Escrow',
+            certLabel: 'Smart Escrow',
+            href: isRent ? `/rent/detail/${docId}` : `/thrift/detail/${docId}`,
+          });
+        }
+        setServerWishlistItems(mapped);
+      })
+      .catch((err) => {
+        console.warn('Could not fetch server wishlist in Wishlist page:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [wishlist]);
 
   // Scroll to top on mount
   useEffect(() => {
@@ -39,23 +96,59 @@ export const Wishlist: React.FC = () => {
   // Temporary toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // ── Resolve genuine products from wishlist IDs (NO mock fake data) ──
+  // ── Resolve genuine products from wishlist IDs (Prioritize MongoDB server data, fallback to cart & static resolver) ──
   const resolvedItems = useMemo(() => {
     if (!wishlist || wishlist.length === 0) return [];
     const list: ResolvedWishlistProduct[] = [];
     const seen = new Set<string>();
 
+    // 1. Ưu tiên sản phẩm đã được populate đầy đủ từ MongoDB
+    serverWishlistItems.forEach((item) => {
+      if (wishlist.includes(item.id) && !seen.has(item.id)) {
+        seen.add(item.id);
+        list.push(item);
+      }
+    });
+
+    // 2. Kế thừa thông tin từ Cart nếu có
     wishlist.forEach((id) => {
       if (!id || seen.has(id)) return;
-      seen.add(id);
+
+      const inCart = cart.find((c) => String(c.id) === String(id));
+      if (inCart) {
+        seen.add(id);
+        list.push({
+          id: inCart.id,
+          mode: inCart.mode === 'thrift' ? 'thrift' : 'rent',
+          title: inCart.title,
+          description: inCart.mode === 'thrift' ? 'Món đồ thanh lý trong giỏ hàng' : 'Thiết bị / trang phục thuê trong giỏ hàng',
+          image: inCart.image || 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80',
+          category: inCart.categoryLabel || 'Sản phẩm tuần hoàn',
+          categoryLabel: inCart.categoryLabel || 'Sản phẩm tuần hoàn',
+          gradeBadge: inCart.gradeBadge || 'Đã kiểm định 95%',
+          price: typeof inCart.price === 'number' ? inCart.price : 0,
+          priceUnit: inCart.mode === 'rent' ? '/ ngày' : '',
+          deposit: typeof inCart.deposit === 'number' ? inCart.deposit : 0,
+          available: true,
+          availabilityLabel: inCart.mode === 'rent' ? 'Có sẵn ngay' : '1-OF-1 ARCHIVE',
+          location: inCart.location || 'Thành phố Đà Nẵng',
+          origin: inCart.vaultOrigin || 'ReUse Hub Escrow',
+          certLabel: 'Smart Escrow',
+          href: inCart.mode === 'rent' ? `/rent/detail/${inCart.id}` : `/thrift/detail/${inCart.id}`,
+        });
+        return;
+      }
+
+      // 3. Fallback sang static resolver nếu là mock item
       const prod = resolveWishlistProduct(id);
       if (prod) {
+        seen.add(id);
         list.push(prod);
       }
     });
 
     return list;
-  }, [wishlist]);
+  }, [wishlist, serverWishlistItems, cart]);
 
   const rentCount = useMemo(() => resolvedItems.filter((i) => i.mode === 'rent').length, [resolvedItems]);
   const thriftCount = useMemo(() => resolvedItems.filter((i) => i.mode === 'thrift').length, [resolvedItems]);
