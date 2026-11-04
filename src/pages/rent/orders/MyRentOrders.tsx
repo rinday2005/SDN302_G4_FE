@@ -318,13 +318,25 @@ export const MyRentOrders: React.FC = () => {
       }
 
       const itemTotal = it.itemRentTotal || (pricePerDay * dayCount * qty);
+      const orderShopObj =
+        typeof (raw as RentalOrderApi).shopOwnerId === 'object' && (raw as RentalOrderApi).shopOwnerId !== null
+          ? ((raw as RentalOrderApi).shopOwnerId as { fullName?: string; shopProfile?: { shopName?: string } })
+          : null;
+      const resolvedShopName =
+        it.shopName && it.shopName !== 'ReUse Vault' && it.shopName !== 'ReUse Partner Vault'
+          ? it.shopName
+          : (raw as RentalOrderApi).shopName ||
+            orderShopObj?.shopProfile?.shopName ||
+            orderShopObj?.fullName ||
+            (pObj as { shopName?: string })?.shopName ||
+            'Light&Night Shop';
 
       return {
         id: pIdStr || `item-${cleanId}-${idx}`,
         title,
         grade: it.grade || 'Grade A+',
         codeBadge: `Lưu ký #${rawCode.slice(-4)}-${idx + 1}`,
-        shop: it.shopName || 'ReUse Partner Vault',
+        shop: resolvedShopName,
         notes: 'Kiểm định chất lượng 8 bước ReUse Standard',
         dailyRate: `${pricePerDay.toLocaleString('vi-VN')}₫ / ngày`,
         itemTotal: `${itemTotal.toLocaleString('vi-VN')}₫`,
@@ -544,11 +556,9 @@ export const MyRentOrders: React.FC = () => {
       }
 
       // B. Read from backend API (Source of truth strictly isolated for the currently authenticated user)
-      let apiSuccess = false;
       try {
         const apiOrders = await getMyRentalOrdersApi();
         if (Array.isArray(apiOrders)) {
-          apiSuccess = true;
           for (const raw of apiOrders) {
             const orderRenterId = typeof raw.renterId === 'object' && raw.renterId !== null
               ? (raw.renterId as { _id?: string })._id
@@ -564,49 +574,13 @@ export const MyRentOrders: React.FC = () => {
               combined.push(mapped);
             }
           }
-          // Overwrite local user cache with fresh authoritative data from MongoDB while preserving local return requests
-          if (uId) {
-            try {
-              const existingRaw = localStorage.getItem(`user_rental_orders_${uId}`);
-              const existingList = existingRaw ? JSON.parse(existingRaw) : [];
-              const returnMap = new Map<string, { status: string; pickupScheduled?: boolean; returnedAt?: string }>();
-              if (Array.isArray(existingList)) {
-                existingList.forEach((e: { orderCode?: string; _id?: string; status?: string; pickupScheduled?: boolean; returnedAt?: string; renterId?: string }) => {
-                  if (e.renterId && String(e.renterId) !== String(uId)) return;
-                  if (e.status === 'RETURN_REQUESTED' || e.pickupScheduled) {
-                    const c = (e.orderCode || e._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                    if (c) returnMap.set(c, { status: e.status || 'RETURN_REQUESTED', pickupScheduled: e.pickupScheduled, returnedAt: e.returnedAt });
-                  }
-                });
-              }
-
-              const mergedApiOrders = apiOrders
-                .filter((o) => {
-                  const oRenter = typeof o.renterId === 'object' && o.renterId !== null
-                    ? (o.renterId as { _id?: string })._id
-                    : String(o.renterId || '');
-                  return !oRenter || !uId || oRenter === String(uId);
-                })
-                .map((o) => {
-                  const c = (o.orderCode || o._id || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                  const localReq = returnMap.get(c);
-                  if (localReq && o.status !== 'COMPLETED' && o.status !== 'RETURNED') {
-                    return { ...o, status: 'RETURN_REQUESTED', pickupScheduled: true, returnedAt: localReq.returnedAt };
-                  }
-                  return o;
-                });
-              localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(mergedApiOrders));
-            } catch {
-              localStorage.setItem(`user_rental_orders_${uId}`, JSON.stringify(apiOrders));
-            }
-          }
         }
       } catch (err) {
         console.warn('Could not load orders from API:', err);
       }
 
-      // C. Read stored orders ONLY if API is completely offline / failed
-      if (uId && !apiSuccess) {
+      // C. Merge local orders for this user that aren't already in combined (ensures newly created local orders are never wiped)
+      if (uId) {
         try {
           const userKey = `user_rental_orders_${uId}`;
           const storedRaw = localStorage.getItem(userKey);
