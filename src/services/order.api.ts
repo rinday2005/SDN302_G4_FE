@@ -66,6 +66,7 @@ export interface RentalOrderApi {
   status: string;
   paymentStatus: string;
   rejectionReason?: string;
+  rejectedAt?: string | null;
   receivedAt?: string | null;
   claProof?: ClaProofApi | null;
   inspectionResult?: {
@@ -248,15 +249,20 @@ export const approveRentalOrderApi = async (
 };
 
 /**
- * Gọi API Backend: POST /api/rent/orders/:id/reject
- * Shop Owner từ chối đơn thuê -> chuyển sang REJECTED
+ * Gọi API Backend: PATCH /api/rent/orders/:id/reject
+ * Shop Owner từ chối đơn thuê kèm lý do -> chuyển sang REJECTED và giải phóng lịch
  */
 export const rejectRentalOrderApi = async (
   orderId: string,
-  reason?: string
+  rejectionReason: string
 ): Promise<RentalOrderApi | null> => {
   try {
-    const res = await api.post(`/rent/orders/${orderId}/reject`, { reason });
+    const cleanReason = String(rejectionReason || "").trim();
+    const res = await api.patch(`/rent/orders/${orderId}/reject`, {
+      status: "REJECTED",
+      rejectionReason: cleanReason,
+      reason: cleanReason,
+    });
     return res.data?.data || res.data || null;
   } catch (error) {
     console.error("Lỗi khi từ chối đơn thuê:", error);

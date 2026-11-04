@@ -4,6 +4,7 @@ import {
   getRentalOrderByIdApi,
   getShopRentalOrdersApi,
   approveRentalOrderApi,
+  rejectRentalOrderApi,
   inspectAndRefundOrderApi,
   updateOrderStatusApi,
   createRentalDisputeApi,
@@ -35,7 +36,7 @@ export const ShopRentOrderDetail: React.FC = () => {
   const [allShopOrders, setAllShopOrders] = useState<RentalOrderApi[]>([]);
 
   // Interactive Demo State Switcher
-  type DemoState = 'pending' | 'paid' | 'shipping' | 'renting' | 'return_requested' | 'returning' | 'inspecting' | 'completed' | 'disputed';
+  type DemoState = 'pending' | 'rejected' | 'paid' | 'shipping' | 'renting' | 'return_requested' | 'returning' | 'inspecting' | 'completed' | 'disputed';
   const [demoState, setDemoState] = useState<DemoState>('shipping');
 
   // Inspection form states (chuyên biệt ngành thời trang, may mặc)
@@ -52,6 +53,10 @@ export const ShopRentOrderDetail: React.FC = () => {
   const [disputeCategory, setDisputeCategory] = useState('Rách hỏng vải / Hư hại cấu trúc trang phục');
   const [disputeEvidenceNote, setDisputeEvidenceNote] = useState('');
   const [showEscrowConfirmModal, setShowEscrowConfirmModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionError, setRejectionError] = useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [zoomImage, setZoomImage] = useState<{ src: string; caption: string } | null>(null);
 
   // Toast feedback
@@ -142,7 +147,9 @@ export const ShopRentOrderDetail: React.FC = () => {
             setDemoState('return_requested');
           } else {
             const st = String(loadedOrder.status || '').toUpperCase();
-            if (st === 'PENDING') {
+            if (st === 'REJECTED') {
+              setDemoState('rejected');
+            } else if (st === 'PENDING') {
               setDemoState('pending');
             } else if (st === 'WAITING_PAYMENT' || st === 'PAID') {
               setDemoState('paid');
@@ -186,6 +193,108 @@ export const ShopRentOrderDetail: React.FC = () => {
       showToast(msg);
     } finally {
       setIsApproving(false);
+    }
+  };
+
+  // Mở Modal Từ chối đơn thuê
+  const handleOpenRejectModal = () => {
+    setRejectionReason(order?.rejectionReason || '');
+    setRejectionError(null);
+    setShowRejectModal(true);
+  };
+
+  // Xác nhận Gửi từ chối đơn thuê (gọi API PATCH /api/rent/orders/:orderId/reject)
+  const handleConfirmRejectOrder = async () => {
+    const cleanReason = rejectionReason.trim();
+    if (!cleanReason) {
+      setRejectionError('Vui lòng nhập lý do từ chối đơn thuê (không được để trống).');
+      return;
+    }
+
+    const targetId = order?._id || cleanId;
+    if (!targetId) return;
+
+    setIsRejecting(true);
+    setRejectionError(null);
+    const rejectedAtIso = new Date().toISOString();
+
+    try {
+      const updated = await rejectRentalOrderApi(targetId, cleanReason);
+      if (updated) {
+        setOrder({
+          ...updated,
+          status: 'REJECTED',
+          rejectionReason: updated.rejectionReason || cleanReason,
+          rejectedAt: updated.rejectedAt || rejectedAtIso,
+        });
+      } else {
+        setOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: 'REJECTED',
+                rejectionReason: cleanReason,
+                rejectedAt: rejectedAtIso,
+              }
+            : null
+        );
+      }
+
+      // Đồng bộ trạng thái REJECTED và giải phóng lịch localStorage
+      try {
+        const cleanCode = (order?.orderCode || cleanId).replace('#', '').trim();
+        const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('user_rental_orders'));
+        allKeys.forEach((k) => {
+          try {
+            const list = JSON.parse(localStorage.getItem(k) || '[]');
+            const nextList = list.map((o: { orderCode?: string; id?: string; _id?: string; [key: string]: unknown }) => {
+              const oCode = (o.orderCode || o.id || o._id || '').replace('#', '').trim();
+              if (oCode === cleanCode || o._id === targetId || o.id === targetId) {
+                return {
+                  ...o,
+                  status: 'REJECTED',
+                  rejectionReason: cleanReason,
+                  rejectedAt: rejectedAtIso,
+                };
+              }
+              return o;
+            });
+            localStorage.setItem(k, JSON.stringify(nextList));
+          } catch {}
+        });
+
+        // Giải phóng ngày đã giữ trong reuse_shared_booked_dates của đơn bị từ chối
+        const rawBooked = localStorage.getItem('reuse_shared_booked_dates');
+        if (rawBooked) {
+          const parsedBooked = JSON.parse(rawBooked);
+          if (Array.isArray(parsedBooked)) {
+            const filtered = parsedBooked.filter(
+              (b: { orderId?: string; orderCode?: string }) =>
+                b.orderId !== targetId &&
+                b.orderCode !== cleanCode &&
+                b.orderCode !== `#${cleanCode}`
+            );
+            localStorage.setItem('reuse_shared_booked_dates', JSON.stringify(filtered));
+          }
+        }
+
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('rental_order_updated'));
+      } catch (syncErr) {
+        console.warn('Lỗi đồng bộ localStorage khi từ chối đơn:', syncErr);
+      }
+
+      setDemoState('rejected');
+      setShowRejectModal(false);
+      showToast('Đã từ chối đơn thuê, giải phóng lịch sản phẩm và gửi lý do tới khách hàng thành công!');
+    } catch (err: unknown) {
+      console.error('Lỗi khi từ chối đơn thuê:', err);
+      const apiMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Không thể từ chối đơn thuê lúc này. Vui lòng thử lại.';
+      setRejectionError(apiMsg);
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -595,17 +704,28 @@ export const ShopRentOrderDetail: React.FC = () => {
             {/* Quick Document & Communication Actions */}
             <div className="flex flex-wrap items-center gap-2">
               {order?.status === 'PENDING' && (
-                <button
-                  type="button"
-                  onClick={handleApproveOrder}
-                  disabled={isApproving}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-xs sm:text-sm transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-[17px]">
-                    {isApproving ? 'hourglass_top' : 'check_circle'}
-                  </span>
-                  <span>{isApproving ? 'Đang duyệt...' : 'Duyệt Đơn Thuê'}</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleApproveOrder}
+                    disabled={isApproving || isRejecting}
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-xs sm:text-sm transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[17px]">
+                      {isApproving ? 'hourglass_top' : 'check_circle'}
+                    </span>
+                    <span>{isApproving ? 'Đang duyệt...' : 'Duyệt Đơn Thuê'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenRejectModal}
+                    disabled={isApproving || isRejecting}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 rounded font-bold text-xs sm:text-sm transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[17px]">cancel</span>
+                    <span>Từ Chối Đơn Thuê</span>
+                  </button>
+                </>
               )}
 
               <button
@@ -654,6 +774,12 @@ export const ShopRentOrderDetail: React.FC = () => {
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-900 text-[11px] font-bold uppercase tracking-wider rounded-full">
                       <span className="w-2 h-2 rounded-full bg-amber-600 animate-pulse"></span>
                       Chờ xét duyệt thẩm định (Pending)
+                    </span>
+                  )}
+                  {effectiveState === 'rejected' && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-100 text-rose-800 border border-rose-300 text-[11px] font-bold uppercase tracking-wider rounded-full">
+                      <span className="material-symbols-outlined text-[14px] text-rose-700">cancel</span>
+                      Đã từ chối đơn thuê (Rejected)
                     </span>
                   )}
                   {effectiveState === 'paid' && (
@@ -718,6 +844,29 @@ export const ShopRentOrderDetail: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Banner hiển thị lý do từ chối khi đơn ở trạng thái REJECTED */}
+            {(effectiveState === 'rejected' || order?.status === 'REJECTED') && (
+              <div className="mt-5 p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3">
+                <span className="material-symbols-outlined text-rose-700 text-[22px] shrink-0 mt-0.5">report</span>
+                <div className="flex-1 text-xs sm:text-sm text-rose-900">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <strong className="font-serif text-sm sm:text-base text-rose-950 uppercase tracking-wider">
+                      Đơn thuê đã bị từ chối • Đã giải phóng lịch sản phẩm
+                    </strong>
+                    {order?.rejectedAt && (
+                      <span className="text-[11px] font-mono text-rose-700 bg-white px-2.5 py-0.5 rounded border border-rose-200">
+                        Thời điểm từ chối: {new Date(order.rejectedAt).toLocaleString('vi-VN')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="leading-relaxed">
+                    <span className="font-semibold">Lý do từ chối của Shop:</span>{' '}
+                    {order?.rejectionReason || rejectionReason || 'Sản phẩm hiện đang trong lịch bảo dưỡng định kỳ tại xưởng.'}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Interactive State Simulation Bar */}
             <div className="mt-6 pt-5 border-t border-[#f2ede9]">
@@ -1496,7 +1645,7 @@ export const ShopRentOrderDetail: React.FC = () => {
 
                 <div className="space-y-3">
                   {/* Pending Mode Workflow */}
-                  <details className="group bg-[#f7f3ef] rounded-xl p-4 border border-[#ece7e4]" open={demoState === 'pending'}>
+                  <details className="group bg-[#f7f3ef] rounded-xl p-4 border border-[#ece7e4]" open={demoState === 'pending' || demoState === 'rejected'}>
                     <summary className="flex items-center justify-between cursor-pointer list-none font-serif text-base text-[#1c1b19] font-semibold">
                       <span className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-[#6c5937] text-[20px]">assignment_turned_in</span>
@@ -1510,23 +1659,36 @@ export const ShopRentOrderDetail: React.FC = () => {
                       <p>
                         Khi khách đặt đơn, đơn sẽ ở trạng thái PENDING. Chủ shop kiểm tra tình trạng hiện vật thời trang &amp; lịch hẹn. Khi chủ shop bấm <strong>[Duyệt đơn]</strong>, bên khách hàng sẽ nhận được thông báo và hiển thị nút thanh toán cọc VNPay.
                       </p>
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={handleApproveOrder}
-                          disabled={isApproving}
-                          className="px-4 py-2 bg-[#6c5937] hover:bg-[#554424] text-white rounded text-xs uppercase tracking-wider font-semibold cursor-pointer transition-colors shadow-xs disabled:opacity-50"
-                        >
-                          {isApproving ? 'Đang duyệt...' : 'Duyệt Đơn Thuê → Chuyển Chờ Thanh Toán'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => showToast('Đã từ chối đơn thuê và gửi lý do tới khách hàng.')}
-                          className="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded text-xs uppercase tracking-wider font-semibold cursor-pointer transition-colors"
-                        >
-                          Từ chối Đơn Thuê (Nhập lý do)
-                        </button>
-                      </div>
+                      {(effectiveState === 'rejected' || order?.status === 'REJECTED') ? (
+                        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 space-y-1">
+                          <div className="flex items-center gap-1.5 font-bold text-rose-800 uppercase text-xs">
+                            <span className="material-symbols-outlined text-[16px]">cancel</span>
+                            <span>Đơn hàng đã bị từ chối (REJECTED)</span>
+                          </div>
+                          <p className="text-xs">
+                            <strong>Lý do từ chối:</strong> {order?.rejectionReason || rejectionReason || 'Chưa cập nhật lý do'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleApproveOrder}
+                            disabled={isApproving || isRejecting}
+                            className="px-4 py-2 bg-[#6c5937] hover:bg-[#554424] text-white rounded text-xs uppercase tracking-wider font-semibold cursor-pointer transition-colors shadow-xs disabled:opacity-50"
+                          >
+                            {isApproving ? 'Đang duyệt...' : 'Duyệt Đơn Thuê → Chuyển Chờ Thanh Toán'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleOpenRejectModal}
+                            disabled={isApproving || isRejecting}
+                            className="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 rounded text-xs uppercase tracking-wider font-semibold cursor-pointer transition-colors disabled:opacity-50"
+                          >
+                            Từ chối Đơn Thuê (Nhập lý do)
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </details>
 
@@ -2130,7 +2292,113 @@ export const ShopRentOrderDetail: React.FC = () => {
           </div>
         )}
 
-        {/* MODAL 5: Image Lightbox Zoom */}
+        {/* MODAL 5: Từ chối đơn thuê (Nhập lý do) */}
+        {showRejectModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-stone-200 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => !isRejecting && setShowRejectModal(false)}
+                disabled={isRejecting}
+                className="absolute top-5 right-5 text-stone-400 hover:text-stone-800 text-lg cursor-pointer disabled:opacity-40"
+              >
+                ✕
+              </button>
+
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[22px]">cancel</span>
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-[#1c1b19]">
+                    Từ Chối Đơn Thuê {displayOrderCode}
+                  </h3>
+                  <p className="text-xs text-[#7e766a]">
+                    Lịch đặt của đơn hàng sẽ được giải phóng ngay để khách khác có thể đặt thuê.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs mt-4 mb-5">
+                <div>
+                  <label className="block font-semibold text-stone-800 mb-1.5">
+                    Lý do từ chối đơn thuê <span className="text-rose-600">*</span>
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={rejectionReason}
+                    onChange={(e) => {
+                      setRejectionReason(e.target.value);
+                      if (rejectionError) setRejectionError(null);
+                    }}
+                    placeholder="Nhập lý do từ chối cụ thể để thông báo cho khách thuê (VD: Trang phục đang trong lịch bảo dưỡng hấp tiệt trùng định kỳ / Lịch giao nhận quá sát ngày sự kiện)..."
+                    className={`w-full p-3 bg-[#f7f3ef] text-[#1c1b19] border rounded-xl outline-none transition-colors leading-relaxed ${
+                      rejectionError
+                        ? 'border-rose-500 bg-rose-50/40 focus:border-rose-600'
+                        : 'border-[#ece7e4] focus:border-[#6c5937]'
+                    }`}
+                  />
+                  {rejectionError && (
+                    <p className="mt-1.5 text-rose-600 font-medium flex items-center gap-1 text-xs">
+                      <span className="material-symbols-outlined text-[15px]">error</span>
+                      <span>{rejectionError}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Gợi ý nhanh lý do từ chối */}
+                <div>
+                  <span className="block text-[11px] text-[#7e766a] mb-1.5 font-medium">
+                    Chọn nhanh lý do phổ biến:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Hiện vật đang trong kỳ bảo dưỡng & hấp khử khuẩn Ozone định kỳ',
+                      'Thời gian vận chuyển không kịp tiến độ ngày sự kiện của khách',
+                      'Sản phẩm vừa phát sinh cần phục chế đường kim thủ công tại xưởng',
+                    ].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          setRejectionReason(preset);
+                          setRejectionError(null);
+                        }}
+                        className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-[11px] transition-colors cursor-pointer text-left"
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setShowRejectModal(false)}
+                  disabled={isRejecting}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRejectOrder}
+                  disabled={isRejecting}
+                  className="px-5 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-semibold uppercase tracking-wider cursor-pointer shadow-sm transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span className={`material-symbols-outlined text-[16px] ${isRejecting ? 'animate-spin' : ''}`}>
+                    {isRejecting ? 'progress_activity' : 'send'}
+                  </span>
+                  <span>{isRejecting ? 'Đang xử lý...' : 'Gửi từ chối'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 6: Image Lightbox Zoom */}
         {zoomImage && (
           <div
             className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"

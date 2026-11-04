@@ -514,7 +514,23 @@ export const Cart: React.FC = () => {
             createdSubOrders = [apiRes];
           }
         }
-      } catch (apiErr) {
+      } catch (apiErr: unknown) {
+        const errObj = apiErr as {
+          response?: { status?: number; data?: { message?: string; errorCode?: string } };
+          message?: string;
+        };
+        const statusCode = errObj?.response?.status;
+        const errCode = errObj?.response?.data?.errorCode;
+        // [PRE-BOOKING CHECK]: Nếu Backend báo trùng lịch (409 INSUFFICIENT_INVENTORY), chặn ngay tại Giỏ hàng và báo lỗi rõ ràng!
+        if (statusCode === 409 || errCode === 'INSUFFICIENT_INVENTORY') {
+          setIsPlacingRent(false);
+          showToast(
+            errObj?.response?.data?.message ||
+              'Sản phẩm bị trùng lịch đã có khách đặt hoặc đang được giữ chỗ. Vui lòng bấm "Sửa ngày" để chọn kỳ thuê khác!',
+            'event_busy'
+          );
+          return;
+        }
         console.warn('Lỗi tạo đơn qua API, dùng fallback local storage:', apiErr);
       }
 
