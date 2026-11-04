@@ -569,21 +569,31 @@ export const RentCheckout: React.FC = () => {
       return;
     }
 
-    // Khi thanh toán đơn hàng hiện tại (currentOrderId), loại trừ chính _id / orderCode của đơn này
-    const conflictItem = rentItems.find((item) => {
-      const bDates = getProductBookedDates(item, {
-        excludeOrderId: existingOrder?._id || queryOrderId || '',
-        excludeOrderCode: existingOrder?.orderCode || contractId || '',
+    // [KIẾN TRÚC CHUẨN P2P RENTAL]:
+    // - Nếu đơn hàng ĐÃ được tạo và Shop ĐÃ duyệt (existingOrder / queryOrderId có sẵn) và người dùng không tự ý đổi ngày khác với ngày đã duyệt:
+    //   => Lịch đã được Lock riêng cho chính đơn này (Temporary Hold Slot 15 phút), KHÔNG chạy check trùng lịch chung chung ở bước bấm nút VNPay!
+    // - Chỉ chạy check trùng lịch trên FE khi người dùng tạo đơn trực tiếp chưa qua bước đặt đơn hoặc vừa chủ động bấm đổi sang khoảng ngày mới trên trang Checkout.
+    const isPayingExistingApprovedOrder =
+      Boolean(existingOrder?._id || queryOrderId) &&
+      (!existingOrder?.startDate || existingOrder.startDate.slice(0, 10) === startDate.slice(0, 10)) &&
+      (!existingOrder?.endDate || existingOrder.endDate.slice(0, 10) === endDate.slice(0, 10));
+
+    if (!isPayingExistingApprovedOrder) {
+      const conflictItem = rentItems.find((item) => {
+        const bDates = getProductBookedDates(item, {
+          excludeOrderId: existingOrder?._id || queryOrderId || '',
+          excludeOrderCode: existingOrder?.orderCode || contractId || '',
+        });
+        return hasDateRangeConflict(startDate, endDate, bDates);
       });
-      return hasDateRangeConflict(startDate, endDate, bDates);
-    });
-    if (conflictItem) {
-      showToast(
-        `Kỳ thuê bạn chọn (${startDate} → ${endDate}) của sản phẩm "${conflictItem.title}" bị trùng ngày đã có khách đặt trước. Vui lòng chọn lại kỳ thuê còn trống!`,
-        'event_busy',
-        'warning'
-      );
-      return;
+      if (conflictItem) {
+        showToast(
+          `Kỳ thuê bạn chọn (${startDate} → ${endDate}) của sản phẩm "${conflictItem.title}" bị trùng ngày đã có khách đặt trước. Vui lòng chọn lại kỳ thuê còn trống!`,
+          'event_busy',
+          'warning'
+        );
+        return;
+      }
     }
 
     setIsSubmitting(true);

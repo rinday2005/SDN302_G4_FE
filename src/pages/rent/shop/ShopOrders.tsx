@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShippingModal } from '../../../components/orders/ShippingModal';
 import type { ShippingData } from '../../../components/orders/ShippingModal';
-import { getShopRentalOrdersApi, handoverRentalOrderApi, approveRentalOrderApi, updateOrderStatusApi } from '../../../services/order.api';
+import { getShopRentalOrdersApi, handoverRentalOrderApi, approveRentalOrderApi, rejectRentalOrderApi, updateOrderStatusApi } from '../../../services/order.api';
 import type { RentalOrderApi } from '../../../services/order.api';
 import { calculateDynamicShippingFee, normalizeShopBranch } from '../../../utils/address';
 
@@ -15,6 +15,8 @@ export interface FormattedRentalOrder {
   totalAmount: number;
   depositAmount?: number;
   status: string;
+  rejectionReason?: string;
+  rejectedAt?: string | null;
   shippingCarrier?: string;
   trackingCode?: string;
   shippedAt?: string;
@@ -69,6 +71,8 @@ const mapApiOrderToFormatted = (apiOrder: RentalOrderApi): FormattedRentalOrder 
     totalAmount: (apiOrder.rentalFee && apiOrder.depositAmount) ? (apiOrder.rentalFee + apiOrder.depositAmount + calculateDynamicShippingFee(apiOrder.shippingAddress ? [apiOrder.shippingAddress.detail, apiOrder.shippingAddress.ward, apiOrder.shippingAddress.district, apiOrder.shippingAddress.province].filter(Boolean).join(', ') : 'Đà Nẵng', normalizeShopBranch(((item?.productId as unknown as { location?: string })?.location) || (item as unknown as { location?: string })?.location || 'Đà Nẵng'))) : (apiOrder.totalAmount || 0),
     depositAmount: apiOrder.depositAmount || 0,
     status: effectiveStatus,
+    rejectionReason: apiOrder.rejectionReason || '',
+    rejectedAt: apiOrder.rejectedAt || null,
     shippingCarrier: apiOrder.shippingDetails?.carrierName || apiOrder.shippingDetails?.carrier || '',
     trackingCode: apiOrder.shippingDetails?.trackingCode || '',
     shippedAt: apiOrder.shippingDetails?.shippedAt ? new Date(apiOrder.shippingDetails.shippedAt).toISOString() : undefined,
@@ -81,6 +85,10 @@ export const ShopOrders: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedOrder, setSelectedOrder] = useState<FormattedRentalOrder | null>(null);
   const [approvingOrderId, setApprovingOrderId] = useState<string | null>(null);
+  const [rejectTargetOrder, setRejectTargetOrder] = useState<FormattedRentalOrder | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string>('');
+  const [rejectionError, setRejectionError] = useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -207,6 +215,98 @@ export const ShopOrders: React.FC = () => {
       showToast(`Đã duyệt đơn thuê ${order.id} thành công!`);
     } finally {
       setApprovingOrderId(null);
+    }
+  };
+
+  // Mở Modal Từ chối đơn thuê tại danh sách ShopOrders
+  const handleOpenRejectModal = (order: FormattedRentalOrder) => {
+    setRejectTargetOrder(order);
+    setRejectionReason(order.rejectionReason || '');
+    setRejectionError(null);
+  };
+
+  // Xác nhận Gửi từ chối đơn thuê từ Modal
+  const handleConfirmRejectOrder = async () => {
+    if (!rejectTargetOrder) return;
+    const cleanReason = rejectionReason.trim();
+    if (!cleanReason) {
+      setRejectionError('Vui lòng nhập lý do từ chối đơn thuê (không được để trống).');
+      return;
+    }
+
+    const targetId = rejectTargetOrder._id || rejectTargetOrder.id;
+    setIsRejecting(true);
+    setRejectionError(null);
+    const rejectedAtIso = new Date().toISOString();
+
+    try {
+      await rejectRentalOrderApi(targetId, cleanReason);
+      setOrders((prev) =>
+        prev.map((ord) => {
+          if (ord._id === rejectTargetOrder._id || ord.id === rejectTargetOrder.id) {
+            return {
+              ...ord,
+              status: 'REJECTED',
+              rejectionReason: cleanReason,
+              rejectedAt: rejectedAtIso,
+            };
+          }
+          return ord;
+        })
+      );
+
+      // Đồng bộ trạng thái REJECTED & giải phóng lịch trên localStorage
+      try {
+        const cleanCode = (rejectTargetOrder.id || rejectTargetOrder._id || '').replace('#', '').trim();
+        const allKeys = Object.keys(localStorage).filter((k) => k.startsWith('user_rental_orders'));
+        allKeys.forEach((k) => {
+          try {
+            const list = JSON.parse(localStorage.getItem(k) || '[]');
+            const updated = list.map((o: { orderCode?: string; id?: string; _id?: string; [key: string]: unknown }) => {
+              const oCode = (o.orderCode || o.id || o._id || '').replace('#', '').trim();
+              if (oCode === cleanCode || o._id === targetId || o.id === targetId) {
+                return {
+                  ...o,
+                  status: 'REJECTED',
+                  rejectionReason: cleanReason,
+                  rejectedAt: rejectedAtIso,
+                };
+              }
+              return o;
+            });
+            localStorage.setItem(k, JSON.stringify(updated));
+          } catch {}
+        });
+
+        const rawBooked = localStorage.getItem('reuse_shared_booked_dates');
+        if (rawBooked) {
+          const parsedBooked = JSON.parse(rawBooked);
+          if (Array.isArray(parsedBooked)) {
+            const filtered = parsedBooked.filter(
+              (b: { orderId?: string; orderCode?: string }) =>
+                b.orderId !== targetId &&
+                b.orderCode !== cleanCode &&
+                b.orderCode !== `#${cleanCode}`
+            );
+            localStorage.setItem('reuse_shared_booked_dates', JSON.stringify(filtered));
+          }
+        }
+
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('rental_order_updated'));
+      } catch {}
+
+      showToast(`Đã từ chối đơn thuê ${rejectTargetOrder.id} và giải phóng lịch sản phẩm thành công!`);
+      setRejectTargetOrder(null);
+      setRejectionReason('');
+    } catch (err: unknown) {
+      console.error('Lỗi khi từ chối đơn thuê:', err);
+      const apiMsg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        'Không thể từ chối đơn thuê lúc này. Vui lòng thử lại.';
+      setRejectionError(apiMsg);
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -384,6 +484,19 @@ export const ShopOrders: React.FC = () => {
                           Chờ duyệt đơn
                         </span>
                       )}
+                      {order.status === 'REJECTED' && (
+                        <div className="space-y-1">
+                          <span className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1.5 w-fit">
+                            <span className="material-symbols-outlined text-[13px] text-rose-700">cancel</span>
+                            Đã từ chối đơn
+                          </span>
+                          {order.rejectionReason && (
+                            <div className="text-[11px] text-rose-700 max-w-[220px] truncate" title={order.rejectionReason}>
+                              Lý do: {order.rejectionReason}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {order.status === 'WAITING_PAYMENT' && (
                         <span className="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-900 border border-blue-300 flex items-center gap-1.5 w-fit">
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
@@ -457,6 +570,16 @@ export const ShopOrders: React.FC = () => {
                             </span>
                             <span>{approvingOrderId === (order._id || order.id) ? 'Đang duyệt...' : 'Duyệt đơn'}</span>
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRejectModal(order)}
+                            disabled={approvingOrderId === (order._id || order.id)}
+                            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 transition-colors font-semibold text-xs inline-flex items-center gap-1 cursor-pointer"
+                            title="Từ chối đơn thuê (Nhập lý do)"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">cancel</span>
+                            <span>Từ chối</span>
+                          </button>
                           <Link
                             to={`/shop/rent/orders/${order.id}`}
                             className="px-2.5 py-1 rounded-lg border border-[#dddad3] text-[#4a463f] hover:bg-[#f2ede9] transition-colors text-xs font-medium inline-flex items-center gap-1"
@@ -527,6 +650,86 @@ export const ShopOrders: React.FC = () => {
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Modal Từ chối đơn thuê (Nhập lý do) */}
+      {rejectTargetOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-stone-200 animate-fade-in">
+            <button
+              type="button"
+              onClick={() => !isRejecting && setRejectTargetOrder(null)}
+              disabled={isRejecting}
+              className="absolute top-5 right-5 text-stone-400 hover:text-stone-800 text-lg cursor-pointer disabled:opacity-40"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-center gap-2.5 mb-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[22px]">cancel</span>
+              </div>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-[#141310]">
+                  Từ Chối Đơn Thuê {rejectTargetOrder.id}
+                </h3>
+                <p className="text-xs text-[#78716c]">
+                  Sản phẩm: <strong>{rejectTargetOrder.productName}</strong> • Khách: {rejectTargetOrder.customerName}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs mt-4 mb-5">
+              <div>
+                <label className="block font-semibold text-stone-800 mb-1.5">
+                  Lý do từ chối đơn thuê <span className="text-rose-600">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={rejectionReason}
+                  onChange={(e) => {
+                    setRejectionReason(e.target.value);
+                    if (rejectionError) setRejectionError(null);
+                  }}
+                  placeholder="Nhập lý do từ chối đơn thuê (không được để trống)..."
+                  className={`w-full p-3 bg-[#f7f3ec] text-[#141310] border rounded-xl outline-none transition-colors leading-relaxed ${
+                    rejectionError
+                      ? 'border-rose-500 bg-rose-50/40 focus:border-rose-600'
+                      : 'border-[#dddad3] focus:border-[#6c5937]'
+                  }`}
+                />
+                {rejectionError && (
+                  <p className="mt-1.5 text-rose-600 font-medium flex items-center gap-1 text-xs">
+                    <span className="material-symbols-outlined text-[15px]">error</span>
+                    <span>{rejectionError}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-stone-200">
+              <button
+                type="button"
+                onClick={() => setRejectTargetOrder(null)}
+                disabled={isRejecting}
+                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRejectOrder}
+                disabled={isRejecting}
+                className="px-5 py-2 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-semibold uppercase tracking-wider cursor-pointer shadow-sm transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span className={`material-symbols-outlined text-[16px] ${isRejecting ? 'animate-spin' : ''}`}>
+                  {isRejecting ? 'progress_activity' : 'send'}
+                </span>
+                <span>{isRejecting ? 'Đang xử lý...' : 'Gửi từ chối'}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
