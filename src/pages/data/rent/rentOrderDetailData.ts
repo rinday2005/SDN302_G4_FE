@@ -25,6 +25,10 @@ export interface BookedDateRange {
   endDate: string;   // YYYY-MM-DD
   note?: string;
   customerName?: string;
+  orderId?: string;
+  orderCode?: string;
+  status?: string;
+  holdExpiresAt?: string | null;
 }
 
 export interface RentProductDetailData {
@@ -590,8 +594,11 @@ export const RENT_PRODUCT_DETAILS_MAP: Record<string, RentProductDetailData> = {
 };
 
 // Helper để lấy danh sách ngày thiết bị đã được thuê (chỉ hiển thị ngày đã đặt thật từ đơn hàng, bỏ hoàn toàn các gạch mẫu)
-export function getProductBookedDates(product?: RentProductDetailData | { id?: string; title?: string; slug?: string } | null): BookedDateRange[] {
-  // Bỏ toàn bộ gạch mẫu giả lập, lịch để trống mặc định cho tới khi có đơn đặt thành công thật
+// Hỗ trợ loại trừ đơn hàng hiện tại (excludeOrderId / excludeOrderCode) khi thanh toán đơn đã được Shop duyệt
+export function getProductBookedDates(
+  product?: RentProductDetailData | { id?: string; title?: string; slug?: string } | null,
+  options?: { excludeOrderId?: string; excludeOrderCode?: string }
+): BookedDateRange[] {
   const customList: BookedDateRange[] = [];
 
   const realBookedRanges: BookedDateRange[] = [];
@@ -600,6 +607,27 @@ export function getProductBookedDates(product?: RentProductDetailData | { id?: s
   const prodId = product?.id ? String(product.id).trim().toLowerCase() : '';
   const prodSlug = (product && 'slug' in product && product.slug) ? String(product.slug).trim().toLowerCase() : '';
   const prodTitle = product?.title ? product.title.trim().toLowerCase() : '';
+
+  const cleanExcludeId = (options?.excludeOrderId || '').replace(/^#/, '').trim().toLowerCase();
+  const cleanExcludeCode = (options?.excludeOrderCode || '').replace(/^#/, '').trim().toLowerCase();
+
+  const isExcludedOrder = (orderId?: string, orderCode?: string, note?: string) => {
+    const oId = (orderId || '').replace(/^#/, '').trim().toLowerCase();
+    const oCode = (orderCode || '').replace(/^#/, '').trim().toLowerCase();
+    const nText = (note || '').toLowerCase();
+
+    if (cleanExcludeId && cleanExcludeId.length >= 4) {
+      if (oId === cleanExcludeId || oCode === cleanExcludeId || nText.includes(cleanExcludeId)) {
+        return true;
+      }
+    }
+    if (cleanExcludeCode && cleanExcludeCode.length >= 4) {
+      if (oCode === cleanExcludeCode || oId === cleanExcludeCode || nText.includes(cleanExcludeCode)) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   try {
     // 1. Kiểm tra bộ lưu trữ ngày đã đặt chung (reuse_shared_booked_dates)
@@ -612,11 +640,21 @@ export function getProductBookedDates(product?: RentProductDetailData | { id?: s
         endDate?: string;
         note?: string;
         customerName?: string;
+        orderId?: string;
+        orderCode?: string;
+        status?: string;
+        holdExpiresAt?: string;
       }
       const sharedList: SharedBookingCheck[] = JSON.parse(sharedRaw);
       if (Array.isArray(sharedList)) {
+        const nowMs = Date.now();
         sharedList.forEach((b: SharedBookingCheck) => {
           if (!b.startDate || !b.endDate) return;
+          if (b.status && ['CANCELLED', 'REJECTED', 'EXPIRED', 'COMPLETED'].includes(b.status)) return;
+          if (b.holdExpiresAt && new Date(b.holdExpiresAt).getTime() < nowMs && b.status !== 'PAID') return;
+
+          // Loại trừ chính đơn hàng đang thanh toán
+          if (isExcludedOrder(b.orderId, b.orderCode, b.note)) return;
 
           const bProdId = b.productId ? String(b.productId).trim().toLowerCase() : '';
           const bTitle = b.title ? b.title.trim().toLowerCase() : '';
@@ -627,12 +665,16 @@ export function getProductBookedDates(product?: RentProductDetailData | { id?: s
             (prodTitle && bTitle && (bTitle === prodTitle || bTitle.includes(prodTitle) || prodTitle.includes(bTitle)));
 
           if (isMatch) {
-            const key = `${b.startDate}_${b.endDate}`;
+            const normStart = b.startDate.slice(0, 10);
+            const normEnd = b.endDate.slice(0, 10);
+            const key = `${normStart}_${normEnd}`;
             if (!seenDateKey.has(key)) {
               seenDateKey.add(key);
               realBookedRanges.push({
-                startDate: b.startDate,
-                endDate: b.endDate,
+                startDate: normStart,
+                endDate: normEnd,
+                orderId: b.orderId,
+                orderCode: b.orderCode,
                 note: b.note || `Đã có khách thuê (${b.title || product?.title || 'Thiết bị'})`,
                 customerName: b.customerName || 'Khách hàng ReUse Hub',
               });
@@ -651,6 +693,7 @@ export function getProductBookedDates(product?: RentProductDetailData | { id?: s
       }
     }
 
+    const nowMs = Date.now();
     rentalStorageKeys.forEach((sKey) => {
       const raw = localStorage.getItem(sKey);
       if (!raw) return;
@@ -662,11 +705,14 @@ export function getProductBookedDates(product?: RentProductDetailData | { id?: s
         productName?: string;
       }
       interface StoredOrderCheck {
+        _id?: string;
+        id?: string;
         orderCode?: string;
         status?: string;
         paymentStatus?: string;
         startDate?: string;
         endDate?: string;
+        holdExpiresAt?: string;
         custodyHolder?: string;
         items?: StoredItemCheck[];
       }
@@ -675,9 +721,20 @@ export function getProductBookedDates(product?: RentProductDetailData | { id?: s
         const orders: StoredOrderCheck[] = JSON.parse(raw);
         if (Array.isArray(orders)) {
           orders.forEach((o: StoredOrderCheck) => {
-            // Bỏ qua đơn đã hủy hoặc từ chối
-            if (o.status === 'CANCELLED' || o.status === 'REJECTED') return;
+            // Bỏ qua đơn đã hủy, từ chối, quá hạn giữ chỗ hoặc đã trả xong
+            if (o.status && ['CANCELLED', 'REJECTED', 'EXPIRED', 'COMPLETED'].includes(o.status)) return;
+            if (
+              o.holdExpiresAt &&
+              ['WAITING_PAYMENT', 'APPROVED', 'PENDING_PAYMENT'].includes(o.status || '') &&
+              o.paymentStatus !== 'PAID' &&
+              new Date(o.holdExpiresAt).getTime() < nowMs
+            ) {
+              return;
+            }
             if (!o.startDate || !o.endDate) return;
+
+            // Loại trừ chính đơn hàng hiện tại (_id / id / orderCode)
+            if (isExcludedOrder(o._id || o.id, o.orderCode)) return;
 
             // Kiểm tra xem đơn này có chứa sản phẩm hay không
             const hasMatchingItem =
@@ -699,14 +756,21 @@ export function getProductBookedDates(product?: RentProductDetailData | { id?: s
               });
 
             if (hasMatchingItem) {
-              const key = `${o.startDate}_${o.endDate}`;
+              const normStart = o.startDate.slice(0, 10);
+              const normEnd = o.endDate.slice(0, 10);
+              const key = `${normStart}_${normEnd}`;
               if (!seenDateKey.has(key)) {
                 seenDateKey.add(key);
                 realBookedRanges.push({
-                  startDate: o.startDate,
-                  endDate: o.endDate,
-                  note: `Đã có khách đặt đơn ${o.orderCode || ''} (${o.status === 'PAID' || o.paymentStatus === 'PAID' ? 'Đã thanh toán Escrow' : 'Đang thuê'
-                    })`,
+                  startDate: normStart,
+                  endDate: normEnd,
+                  orderId: o._id || o.id,
+                  orderCode: o.orderCode,
+                  status: o.status,
+                  holdExpiresAt: o.holdExpiresAt || null,
+                  note: `Đã có khách đặt đơn ${o.orderCode || ''} (${
+                    o.status === 'PAID' || o.paymentStatus === 'PAID' ? 'Đã thanh toán Escrow' : 'Đang giữ chỗ'
+                  })`,
                   customerName: o.custodyHolder || 'Khách hàng ReUse Hub',
                 });
               }
@@ -725,14 +789,24 @@ export function getProductBookedDates(product?: RentProductDetailData | { id?: s
 }
 
 // Helper để ghi nhận ngày đã đặt cho thiết bị khi tạo đơn
-export function recordBookedDates(productId: string, startDate: string, endDate: string, note?: string) {
+export function recordBookedDates(
+  productId: string,
+  startDate: string,
+  endDate: string,
+  note?: string,
+  orderMeta?: { orderId?: string; orderCode?: string; status?: string; holdExpiresAt?: string }
+) {
   try {
     const sharedRaw = localStorage.getItem('reuse_shared_booked_dates') || '[]';
     const list = JSON.parse(sharedRaw);
     list.push({
       productId,
-      startDate,
-      endDate,
+      startDate: startDate.slice(0, 10),
+      endDate: endDate.slice(0, 10),
+      orderId: orderMeta?.orderId,
+      orderCode: orderMeta?.orderCode,
+      status: orderMeta?.status,
+      holdExpiresAt: orderMeta?.holdExpiresAt,
       note: note || 'Đã có khách đặt thuê (Bảo chứng Smart Escrow)',
       customerName: 'Khách hàng ReUse Hub',
     });

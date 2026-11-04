@@ -430,6 +430,13 @@ export const Cart: React.FC = () => {
     const mappedItems = selectedRentItems.map((item) => {
       const qty = item.quantity || 1;
       const depositVal = parseDeposit(item) * qty;
+      const mapInfo = productShopMap[String(item.id)];
+      const resolvedShopName =
+        mapInfo?.shopName ||
+        (item.shopName && item.shopName !== 'Atelier Chronos & Optics Ltd.' ? item.shopName : '') ||
+        'Light&Night Shop';
+      const resolvedShopId =
+        mapInfo?.shopId || item.shopId || item.shopOwnerId || '6ac39f4b216ef5928d9c46bb';
       return {
         id: String(item.id),
         productId: String(item.id),
@@ -443,8 +450,9 @@ export const Cart: React.FC = () => {
         imageUrl: item.image || '',
         image: item.image || '',
         grade: item.gradeBadge || 'Grade A+',
-        shopName: item.vaultOrigin || 'ReUse Vault',
-        location: normalizeShopBranch(item.location || 'Đà Nẵng'),
+        shopId: resolvedShopId,
+        shopName: resolvedShopName,
+        location: normalizeShopBranch(mapInfo?.shopLocation || item.location || 'Đà Nẵng'),
       };
     });
 
@@ -477,46 +485,60 @@ export const Cart: React.FC = () => {
       },
     };
 
-    // Gọi API Backend tạo đơn thuê PENDING
-    try {
-      const apiRes = await createRentalOrderApi({
-        startDate,
-        endDate,
-        shippingAddress: newOrder.shippingAddress,
-        items: mappedItems,
-        totalAmount: rentGrandTotal,
-        depositAmount: rentEscrowTotal,
-        rentalFee: rentSubtotal,
-        shippingFee: rentShipping,
-      });
-      if (apiRes) {
-        if (apiRes.orderCode) newOrder.orderCode = apiRes.orderCode;
-        if (apiRes._id) newOrder._id = apiRes._id;
-        if (apiRes._id) (newOrder as Record<string, unknown>).id = apiRes._id;
-        if (typeof apiRes.shippingFee === 'number' && apiRes.shippingFee > 0) {
-          newOrder.shippingFee = apiRes.shippingFee;
-          newOrder.totalAmount = rentSubtotal + rentEscrowTotal + apiRes.shippingFee;
-          newOrder.totalPayment = newOrder.totalAmount;
+      // Lưu vào localStorage của User (hỗ trợ cả trường hợp tách nhiều đơn theo từng Shop)
+      let createdSubOrders: unknown[] = [];
+      // Gọi API Backend tạo đơn thuê PENDING
+      try {
+        const apiRes = await createRentalOrderApi({
+          startDate,
+          endDate,
+          shippingAddress: newOrder.shippingAddress,
+          items: mappedItems,
+          totalAmount: rentGrandTotal,
+          depositAmount: rentEscrowTotal,
+          rentalFee: rentSubtotal,
+          shippingFee: rentShipping,
+        });
+        if (apiRes) {
+          if (apiRes.orderCode) newOrder.orderCode = apiRes.orderCode;
+          if (apiRes._id) newOrder._id = apiRes._id;
+          if (apiRes._id) (newOrder as Record<string, unknown>).id = apiRes._id;
+          if (typeof apiRes.shippingFee === 'number' && apiRes.shippingFee > 0) {
+            newOrder.shippingFee = apiRes.shippingFee;
+            newOrder.totalAmount = rentSubtotal + rentEscrowTotal + apiRes.shippingFee;
+            newOrder.totalPayment = newOrder.totalAmount;
+          }
+          if (Array.isArray(apiRes.subOrders) && apiRes.subOrders.length > 0) {
+            createdSubOrders = apiRes.subOrders;
+          } else {
+            createdSubOrders = [apiRes];
+          }
         }
+      } catch (apiErr) {
+        console.warn('Lỗi tạo đơn qua API, dùng fallback local storage:', apiErr);
       }
-    } catch (apiErr) {
-      console.warn('Lỗi tạo đơn qua API, dùng fallback local storage:', apiErr);
-    }
 
-    // Lưu vào localStorage của User
-    try {
-      const uId = user?._id || user?.id || '';
-      if (uId) {
-        const userKey = `user_rental_orders_${uId}`;
-        const existing = JSON.parse(localStorage.getItem(userKey) || '[]');
-        localStorage.setItem(userKey, JSON.stringify([newOrder, ...existing]));
-      }
-      // Ghi nhận lịch đã đặt
-      selectedRentItems.forEach((ri) => {
-        recordBookedDates(ri.id, startDate, endDate, `Đã có khách đặt đơn ${newOrder.orderCode}`);
-      });
-      window.dispatchEvent(new Event('storage'));
-    } catch {}
+      // Lưu vào localStorage của User
+      try {
+        const uId = user?._id || user?.id || '';
+        if (uId) {
+          const userKey = `user_rental_orders_${uId}`;
+          const existing = JSON.parse(localStorage.getItem(userKey) || '[]');
+          const ordersToStore =
+            createdSubOrders.length > 0 ? createdSubOrders : [{ ...newOrder, renterId: uId }];
+          localStorage.setItem(userKey, JSON.stringify([...ordersToStore, ...existing]));
+        }
+        // Ghi nhận lịch đã đặt kèm orderId và orderCode để bước Thanh toán tự loại trừ chính đơn này
+        selectedRentItems.forEach((ri) => {
+          recordBookedDates(ri.id, startDate, endDate, `Đã có khách đặt đơn ${newOrder.orderCode}`, {
+            orderId: String(newOrder._id || newOrder.id || ''),
+            orderCode: newOrder.orderCode,
+            status: 'PENDING',
+          });
+        });
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new Event('rental_order_updated'));
+      } catch {}
 
     // Xóa sản phẩm thuê đã đặt khỏi giỏ
     selectedRentItems.forEach((ri) => {

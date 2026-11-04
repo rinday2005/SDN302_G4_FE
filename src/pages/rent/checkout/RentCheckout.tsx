@@ -144,10 +144,18 @@ export const RentCheckout: React.FC = () => {
   }, [cart, id, location.state, existingOrder]);
 
   // ── 3. COMMON RENTAL DATES ("ngày thuê chung" cho toàn bộ thiết bị) ──
+  const currentExcludeOpts = useMemo(
+    () => ({
+      excludeOrderId: existingOrder?._id || queryOrderId || '',
+      excludeOrderCode: existingOrder?.orderCode || '',
+    }),
+    [existingOrder?._id, existingOrder?.orderCode, queryOrderId]
+  );
+
   const [startDate, setStartDate] = useState(() => {
     const fromItem = (rentItems[0] as { startDate?: string; id?: string; title?: string })?.startDate;
     const fromItemEnd = (rentItems[0] as { endDate?: string })?.endDate;
-    const bDates = getProductBookedDates(rentItems[0]);
+    const bDates = getProductBookedDates(rentItems[0], currentExcludeOpts);
     if (fromItem && !hasDateRangeConflict(fromItem, fromItemEnd || fromItem, bDates)) {
       return fromItem;
     }
@@ -157,7 +165,7 @@ export const RentCheckout: React.FC = () => {
   const [endDate, setEndDate] = useState(() => {
     const fromItem = (rentItems[0] as { startDate?: string; id?: string; title?: string })?.startDate;
     const fromItemEnd = (rentItems[0] as { endDate?: string })?.endDate;
-    const bDates = getProductBookedDates(rentItems[0]);
+    const bDates = getProductBookedDates(rentItems[0], currentExcludeOpts);
     if (fromItemEnd && fromItem && !hasDateRangeConflict(fromItem, fromItemEnd, bDates)) {
       return fromItemEnd;
     }
@@ -165,17 +173,19 @@ export const RentCheckout: React.FC = () => {
   });
   const [isChangingDates, setIsChangingDates] = useState(false);
 
-  // Tự động kiểm tra và chuyển ngày sang khoảng trống nếu rentItems thay đổi
+  // Tự động kiểm tra và chuyển ngày sang khoảng trống nếu rentItems thay đổi (chỉ áp dụng khi chưa có existingOrder)
   const [prevRentItems, setPrevRentItems] = useState(rentItems);
   if (prevRentItems !== rentItems) {
     setPrevRentItems(rentItems);
-    const firstItem = rentItems[0];
-    if (firstItem) {
-      const bDates = getProductBookedDates(firstItem);
-      if (hasDateRangeConflict(startDate, endDate, bDates)) {
-        const earliest = findEarliestAvailableRentalRange(bDates, 3);
-        setStartDate(earliest.startDate);
-        setEndDate(earliest.endDate);
+    if (!existingOrder && !queryOrderId) {
+      const firstItem = rentItems[0];
+      if (firstItem) {
+        const bDates = getProductBookedDates(firstItem, currentExcludeOpts);
+        if (hasDateRangeConflict(startDate, endDate, bDates)) {
+          const earliest = findEarliestAvailableRentalRange(bDates, 3);
+          setStartDate(earliest.startDate);
+          setEndDate(earliest.endDate);
+        }
       }
     }
   }
@@ -559,8 +569,12 @@ export const RentCheckout: React.FC = () => {
       return;
     }
 
+    // Khi thanh toán đơn hàng hiện tại (currentOrderId), loại trừ chính _id / orderCode của đơn này
     const conflictItem = rentItems.find((item) => {
-      const bDates = getProductBookedDates(item);
+      const bDates = getProductBookedDates(item, {
+        excludeOrderId: existingOrder?._id || queryOrderId || '',
+        excludeOrderCode: existingOrder?.orderCode || contractId || '',
+      });
       return hasDateRangeConflict(startDate, endDate, bDates);
     });
     if (conflictItem) {
@@ -637,15 +651,41 @@ export const RentCheckout: React.FC = () => {
       const uId = user?._id || user?.id || '';
       const userKey = uId ? `user_rental_orders_${uId}` : null;
 
-      // Only save to the currently logged in user's key to ensure strict account isolation
+      // Only save to the currently logged in user's key to ensure strict account isolation (update in-place if existingOrder)
       if (userKey) {
         const userOrders = JSON.parse(localStorage.getItem(userKey) || '[]');
-        localStorage.setItem(userKey, JSON.stringify([newOrder, ...userOrders]));
+        const cleanTargetCode = contractId.replace(/^#/, '').trim().toLowerCase();
+        const cleanTargetId = String(existingOrder?._id || queryOrderId || '').trim().toLowerCase();
+        const filteredOrders = Array.isArray(userOrders)
+          ? userOrders.filter((o: { _id?: string; id?: string; orderCode?: string }) => {
+              const oId = String(o._id || o.id || '').trim().toLowerCase();
+              const oCode = (o.orderCode || '').replace(/^#/, '').trim().toLowerCase();
+              return !(
+                (cleanTargetId && oId === cleanTargetId) ||
+                (cleanTargetCode && oCode === cleanTargetCode)
+              );
+            })
+          : [];
+        localStorage.setItem(
+          userKey,
+          JSON.stringify([
+            {
+              ...newOrder,
+              _id: existingOrder?._id || queryOrderId || undefined,
+              id: existingOrder?._id || queryOrderId || undefined,
+            },
+            ...filteredOrders,
+          ])
+        );
       }
 
-      // Record booked dates into shared storage so calendar immediately blocks these dates for other users
+      // Record booked dates into shared storage with orderId & orderCode metadata so self-exclusion works accurately
       rentItems.forEach((ri) => {
-        recordBookedDates(ri.id, startDate, endDate, `Đã có khách đặt đơn ${contractId}`);
+        recordBookedDates(ri.id, startDate, endDate, `Đã có khách đặt đơn ${contractId}`, {
+          orderId: existingOrder?._id || queryOrderId || '',
+          orderCode: contractId.replace(/^#/, ''),
+          status: 'WAITING_PAYMENT',
+        });
       });
     } catch {
       // ignore

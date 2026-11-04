@@ -48,7 +48,11 @@ export interface RentalOrderApi {
   _id: string;
   orderCode: string;
   renterId: string;
-  shopOwnerId?: string;
+  shopOwnerId?: string | { _id?: string; fullName?: string; shopProfile?: { shopName?: string } };
+  shopName?: string;
+  orderGroupId?: string;
+  subOrders?: RentalOrderApi[];
+  orderGroup?: Record<string, unknown>;
   items: RentalOrderItemApi[];
   startDate: string;
   endDate: string;
