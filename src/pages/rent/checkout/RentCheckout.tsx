@@ -10,6 +10,7 @@ import {
 import { redirectToVnPayGateway } from '../../../services/payment.api';
 import { getRentalOrderByIdApi, type RentalOrderApi } from '../../../services/order.api';
 import { getKycStatusApi } from '../../../services/kyc.api';
+import { getPublicRentProductsApi } from '../../../services/rentProduct.api';
 import {
   getProductBookedDates,
   hasDateRangeConflict,
@@ -375,6 +376,50 @@ export const RentCheckout: React.FC = () => {
     return item.price * 8;
   };
 
+  // Map tra cứu tên Shop riêng của từng sản phẩm trong đơn thuê
+  const [productShopMap, setProductShopMap] = useState<
+    Record<string, { shopId: string; shopName: string; shopLocation: string }>
+  >({});
+
+  useEffect(() => {
+    let isMounted = true;
+    getPublicRentProductsApi({ limit: 200 })
+      .then((list) => {
+        if (!isMounted || !Array.isArray(list)) return;
+        const nextMap: Record<string, { shopId: string; shopName: string; shopLocation: string }> = {};
+        list.forEach((p) => {
+          const ownerObj = typeof p.ownerId === 'object' && p.ownerId ? p.ownerId : null;
+          const sId =
+            (p as { shopId?: string }).shopId ||
+            ownerObj?._id ||
+            (typeof p.ownerId === 'string' ? p.ownerId : '') ||
+            '6ac39f4b216ef5928d9c46bb';
+          const sName =
+            (p as { shopName?: string }).shopName ||
+            ownerObj?.shopProfile?.shopName ||
+            ownerObj?.fullName ||
+            'Light&Night Shop';
+          const sLoc =
+            p.location ||
+            ownerObj?.shopProfile?.cityRegion ||
+            ownerObj?.address?.province ||
+            'Đà Nẵng';
+          if (p._id) {
+            nextMap[String(p._id)] = {
+              shopId: String(sId),
+              shopName: sName,
+              shopLocation: sLoc,
+            };
+          }
+        });
+        setProductShopMap(nextMap);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Itemized rental fees
   const itemizedCalculations = useMemo(() => {
     return rentItems.map((item) => {
@@ -382,6 +427,25 @@ export const RentCheckout: React.FC = () => {
       const dailyPrice = item.price;
       const itemRentTotal = dailyPrice * rentalDays * qty;
       const itemDeposit = parseDeposit(item) * qty;
+      const mapInfo = productShopMap[String(item.id)];
+      const rawShopName = (item as { shopName?: string }).shopName?.trim();
+      const isGeneric =
+        !rawShopName ||
+        rawShopName === 'Atelier Chronos & Optics Ltd.' ||
+        rawShopName === 'ReUse Official Shop' ||
+        rawShopName === 'ReUse Hub Certified Shop';
+      const resolvedShopName =
+        mapInfo?.shopName || (!isGeneric ? rawShopName : '') || 'Light&Night Shop';
+      const resolvedShopId =
+        mapInfo?.shopId ||
+        (item as { shopId?: string }).shopId ||
+        (item as { shopOwnerId?: string }).shopOwnerId ||
+        '6ac39f4b216ef5928d9c46bb';
+      const resolvedShopLocation =
+        mapInfo?.shopLocation ||
+        (item as { shopLocation?: string }).shopLocation ||
+        item.location ||
+        'Đà Nẵng';
 
       return {
         ...item,
@@ -389,9 +453,12 @@ export const RentCheckout: React.FC = () => {
         dailyPrice,
         itemRentTotal,
         itemDeposit,
+        resolvedShopName,
+        resolvedShopId,
+        resolvedShopLocation,
       };
     });
-  }, [rentItems, rentalDays]);
+  }, [rentItems, rentalDays, productShopMap]);
 
   // Subtotals
   const totalRentFee = useMemo(() => {
@@ -885,7 +952,33 @@ export const RentCheckout: React.FC = () => {
                           : `Số lượng: ${item.qty} bộ phụ kiện bảo chứng tiêu chuẩn`;
 
                       return (
-                        <article key={item.id} className="py-5 flex flex-col sm:flex-row gap-5 items-start">
+                        <article key={item.id} className="py-5 flex flex-col gap-3.5">
+                          {/* Thanh tiêu đề Tên Shop riêng tương ứng với từng sản phẩm */}
+                          <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-[#FAF8F5] border border-[#EFECE6]">
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-[17px] text-[#2D5A43]">
+                                storefront
+                              </span>
+                              <Link
+                                to={`/shops/${item.resolvedShopId}`}
+                                className="font-bold text-xs sm:text-sm text-[#1E1E1E] hover:text-[#2D5A43] hover:underline transition-colors"
+                              >
+                                {item.resolvedShopName}
+                              </Link>
+                              <span
+                                className="material-symbols-outlined text-[14px] text-emerald-600"
+                                title="Cửa hàng đã xác minh định danh KYC"
+                              >
+                                verified
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-stone-500 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[13px]">location_on</span>
+                              <span>{item.resolvedShopLocation}</span>
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-5 items-start">
                           {/* Item Image / Badge */}
                           <div className="relative w-full sm:w-28 h-28 bg-[#F5F2EB] rounded-xl overflow-hidden border border-[#E5E0D8] shrink-0 flex items-center justify-center group">
                             <img
@@ -968,6 +1061,7 @@ export const RentCheckout: React.FC = () => {
                                 </p>
                               </div>
                             </div>
+                          </div>
                           </div>
                         </article>
                       );

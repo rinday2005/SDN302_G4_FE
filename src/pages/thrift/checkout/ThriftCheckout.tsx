@@ -12,6 +12,7 @@ import {
   updateThriftOrderStatusApi,
   type ThriftOrderApi,
 } from '../../../services/thriftOrder.api';
+import { getPublicThriftListingsApi } from '../../../services/thrift.api';
 import {
   getUserProfileAddress,
   getShippingZoneInfo,
@@ -133,6 +134,57 @@ export const ThriftCheckout: React.FC = () => {
     return val.toLocaleString('vi-VN') + '₫';
   };
 
+  // Map tra cứu tên Shop riêng của từng sản phẩm trong đơn thanh lý
+  const [productShopMap, setProductShopMap] = useState<
+    Record<string, { shopId: string; shopName: string; shopLocation: string }>
+  >({});
+
+  useEffect(() => {
+    let isMounted = true;
+    getPublicThriftListingsApi()
+      .then((list) => {
+        if (!isMounted || !Array.isArray(list)) return;
+        const nextMap: Record<string, { shopId: string; shopName: string; shopLocation: string }> = {};
+        list.forEach((t) => {
+          const ownerObj = typeof t.ownerId === 'object' && t.ownerId ? t.ownerId : null;
+          const sellerObj = typeof t.sellerId === 'object' && t.sellerId ? t.sellerId : null;
+          const sId =
+            (t as { shopId?: string }).shopId ||
+            ownerObj?._id ||
+            sellerObj?._id ||
+            (typeof t.ownerId === 'string' ? t.ownerId : '') ||
+            (typeof t.sellerId === 'string' ? t.sellerId : '') ||
+            '6ac39f4b216ef5928d9c46bb';
+          const sName =
+            (t as { shopName?: string }).shopName ||
+            ownerObj?.shopProfile?.shopName ||
+            sellerObj?.shopProfile?.shopName ||
+            ownerObj?.fullName ||
+            sellerObj?.fullName ||
+            'Light&Night Shop';
+          const sLoc =
+            t.location ||
+            ownerObj?.shopProfile?.cityRegion ||
+            sellerObj?.shopProfile?.cityRegion ||
+            ownerObj?.address?.province ||
+            sellerObj?.address?.province ||
+            'Đà Nẵng';
+          if (t._id) {
+            nextMap[String(t._id)] = {
+              shopId: String(sId),
+              shopName: sName,
+              shopLocation: sLoc,
+            };
+          }
+        });
+        setProductShopMap(nextMap);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const itemizedList = useMemo(() => {
     return thriftItems.map((item, index) => {
       const qty = item.quantity || 1;
@@ -151,6 +203,25 @@ export const ThriftCheckout: React.FC = () => {
           : (item.sizeOrSpec || 'Kèm chứng thư số bảo chứng độc bản 1-of-1');
       const warranty = 'warranty' in item ? (item.warranty as string) : 'Bảo hành cơ học: 12 tháng';
       const vaultOrigin = 'vaultOrigin' in item ? (item.vaultOrigin as string) : 'Curated Archive Tokyo';
+      const mapInfo = productShopMap[String(item.id)];
+      const rawShopName = (item as { shopName?: string }).shopName?.trim();
+      const isGeneric =
+        !rawShopName ||
+        rawShopName === 'Atelier Chronos & Optics Ltd.' ||
+        rawShopName === 'ReUse Official Shop' ||
+        rawShopName === 'ReUse Hub Certified Shop';
+      const resolvedShopName =
+        mapInfo?.shopName || (!isGeneric ? rawShopName : '') || 'Light&Night Shop';
+      const resolvedShopId =
+        mapInfo?.shopId ||
+        (item as { shopId?: string }).shopId ||
+        (item as { shopOwnerId?: string }).shopOwnerId ||
+        '6ac39f4b216ef5928d9c46bb';
+      const resolvedShopLocation =
+        mapInfo?.shopLocation ||
+        (item as { shopLocation?: string }).shopLocation ||
+        (item as { location?: string }).location ||
+        'Đà Nẵng';
 
       return {
         ...item,
@@ -164,9 +235,12 @@ export const ThriftCheckout: React.FC = () => {
         specDetails,
         warranty,
         vaultOrigin,
+        resolvedShopName,
+        resolvedShopId,
+        resolvedShopLocation,
       };
     });
-  }, [thriftItems]);
+  }, [thriftItems, productShopMap]);
 
   const itemsSubtotal = useMemo(() => {
     return itemizedList.reduce((sum, item) => sum + item.totalItemPrice, 0);
@@ -538,8 +612,34 @@ export const ThriftCheckout: React.FC = () => {
                 {itemizedList.map((item) => (
                   <article
                     key={item.id}
-                    className="bg-[#F7F3EC] rounded-xl p-4 flex flex-col sm:flex-row gap-4 transition-all hover:shadow-xs border border-[#E6E2DB]/70"
+                    className="bg-[#F7F3EC] rounded-xl p-4 flex flex-col gap-3.5 transition-all hover:shadow-xs border border-[#E6E2DB]/70"
                   >
+                    {/* Thanh tiêu đề Tên Shop riêng tương ứng với từng sản phẩm */}
+                    <div className="flex items-center justify-between px-3.5 py-2 rounded-lg bg-white border border-[#E6E2DB]/80">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[17px] text-[#576151]">
+                          storefront
+                        </span>
+                        <Link
+                          to={`/shops/${item.resolvedShopId}`}
+                          className="font-bold text-xs sm:text-sm text-[#141310] hover:text-[#576151] hover:underline transition-colors"
+                        >
+                          {item.resolvedShopName}
+                        </Link>
+                        <span
+                          className="material-symbols-outlined text-[14px] text-emerald-600"
+                          title="Cửa hàng đã xác minh định danh KYC"
+                        >
+                          verified
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-[#7B766F] flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">location_on</span>
+                        <span>{item.resolvedShopLocation}</span>
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4">
                     {/* Item Thumbnail */}
                     <div className="sm:w-40 h-40 rounded-xl overflow-hidden shrink-0 relative bg-[#EBE8E1]">
                       <img
@@ -596,6 +696,7 @@ export const ThriftCheckout: React.FC = () => {
                           {formatCurrency(item.totalItemPrice)}
                         </span>
                       </div>
+                    </div>
                     </div>
                   </article>
                 ))}

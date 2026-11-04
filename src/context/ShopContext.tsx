@@ -123,6 +123,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Nạp sản phẩm RENT từ MongoDB và tính số lượng tồn kho theo đơn hàng thực tế
   const fetchProductsFromDB = useCallback(async () => {
+    const role = auth?.user?.role;
+    if (role !== 'SHOP_OWNER' && role !== 'ADMIN') {
+      return;
+    }
     try {
       // 1. Lấy danh sách sản phẩm riêng của Shop Owner hiện tại từ MongoDB
       let apiProducts = await getShopRentProductsApi();
@@ -251,7 +255,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.warn('Lỗi nạp sản phẩm RENT từ MongoDB:', err);
     }
-  }, [currentOwnerId]);
+  }, [currentOwnerId, auth?.user?.role]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

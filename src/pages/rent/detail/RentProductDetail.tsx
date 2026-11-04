@@ -45,9 +45,9 @@ export const RentProductDetail: React.FC = () => {
         const price = Number(p.pricePerDay) || 100000;
         const deposit = Number(p.depositAmount) || (price * 5);
 
-        const rawOwner = typeof p.ownerId === 'object' && p.ownerId ? (p.ownerId as { _id?: string; fullName?: string; kycStatus?: string; address?: { province?: string }; shopProfile?: { shopName?: string; cityRegion?: string } }) : null;
+        const rawOwner = typeof p.ownerId === 'object' && p.ownerId ? (p.ownerId as { _id?: string; fullName?: string; kycStatus?: string; address?: { province?: string }; shopProfile?: { shopName?: string; cityRegion?: string; rating?: number } }) : null;
         const ownerIdStr = (p as unknown as { shopId?: string }).shopId || rawOwner?._id || (typeof p.ownerId === 'string' ? p.ownerId : '') || '6ac39f4b216ef5928d9c46bb';
-        const shopName = (p as unknown as { shopName?: string }).shopName || rawOwner?.shopProfile?.shopName || rawOwner?.fullName || 'Atelier Chronos & Optics Ltd.';
+        const shopName = (p as unknown as { shopName?: string }).shopName || rawOwner?.shopProfile?.shopName || rawOwner?.fullName || 'Light&Night Shop';
         const isKyc = rawOwner?.kycStatus === 'APPROVED' || rawOwner?.kycStatus === 'VERIFIED';
         const shopLocation = p.location || rawOwner?.shopProfile?.cityRegion || rawOwner?.address?.province || 'Đà Nẵng';
         const avatarLetters = (shopName || 'Shop').slice(0, 2).toUpperCase();
@@ -60,8 +60,8 @@ export const RentProductDetail: React.FC = () => {
           category: catName.toUpperCase(),
           location: shopLocation,
           ownerId: ownerIdStr,
-          rating: 5.0,
-          reviewCount: 1,
+          rating: typeof rawOwner?.shopProfile?.rating === 'number' ? rawOwner.shopProfile.rating : 0,
+          reviewCount: 0,
           condition: condLabel,
           grade: cond === 'NEW' ? 'Grade Mint' : 'Grade A+',
           shutterOrUsage: `Lưu ký xác thực: ${condLabel}`,
@@ -251,10 +251,11 @@ export const RentProductDetail: React.FC = () => {
         endDate: endDate,
         gradeBadge: product.grade,
         size: product.size || 'L',
-        shopName: product.shopOwner?.name || 'Atelier Chronos & Optics Ltd.',
+        shopId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
+        shopName: product.shopOwner?.name || 'Light&Night Shop',
         shopOwnerId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
         shopAvatar: product.shopOwner?.avatarText || 'RE',
-        shopLocation: product.shopOwner?.successOrders || 'Hồ Chí Minh',
+        shopLocation: product.location || 'Đà Nẵng',
         isShopVerified: product.shopOwner?.isKycVerified ?? true,
       });
       navigate('/cart');
@@ -284,10 +285,11 @@ export const RentProductDetail: React.FC = () => {
       endDate: endDate,
       gradeBadge: product.grade,
       size: product.size || 'L',
-      shopName: product.shopOwner?.name || 'Atelier Chronos & Optics Ltd.',
-        shopOwnerId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
+      shopId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
+      shopName: product.shopOwner?.name || 'Light&Night Shop',
+      shopOwnerId: product.ownerId || '6ac39f4b216ef5928d9c46bb',
       shopAvatar: product.shopOwner?.avatarText || 'RE',
-      shopLocation: product.shopOwner?.successOrders || 'Hồ Chí Minh',
+      shopLocation: product.location || 'Đà Nẵng',
       isShopVerified: product.shopOwner?.isKycVerified ?? true,
     });
     showToast('Đã thêm sản phẩm vào giỏ hàng thuê tuần hoàn!', 'check_circle', 'success');

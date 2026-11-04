@@ -28,6 +28,7 @@ const ProductCard: React.FC<{
   const {
     id, title, categoryLabel, price, rating, reviewCount,
     conditionLabel, location, deposit, available, href, image,
+    shopId, shopOwnerId, shopName, shopAvatar, shopLocation, isShopVerified,
   } = product;
   const isSaved = isWishlisted(id);
 
@@ -48,6 +49,12 @@ const ProductCard: React.FC<{
       deposit,
       categoryLabel,
       gradeBadge: conditionLabel,
+      shopId,
+      shopOwnerId: shopOwnerId || shopId,
+      shopName,
+      shopAvatar,
+      shopLocation: shopLocation || location,
+      isShopVerified: isShopVerified ?? true,
       quantity: 1,
     });
   };
@@ -260,30 +267,48 @@ const RentMarketplace: React.FC = () => {
             const condLabel = cond === 'NEW' ? 'Mới 100%' : cond === 'LIKE_NEW' ? 'Như mới 99%' : 'Rất tốt 95%';
             const img = Array.isArray(item.images) && item.images.length > 0 ? normalizeImageUrl(item.images[0]) : '';
             const dep = item.depositAmount ? `${Number(item.depositAmount).toLocaleString('vi-VN')}đ` : '0đ';
-            return {
-              id: item._id,
-              title: item.name,
-              category: catSlug,
-              categoryLabel: catName,
-              price: Number(item.pricePerDay) || 0,
-              rating: 5.0,
-              reviewCount: 1,
-              condition: cond === 'LIKE_NEW' ? 'Như mới' : 'Rất tốt',
-              conditionLabel: condLabel,
-              location: (function() {
-                const owner = typeof item.ownerId === 'object' && item.ownerId ? item.ownerId : null;
-                const rawLoc = item.location || owner?.shopProfile?.cityRegion || owner?.address?.province || 'Đà Nẵng';
+              const ownerObj = typeof item.ownerId === 'object' && item.ownerId ? item.ownerId : null;
+              const resolvedShopId =
+                (item as { shopId?: string }).shopId ||
+                ownerObj?._id ||
+                (typeof item.ownerId === 'string' ? item.ownerId : '') ||
+                '6ac39f4b216ef5928d9c46bb';
+              const resolvedShopName =
+                (item as { shopName?: string }).shopName ||
+                ownerObj?.shopProfile?.shopName ||
+                ownerObj?.fullName ||
+                'Light&Night Shop';
+              const resolvedShopLocation = (function() {
+                const rawLoc = item.location || ownerObj?.shopProfile?.cityRegion || ownerObj?.address?.province || 'Đà Nẵng';
                 const lower = String(rawLoc).toLowerCase();
                 if (lower.includes('hồ chí minh') || lower.includes('ho chi minh') || lower.includes('hcm') || lower.includes('sài gòn')) return 'TP. Hồ Chí Minh';
                 if (lower.includes('hà nội') || lower.includes('ha noi')) return 'Hà Nội';
                 if (lower.includes('đà nẵng') || lower.includes('da nang')) return 'Đà Nẵng';
                 return rawLoc;
-              })(),
-              deposit: dep,
-              available: (item.totalQuantity || 1) > 0,
-              href: `/rent/products/${item._id}`,
-              image: img,
-            };
+              })();
+
+              return {
+                id: item._id,
+                title: item.name,
+                category: catSlug,
+                categoryLabel: catName,
+                price: Number(item.pricePerDay) || 0,
+                rating: typeof ownerObj?.shopProfile?.rating === 'number' ? ownerObj.shopProfile.rating : 0,
+                reviewCount: 0,
+                condition: cond === 'LIKE_NEW' ? 'Như mới' : 'Rất tốt',
+                conditionLabel: condLabel,
+                location: resolvedShopLocation,
+                deposit: dep,
+                available: (item.totalQuantity || 1) > 0,
+                href: `/rent/products/${item._id}`,
+                image: img,
+                shopId: String(resolvedShopId),
+                shopOwnerId: String(resolvedShopId),
+                shopName: resolvedShopName,
+                shopAvatar: ownerObj?.shopProfile?.avatarUrl || ownerObj?.avatarUrl || '',
+                shopLocation: resolvedShopLocation,
+                isShopVerified: true,
+              };
           });
           setDbProducts(mapped);
         }

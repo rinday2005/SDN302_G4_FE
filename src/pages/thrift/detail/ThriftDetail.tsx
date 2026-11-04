@@ -82,7 +82,7 @@ export const ThriftDetail: React.FC = () => {
           const rawData = data as unknown as { shopId?: string; shopName?: string; location?: string; ownerId?: { _id?: string; shopProfile?: { shopName?: string; cityRegion?: string }; fullName?: string; kycStatus?: string; address?: { province?: string } }; verifiedBy?: string };
           const owner = typeof rawData?.ownerId === 'object' && rawData?.ownerId ? rawData.ownerId : null;
           const ownerIdStr = rawData?.shopId || owner?._id || (typeof data.ownerId === 'string' ? data.ownerId : '') || '6ac39f4b216ef5928d9c46bb';
-          const sName = rawData?.shopName || owner?.shopProfile?.shopName || owner?.fullName || rawData?.verifiedBy || 'Atelier Chronos & Optics Ltd.';
+          const sName = rawData?.shopName || owner?.shopProfile?.shopName || owner?.fullName || rawData?.verifiedBy || 'Light&Night Shop';
           const sKyc = owner?.kycStatus === 'APPROVED' || owner?.kycStatus === 'VERIFIED';
           const sLoc = rawData?.location || owner?.shopProfile?.cityRegion || owner?.address?.province || data.location || 'Hồ Chí Minh';
 
@@ -172,8 +172,9 @@ export const ThriftDetail: React.FC = () => {
           gradeBadge: product.conditionLabel,
           quantity: 1,
           size: showSizeSelector ? selectedSize : undefined,
-          shopName: shopOwnerInfo.name || 'Atelier Chronos & Optics Ltd.',
-        shopOwnerId: shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb',
+          shopId: shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb',
+          shopName: shopOwnerInfo.name || 'Light&Night Shop',
+          shopOwnerId: shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb',
           shopAvatar: shopOwnerInfo.avatarText || 'RH',
           shopLocation: shopOwnerInfo.location || 'Đà Nẵng',
           isShopVerified: shopOwnerInfo.isKycVerified,
@@ -194,8 +195,9 @@ export const ThriftDetail: React.FC = () => {
       gradeBadge: product.conditionLabel,
       quantity: 1,
       size: showSizeSelector ? selectedSize : undefined,
-      shopName: shopOwnerInfo.name || 'Atelier Chronos & Optics Ltd.',
-        shopOwnerId: shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb',
+      shopId: shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb',
+      shopName: shopOwnerInfo.name || 'Light&Night Shop',
+      shopOwnerId: shopOwnerInfo.id || '6ac39f4b216ef5928d9c46bb',
       shopAvatar: shopOwnerInfo.avatarText || 'RH',
       shopLocation: shopOwnerInfo.location || 'Đà Nẵng',
       isShopVerified: shopOwnerInfo.isKycVerified,

@@ -98,24 +98,40 @@ export const ThriftMarketplace: React.FC = () => {
                         else if (condStr.includes('98') || condStr.includes('mint')) conditionLevel = '98';
                         else if (condStr.includes('90') || condStr.includes('used') || condStr.includes('good')) conditionLevel = '90';
 
+                        const sellerObj = typeof item.sellerId === 'object' && item.sellerId ? item.sellerId : null;
+                        const ownerObj = typeof item.ownerId === 'object' && item.ownerId ? item.ownerId : null;
+                        const resolvedShopId =
+                            (item as { shopId?: string }).shopId ||
+                            ownerObj?._id ||
+                            sellerObj?._id ||
+                            (typeof item.ownerId === 'string' ? item.ownerId : '') ||
+                            (typeof item.sellerId === 'string' ? item.sellerId : '') ||
+                            '6ac39f4b216ef5928d9c46bb';
+                        const resolvedShopName =
+                            (item as { shopName?: string }).shopName ||
+                            ownerObj?.shopProfile?.shopName ||
+                            sellerObj?.shopProfile?.shopName ||
+                            ownerObj?.fullName ||
+                            sellerObj?.fullName ||
+                            'Light&Night Shop';
+                        const resolvedShopLocation = (function() {
+                            const rawLoc = item.location || sellerObj?.shopProfile?.cityRegion || sellerObj?.address?.province || ownerObj?.shopProfile?.cityRegion || ownerObj?.address?.province || 'Đà Nẵng';
+                            const lower = String(rawLoc).toLowerCase();
+                            if (lower.includes('hồ chí minh') || lower.includes('ho chi minh') || lower.includes('hcm') || lower.includes('sài gòn')) return 'TP. Hồ Chí Minh';
+                            if (lower.includes('hà nội') || lower.includes('ha noi')) return 'Hà Nội';
+                            if (lower.includes('đà nẵng') || lower.includes('da nang')) return 'Đà Nẵng';
+                            return rawLoc;
+                        })();
+
                         return {
                             id: item._id,
                             slug: item.slug || item._id,
                             title: item.name || item.title || 'Sản phẩm THRIFT',
                             category: catSlug as ThriftProduct['category'],
                             categoryLabel: catName,
-                            location: (function() {
-                                const seller = typeof item.sellerId === 'object' && item.sellerId ? item.sellerId : null;
-                                const owner = typeof item.ownerId === 'object' && item.ownerId ? item.ownerId : null;
-                                const rawLoc = item.location || seller?.shopProfile?.cityRegion || seller?.address?.province || owner?.shopProfile?.cityRegion || owner?.address?.province || 'Đà Nẵng';
-                                const lower = String(rawLoc).toLowerCase();
-                                if (lower.includes('hồ chí minh') || lower.includes('ho chi minh') || lower.includes('hcm') || lower.includes('sài gòn')) return 'TP. Hồ Chí Minh';
-                                if (lower.includes('hà nội') || lower.includes('ha noi')) return 'Hà Nội';
-                                if (lower.includes('đà nẵng') || lower.includes('da nang')) return 'Đà Nẵng';
-                                return rawLoc;
-                            })(),
-                            rating: 5.0,
-                            reviewCount: 1,
+                            location: resolvedShopLocation,
+                            rating: typeof ownerObj?.shopProfile?.rating === 'number' ? ownerObj.shopProfile.rating : 0,
+                            reviewCount: 0,
                             condition: item.condition === 'LIKE_NEW' ? 'Grade Mint (99%)' : item.condition === 'GOOD' ? 'Tốt (90%)' : item.condition || 'Rất tốt (95%)',
                             conditionLevel,
                             source: (item.sourceType === 'rent' || item.source === 'rent' || item.sourceType === 'RENTAL_PRODUCT') ? 'rent' : 'used',
@@ -127,6 +143,12 @@ export const ThriftMarketplace: React.FC = () => {
                             status: item.status || 'APPROVED',
                             quantity: item.quantity !== undefined ? Number(item.quantity) : 5,
                             isSold: false,
+                            shopId: String(resolvedShopId),
+                            shopOwnerId: String(resolvedShopId),
+                            shopName: resolvedShopName,
+                            shopAvatar: ownerObj?.shopProfile?.avatarUrl || sellerObj?.shopProfile?.avatarUrl || '',
+                            shopLocation: resolvedShopLocation,
+                            isShopVerified: true,
                         };
                     });
                     setDbProducts(mapped);
@@ -215,6 +237,12 @@ export const ThriftMarketplace: React.FC = () => {
             location: product.location,
             categoryLabel: product.category,
             gradeBadge: product.condition,
+            shopId: product.shopId,
+            shopOwnerId: product.shopOwnerId || product.shopId,
+            shopName: product.shopName,
+            shopAvatar: product.shopAvatar,
+            shopLocation: product.shopLocation || product.location,
+            isShopVerified: product.isShopVerified ?? true,
             quantity: 1,
         });
     };

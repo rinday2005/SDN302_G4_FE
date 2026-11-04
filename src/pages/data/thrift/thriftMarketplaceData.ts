@@ -22,6 +22,12 @@ export interface ThriftProduct {
   sourceType?: string;
   name?: string;
   isSold?: boolean;
+  shopId?: string;
+  shopOwnerId?: string;
+  shopName?: string;
+  shopAvatar?: string;
+  shopLocation?: string;
+  isShopVerified?: boolean;
 }
 
 export type ThriftSortKey = 'recommended' | 'price-asc' | 'price-desc' | 'latest';

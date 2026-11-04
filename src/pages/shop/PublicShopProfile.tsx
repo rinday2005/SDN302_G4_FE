@@ -56,7 +56,8 @@ export const PublicShopProfile: React.FC = () => {
             slogan: 'Bảo tồn giá trị trường tồn • Tuần hoàn di sản cao cấp',
             specialization: 'Xưởng lưu ký & cho thuê trang phục, thiết bị thời trang cao cấp tuần hoàn.',
             description: 'Light&Night Shop chuyên giám định, bảo tồn và lưu ký thiết bị quang học cùng trang phục dạ tiệc cao cấp với chế độ kiểm soát nhiệt ẩm chuẩn quốc tế.',
-            rating: 5.0,
+            rating: 0,
+            reviewCount: 0,
             establishedYear: 2024,
             kycStatus: 'APPROVED',
             hotline: '0901234567',
@@ -204,7 +205,7 @@ export const PublicShopProfile: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-[#FBF9F5] text-[#1C1A18] min-h-screen font-sans pb-20">
+    <div className="no-reveal w-full bg-[#FBF9F5] text-[#1C1A18] min-h-screen font-sans pb-20">
       {/* ── BREADCRUMB ── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-3">
         <nav className="flex items-center gap-2 text-xs text-[#78736A] uppercase tracking-wider">
@@ -262,7 +263,12 @@ export const PublicShopProfile: React.FC = () => {
                   </span>
                   <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-900 text-[10px] font-bold rounded">
                     <span className="material-symbols-outlined text-[13px] text-amber-500">star</span>
-                    <span>{(shop?.rating || 5.0).toFixed(1)} / 5.0</span>
+                    <span>
+                      {(typeof shop?.rating === 'number' ? shop.rating : 0).toFixed(1)} / 5.0
+                      {typeof shop?.reviewCount === 'number'
+                        ? ` (${shop.reviewCount} đánh giá)`
+                        : ''}
+                    </span>
                   </div>
                 </div>
 
