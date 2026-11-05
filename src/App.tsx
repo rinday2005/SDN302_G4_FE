@@ -182,6 +182,7 @@ const App = () => {
             <Route path="/shop-view/:shopId" element={<PublicShopProfile />} />
             <Route path="/payment/vnpay-return" element={<PaymentReturn />} />
             <Route path="/payments/vnpay-return" element={<PaymentReturn />} />
+            <Route path="/payment-return" element={<PaymentReturn />} />
             <Route path="/payment-success" element={<PaymentSuccess />} />
             <Route path="/payment-failed" element={<PaymentFailed />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
