@@ -70,6 +70,48 @@ export const ShopChatDrawer: React.FC = () => {
     }
   }, [messages, activeConversation, isCustomerTyping]);
 
+  // Bóc tách nội dung tin nhắn cốt lõi (bỏ qua mọi trích dẫn cũ để không bao giờ bị lồng nhau)
+  const extractCoreMessage = (rawText: string): string => {
+    if (!rawText) return "";
+    const segments = rawText.split("\n\n");
+    const lastSegment = segments[segments.length - 1] || rawText;
+    return lastSegment.replace(/^(>\s*(\[[^\]]+\]:\s*)*)+/, "").trim();
+  };
+
+  // Phân tích tin nhắn thành: Tên người được trả lời, nội dung câu được trả lời, và nội dung tin nhắn chính
+  const parseReplyAndContent = (rawText: string) => {
+    if (!rawText) return { replySender: null, replySnippet: null, actualContent: "" };
+
+    if (rawText.startsWith("> ")) {
+      const parts = rawText.split("\n\n");
+      if (parts.length >= 2) {
+        const quoteHeader = parts[0];
+        const actualContent = extractCoreMessage(parts.slice(1).join("\n\n"));
+
+        // Lấy tên người gửi trong dấu ngoặc vuông []
+        const nameMatch = quoteHeader.match(/\[([^\]]+)\]/);
+        const replySender = nameMatch ? nameMatch[1].replace(/^reply:/, "") : "Đã trả lời";
+
+        // Lấy nội dung câu được trích dẫn (loại bỏ các prefix > và [Tên]:)
+        const lastColonIdx = quoteHeader.lastIndexOf(":");
+        let replySnippet = lastColonIdx !== -1 ? quoteHeader.slice(lastColonIdx + 1) : quoteHeader;
+        replySnippet = replySnippet.replace(/^(>\s*(\[[^\]]+\]:\s*)*)+/, "").trim();
+
+        return {
+          replySender,
+          replySnippet,
+          actualContent: actualContent || rawText,
+        };
+      }
+    }
+
+    return {
+      replySender: null,
+      replySnippet: null,
+      actualContent: rawText,
+    };
+  };
+
   // Xử lý gửi tin nhắn
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -78,7 +120,8 @@ export const ShopChatDrawer: React.FC = () => {
 
     let messageToSend = text;
     if (replyingTo) {
-      messageToSend = `> [${replyingTo.senderName}]: ${replyingTo.text}\n\n${text}`;
+      const coreQuoted = extractCoreMessage(replyingTo.text);
+      messageToSend = `> [${replyingTo.senderName}]: ${coreQuoted}\n\n${text}`;
     }
 
     setInputVal("");
@@ -89,24 +132,32 @@ export const ShopChatDrawer: React.FC = () => {
     await sendMessage(messageToSend);
   };
 
-  // Helper hiển thị tin nhắn kèm khối trích dẫn trả lời nếu có
-  const renderMessageContent = (text: string) => {
-    if (text.startsWith("> ")) {
-      const parts = text.split("\n\n");
-      if (parts.length >= 2) {
-        const quote = parts[0].replace(/^>\s*/, "");
-        const actualMessage = parts.slice(1).join("\n\n");
-        return (
-          <div>
-            <div className="mb-1.5 pl-2 py-0.5 border-l-2 border-current/40 bg-black/5 rounded-r text-[11px] opacity-80 italic line-clamp-2">
-              {quote}
+  // Helper hiển thị tin nhắn chuẩn phong cách Zalo / Messenger (khối trích dẫn gọn gàng, không lặp lại)
+  const renderMessageContent = (rawText: string, isMe: boolean) => {
+    const { replySender, replySnippet, actualContent } = parseReplyAndContent(rawText);
+
+    return (
+      <div className="flex flex-col">
+        {replySnippet && (
+          <div
+            className={`mb-2 px-2.5 py-1.5 rounded-xl text-[11px] leading-snug border-l-4 transition-all ${
+              isMe
+                ? "bg-white/15 border-amber-400 text-stone-200"
+                : "bg-black/5 border-[#141310] text-[#57534e]"
+            }`}
+          >
+            <div className="font-bold flex items-center gap-1 text-[10px] uppercase tracking-wider mb-0.5 opacity-90">
+              <span className="material-symbols-outlined text-[13px]">reply</span>
+              <span>{replySender || "Đã trả lời"}</span>
             </div>
-            <div className="whitespace-pre-wrap">{actualMessage}</div>
+            <p className="line-clamp-1 italic truncate opacity-85">
+              {replySnippet}
+            </p>
           </div>
-        );
-      }
-    }
-    return <div className="whitespace-pre-wrap">{text}</div>;
+        )}
+        <div className="whitespace-pre-wrap break-words">{actualContent}</div>
+      </div>
+    );
   };
 
   // Xử lý typing indicator
@@ -470,7 +521,7 @@ export const ShopChatDrawer: React.FC = () => {
                                     : "bg-white text-[#1c1c18] border border-[#dddad3] rounded-bl-none"
                                 }`}
                               >
-                                {renderMessageContent(m.text)}
+                                {renderMessageContent(m.text, isMe)}
                                 {m.imageUrl && (
                                   <img
                                     src={m.imageUrl}
@@ -487,7 +538,7 @@ export const ShopChatDrawer: React.FC = () => {
                                   setReplyingTo({
                                     _id: m._id,
                                     senderName: senderDisplayName,
-                                    text: m.text || (m.imageUrl ? "[Hình ảnh]" : ""),
+                                    text: extractCoreMessage(m.text) || (m.imageUrl ? "[Hình ảnh]" : ""),
                                   })
                                 }
                                 className="opacity-70 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[#78716c] hover:text-[#141310] hover:bg-[#ede8de] rounded-full shrink-0 self-center cursor-pointer"
