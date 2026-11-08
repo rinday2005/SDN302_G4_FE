@@ -22,7 +22,6 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const currentUserId = user?._id || user?.id || "";
 
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"RENT" | "THRIFT">("RENT");
   const [activeConversation, setActiveConversation] = useState<ConversationItem | null>(null);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +55,6 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
             ? c.lastMessage.senderId?._id?.toString()
             : c.lastMessage.senderId?.toString();
 
-        // Tin nhắn cuối gửi từ phía Shop Owner
         if (senderIdStr && senderIdStr !== currentUserId) {
           const lastReadTime = localStorage.getItem(`customer_chat_read_${c._id}`);
           const msgTime = c.lastMessage.createdAt
@@ -74,42 +72,31 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [currentUserId]);
 
-  // Nạp cuộc hội thoại của User theo activeTab
-  const loadConversation = useCallback(
-    async (tab: "RENT" | "THRIFT") => {
-      if (!currentUserId) return;
-      setIsLoading(true);
-      try {
-        const conv = await getMyConversationApi({ serviceType: tab });
-        setActiveConversation(conv);
+  // Nạp cuộc hội thoại duy nhất của User với Shop Owner
+  const loadConversation = useCallback(async () => {
+    if (!currentUserId) return;
+    setIsLoading(true);
+    try {
+      const conv = await getMyConversationApi();
+      setActiveConversation(conv);
 
-        // Join socket room
-        const socket = getSocket();
-        socket.emit("join_room", { conversationId: conv._id });
+      // Join socket room
+      const socket = getSocket();
+      socket.emit("join_room", { conversationId: conv._id });
 
-        // Nạp tin nhắn
-        const res = await getMessagesApi(conv._id);
-        setMessages(res.messages || []);
+      // Nạp tin nhắn
+      const res = await getMessagesApi(conv._id);
+      setMessages(res.messages || []);
 
-        // Đánh dấu đã đọc hội thoại này
-        localStorage.setItem(`customer_chat_read_${conv._id}`, Date.now().toString());
-        refreshUnread();
-      } catch (err) {
-        console.warn("⚠️ [CustomerChat] Failed to load conversation:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [currentUserId, refreshUnread]
-  );
-
-  const handleTabChange = useCallback(
-    (tab: "RENT" | "THRIFT") => {
-      setActiveTab(tab);
-      loadConversation(tab);
-    },
-    [loadConversation]
-  );
+      // Đánh dấu đã đọc hội thoại này
+      localStorage.setItem(`customer_chat_read_${conv._id}`, Date.now().toString());
+      refreshUnread();
+    } catch (err) {
+      console.warn("⚠️ [CustomerChat] Failed to load conversation:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUserId, refreshUnread]);
 
   // Lắng nghe real-time Socket.IO
   useEffect(() => {
@@ -146,7 +133,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const socket = getSocket();
 
-    const handleNewMessage = (msg: ChatMessageItem & { serviceType?: "RENT" | "THRIFT" }) => {
+    const handleNewMessage = (msg: ChatMessageItem) => {
       const senderIdStr =
         typeof msg.senderId === "object" ? String(msg.senderId._id) : String(msg.senderId);
       const isFromShop = senderIdStr !== currentUserId;
@@ -225,20 +212,15 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const openChat = useCallback(
     (options?: {
-      serviceType?: "RENT" | "THRIFT";
       product?: CustomerProductContext;
     }) => {
-      const tabToOpen = options?.serviceType || activeTab;
-      if (options?.serviceType) {
-        setActiveTab(options.serviceType);
-      }
       if (options?.product) {
         setProductContext(options.product);
       }
       setIsOpen(true);
-      loadConversation(tabToOpen);
+      loadConversation();
     },
-    [activeTab, loadConversation]
+    [loadConversation]
   );
 
   const closeChat = useCallback(() => {
@@ -320,7 +302,6 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const contextValue: CustomerChatContextType = {
     isOpen,
-    activeTab,
     unreadCount,
     messages,
     isLoading,
@@ -328,7 +309,6 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
     productContext,
     openChat,
     closeChat,
-    setActiveTab: handleTabChange,
     sendMessage,
     sendTyping,
     clearProductContext,

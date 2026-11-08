@@ -5,13 +5,11 @@ import { useAuth } from "../../hooks/useAuth";
 export const CustomerChatBox: React.FC = () => {
   const {
     isOpen,
-    activeTab,
     messages,
     isLoading,
     isShopTyping,
     productContext,
     closeChat,
-    setActiveTab,
     sendMessage,
     sendTyping,
     clearProductContext,
@@ -65,7 +63,7 @@ export const CustomerChatBox: React.FC = () => {
   return (
     <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-[calc(100vw-32px)] sm:w-[410px] h-[580px] max-h-[85vh] bg-[#fdf9f2] rounded-3xl shadow-2xl border border-[#dddad3] flex flex-col overflow-hidden animate-slide-up font-sans">
       {/* 1. HEADER */}
-      <div className="bg-[#f5efe6] px-4 py-3 border-b border-[#dddad3] flex items-center justify-between shrink-0">
+      <div className="bg-[#f5efe6] px-4 py-3.5 border-b border-[#dddad3] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-10 h-10 rounded-full bg-[#141310] text-[#fdf9f2] flex items-center justify-center font-serif font-bold text-sm shadow-xs overflow-hidden">
@@ -89,7 +87,7 @@ export const CustomerChatBox: React.FC = () => {
             </div>
             <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-              Chủ xưởng trực tuyến • Trả lời ngay
+              Chủ xưởng trực tuyến • Phản hồi nhanh
             </p>
           </div>
         </div>
@@ -104,33 +102,7 @@ export const CustomerChatBox: React.FC = () => {
         </button>
       </div>
 
-      {/* 2. TAB SELECTOR (RENT vs THRIFT) */}
-      <div className="bg-[#ebe6dc]/60 px-3 py-1.5 border-b border-[#dddad3] flex items-center gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={() => setActiveTab("RENT")}
-          className={`flex-1 py-1.5 px-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer text-center ${
-            activeTab === "RENT"
-              ? "bg-[#141310] text-white shadow-xs"
-              : "bg-[#f5efe6] text-[#57534e] hover:bg-white hover:text-[#141310]"
-          }`}
-        >
-          Cho thuê RENT
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("THRIFT")}
-          className={`flex-1 py-1.5 px-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer text-center ${
-            activeTab === "THRIFT"
-              ? "bg-[#141310] text-white shadow-xs"
-              : "bg-[#f5efe6] text-[#57534e] hover:bg-white hover:text-[#141310]"
-          }`}
-        >
-          Thanh lý THRIFT
-        </button>
-      </div>
-
-      {/* 3. PINNED PRODUCT CONTEXT BANNER (NẾU CÓ) */}
+      {/* 2. PINNED PRODUCT CONTEXT BANNER (NẾU CÓ) */}
       {productContext && (
         <div className="bg-[#f0ebe1] px-3.5 py-2.5 border-b border-[#dddad3] flex items-center justify-between gap-2 shrink-0 animate-fade-in">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -171,7 +143,7 @@ export const CustomerChatBox: React.FC = () => {
         </div>
       )}
 
-      {/* 4. MESSAGES CONTAINER */}
+      {/* 3. MESSAGES CONTAINER */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#fdf9f2]">
         {isLoading && (
           <div className="flex items-center justify-center py-6 text-xs text-[#78716c] gap-2">
@@ -246,7 +218,7 @@ export const CustomerChatBox: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 5. INPUT BAR */}
+      {/* 4. INPUT BAR */}
       <form
         onSubmit={handleSend}
         className="p-3 bg-white border-t border-[#dddad3] flex items-center gap-2 shrink-0"
@@ -255,7 +227,7 @@ export const CustomerChatBox: React.FC = () => {
           type="text"
           value={inputVal}
           onChange={handleInputChange}
-          placeholder={`Nhắn tin hỏi Atelier (${activeTab})...`}
+          placeholder="Nhắn tin hỏi Atelier (Xưởng)..."
           className="flex-1 bg-[#f7f5f0] border border-[#e5e0d8] focus:border-[#141310] focus:bg-white text-xs text-[#141310] rounded-xl px-3.5 py-2.5 outline-none transition-all placeholder:text-[#a8a29e]"
         />
 

@@ -300,7 +300,6 @@ export const RentProductDetail: React.FC = () => {
   const handleChat = () => {
     handleProtectedAction('trò chuyện trực tiếp với Shop Owner', () => {
       openChat({
-        serviceType: 'RENT',
         product: {
           title: product.title,
           image: product.images[0]?.src || '',

@@ -56,9 +56,6 @@ export const ChatPage: React.FC = () => {
     user?.avatarUrl ||
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
 
-  // Topic filter ('rent' | 'thrift' | 'all')
-  const [activeTopic, setActiveTopic] = useState<'all' | 'rent' | 'thrift' | 'contax'>('rent');
-
   // Input & state
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -119,12 +116,11 @@ export const ChatPage: React.FC = () => {
     };
   }, [customerName, customerAvatar]);
 
-  // Nạp cuộc trò chuyện THẬT từ MongoDB theo kênh RENT hoặc THRIFT
+  // Nạp cuộc trò chuyện THẬT từ MongoDB
   useEffect(() => {
     let isSubscribed = true;
-    const serviceType = activeTopic === 'thrift' ? 'THRIFT' : 'RENT';
 
-    getMyConversationApi({ serviceType })
+    getMyConversationApi()
       .then(async (conv) => {
         if (!isSubscribed) return;
         setConversation(conv);
@@ -147,7 +143,7 @@ export const ChatPage: React.FC = () => {
     return () => {
       isSubscribed = false;
     };
-  }, [activeTopic, currentUserId, mapApiMessageToUi]);
+  }, [currentUserId, mapApiMessageToUi]);
 
   // Lắng nghe tin nhắn mới REAL-TIME từ Socket.IO
   useEffect(() => {
@@ -337,60 +333,16 @@ export const ChatPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Filter Context Ribbons / Topic Chips */}
+            {/* Context Ribbon */}
             <div className="py-4 flex flex-wrap items-center justify-between gap-3 border-b border-brand-border/40">
-              <div className="flex items-center gap-2 overflow-x-auto thin-scrollbar pb-1 md:pb-0">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mr-1">
-                  Luồng trao đổi:
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-semibold text-brand-charcoal">
+                  Kênh trò chuyện trực tiếp với Atelier Chronos &amp; Optics (Shop Owner)
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('all')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeTopic === 'all'
-                      ? 'bg-brand-charcoal text-white shadow-2xs'
-                      : 'bg-white hover:bg-brand-surface border border-brand-border text-brand-charcoal'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">all_inbox</span>
-                  Tất cả phiên
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('rent')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'rent'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-charcoal'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-brand-sage" />
-                  Thuê #RH-RNT-2024-8845 (Hasselblad 907X)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('thrift')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'thrift'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-charcoal'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#C88A37]" />
-                  Thrift #RH-THF-2025-0814 (Leica M6 Classic)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('contax')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'contax'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-muted hover:text-brand-charcoal'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">help_outline</span>
-                  Tư vấn quang sai Contax T2
-                </button>
+                <span className="px-2.5 py-0.5 rounded-full bg-[#f4f0ea] text-[#1c1a18] text-[10px] font-bold">
+                  Socket.IO Real-time
+                </span>
               </div>
 
               {/* Quick Status Pill */}
@@ -413,16 +365,10 @@ export const ChatPage: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <h2 className="text-sm font-bold text-brand-charcoal">
-                          {activeTopic === 'rent'
-                            ? 'Phiên kiểm định: Hasselblad 907X 50C (Thuê RENT)'
-                            : activeTopic === 'thrift'
-                            ? 'Phiên lưu kho: Leica M6 Classic 0.72x (Mua THRIFT)'
-                            : activeTopic === 'contax'
-                            ? 'Tư vấn quang sai & Đo tốc cơ khí Contax T2'
-                            : 'Phiên thẩm định: Leica M6 Classic & Hasselblad 907X'}
+                          Trò chuyện cùng Atelier Chronos &amp; Optics
                         </h2>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-sage/15 text-brand-sage uppercase">
-                          Đang mở
+                          Trực tuyến
                         </span>
                       </div>
                       <p className="text-[11px] text-brand-muted">

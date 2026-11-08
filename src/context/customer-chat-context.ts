@@ -9,18 +9,15 @@ export interface CustomerProductContext {
 
 export interface CustomerChatContextType {
   isOpen: boolean;
-  activeTab: "RENT" | "THRIFT";
   unreadCount: number;
   messages: ChatMessageItem[];
   isLoading: boolean;
   isShopTyping: boolean;
   productContext: CustomerProductContext | null;
   openChat: (options?: {
-    serviceType?: "RENT" | "THRIFT";
     product?: CustomerProductContext;
   }) => void;
   closeChat: () => void;
-  setActiveTab: (tab: "RENT" | "THRIFT") => void;
   sendMessage: (text: string, imageUrl?: string) => Promise<void>;
   sendTyping: (isTyping: boolean) => void;
   clearProductContext: () => void;
@@ -33,7 +30,6 @@ export const useCustomerChat = (): CustomerChatContextType => {
   if (!context) {
     return {
       isOpen: false,
-      activeTab: "RENT",
       unreadCount: 0,
       messages: [],
       isLoading: false,
@@ -41,7 +37,6 @@ export const useCustomerChat = (): CustomerChatContextType => {
       productContext: null,
       openChat: () => {},
       closeChat: () => {},
-      setActiveTab: () => {},
       sendMessage: async () => {},
       sendTyping: () => {},
       clearProductContext: () => {},
