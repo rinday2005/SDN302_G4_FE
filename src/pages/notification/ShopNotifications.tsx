@@ -1,3 +1,9 @@
+import {
+  getNotificationsApi,
+  markNotificationAsReadApi,
+  markAllNotificationsAsReadApi,
+  type NotificationItem,
+} from "../../services/notification.api";
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -24,142 +30,81 @@ export interface ShopNotification {
   actionLink: string;
 }
 
-const INITIAL_SHOP_NOTIFICATIONS: ShopNotification[] = [
-  {
-    id: 'notif-1',
-    category: 'listings',
-    typeBadge: 'RENT',
-    typeColor: 'rent',
-    badgeTag: 'RENT listing approved.',
-    isUnread: true,
-    timeAgo: '15 phút trước',
-    datetime: '2024-11-05T14:45:00',
-    title: 'Canon EOS R6 Mark II Full-Frame Kit',
-    description:
-      'Sản phẩm cho thuê Canon EOS R6 Mark II Full-Frame Kit đã được Admin phê duyệt kiểm định và xuất bản công khai lên sàn RENT.',
-    embeddedBox: {
-      icon: 'photo_camera',
-      headline: 'MÃ LƯU KÝ: #RC-904-CN',
-      subline: 'Tiêu chuẩn cọc Escrow: $75.00/ngày • Bảo chứng toàn diện',
-    },
-    actionText: 'Xem Sản Phẩm RENT →',
-    actionLink: '/shop/rent/products',
-  },
-  {
-    id: 'notif-2',
-    category: 'listings',
-    typeBadge: 'THRIFT',
-    typeColor: 'rejected',
-    badgeTag: 'THRIFT listing rejected.',
-    isUnread: true,
-    timeAgo: '2 giờ trước',
-    datetime: '2024-11-05T13:00:00',
-    title: 'Rolleiflex 2.8F TLR Planar 80mm',
-    description:
-      'Mục đăng bán đứt Rolleiflex 2.8F TLR Planar 80mm đã bị từ chối kiểm định. Ghi chú kiểm định: Yêu cầu bổ sung ảnh macro buồng thấu kính và vạch số series.',
-    embeddedBox: {
-      icon: 'info',
-      headline: 'Quy chuẩn kiểm duyệt: Quang học & Ống kính đôi TLR',
-      subline: 'Thời gian xét duyệt lại: trong vòng 4 giờ kể từ khi cập nhật ảnh hồ sơ.',
-    },
-    actionText: 'Chỉnh Sửa Mục Đăng THRIFT →',
-    actionLink: '/shop/thrift/listings',
-  },
-  {
-    id: 'notif-3',
-    category: 'orders',
-    typeBadge: 'RENT',
-    typeColor: 'rent',
-    badgeTag: 'New rental order.',
-    isUnread: true,
-    timeAgo: '3 giờ trước',
-    datetime: '2024-11-05T12:00:00',
-    title: 'Đơn Thuê #RN-ORD-9042 · Marcus Sterling',
-    description:
-      'Đơn thuê mới #RN-ORD-9042 từ khách hàng Marcus Sterling (Thời gian thuê: 3 ngày, ký quỹ Escrow: $520.00 USD / 12.500.000 ₫).',
-    embeddedBox: {
-      icon: 'key',
-      headline: 'ĐƠN THUÊ MỚI',
-      subline: 'Hộp Nanuk & Tem Niêm Phong',
-      gridItems: [
-        { label: 'Thời Hạn Thuê', value: '3 Ngày (Nov 07 - Nov 10)' },
-        { label: 'Ký Quỹ Escrow', value: '$520.00 USD (Đã Khóa)', isGreen: true },
-        { label: 'Quy Chuẩn Giao', value: 'Hộp Nanuk & Tem Niêm' },
-      ],
-    },
-    actionText: 'Xử Lý Đơn Thuê →',
-    actionLink: '/shop/rent/orders',
-  },
-  {
-    id: 'notif-4',
-    category: 'orders',
-    typeBadge: 'RENT',
-    typeColor: 'rent',
-    badgeTag: 'Customer requested a return.',
-    isUnread: false,
-    timeAgo: 'Hôm qua',
-    datetime: '2024-11-04T18:00:00',
-    title: 'Đơn Thuê Sony FX3 Cinema Line · #RN-ORD-8991',
-    description:
-      'Khách hàng yêu cầu hoàn trả thiết bị cho đơn thuê Sony FX3 Cinema Line #RN-ORD-8991. Bưu tá chuyên dụng Nanuk đã lên lịch nhận đồ.',
-    embeddedBox: {
-      icon: 'science',
-      headline: 'SẴN SÀNG NGHIỆM THU',
-      subline: 'Quy trình kiểm tra sai số quang học sẵn sàng khi nhận kiện hàng.',
-    },
-    actionText: 'Kiểm Tra & Nghiệm Thu Hoàn Trả →',
-    actionLink: '/shop/rent/orders',
-  },
-  {
-    id: 'notif-5',
-    category: 'orders',
-    subCategory: 'escrow',
-    typeBadge: 'THRIFT',
-    typeColor: 'thrift',
-    badgeTag: 'New THRIFT order.',
-    isUnread: false,
-    timeAgo: '04/11, 14:18',
-    datetime: '2024-11-04T14:18:00',
-    title: 'Thân Máy Contax G2 Black Edition · #TH-ORD-8821',
-    description:
-      'Đơn mua đứt mới #TH-ORD-8821 cho thân máy Contax G2 Black Edition ($1,485.00 USD). Tiền ký quỹ đã khóa an toàn tại VNPay Smart Escrow.',
-    embeddedBox: {
-      icon: 'security',
-      headline: '$1,485.00 USD trong VNPay Smart Escrow',
-      subline: 'Giải ngân tự động sau khi người mua ký biên bản bàn giao kiểm định.',
-    },
-    actionText: 'Xử Lý Đơn Bán THRIFT →',
-    actionLink: '/shop/thrift/orders',
-  },
-  {
-    id: 'notif-6',
-    category: 'messages',
-    typeBadge: 'CHAT',
-    typeColor: 'chat',
-    badgeTag: 'Customer sent a message.',
-    isUnread: false,
-    timeAgo: '04/11, 14:32',
-    datetime: '2024-11-04T14:32:00',
-    title: 'Elena Rostova liên hệ về đơn #RH-THF-2024-9108',
-    quoteText:
-      'Shop cho mình hỏi quy trình dán tem seal Nanuk trước khi giao qua bưu tá cho đơn hàng #RH-THF-2024-9108 nhé?',
-    description:
-      'Khách hàng Elena Rostova gửi tin nhắn hỏi về quy trình dán tem seal Nanuk cho đơn hàng #RH-THF-2024-9108.',
-    actionText: 'Mở Trò Chuyện (/chat) →',
-    actionLink: '/chat',
-  },
-];
-
 export const ShopNotifications: React.FC = () => {
-  const [notifications, setNotifications] = useState<ShopNotification[]>(() => {
+  const [notifications, setNotifications] = useState<ShopNotification[]>([]);
+  
+
+  const formatTimeAgo = (dateStr?: string) => {
+    if (!dateStr) return 'Vừa xong';
     try {
-      const saved = localStorage.getItem('reuse_shop_notifications');
-      if (saved) return JSON.parse(saved);
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return 'Vừa xong';
+      if (diffMins < 60) return `${diffMins} phút trước`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours} giờ trước`;
+      return new Date(dateStr).toLocaleDateString('vi-VN');
     } catch {
-      // ignore
+      return 'Gần đây';
     }
-    return INITIAL_SHOP_NOTIFICATIONS;
-  });
+  };
+
+  const mapApiToShopNotification = (n: NotificationItem): ShopNotification => {
+    let cat: 'orders' | 'listings' | 'messages' | 'escrow' = 'orders';
+    let typeBadge = 'RENT';
+    let typeColor: 'rent' | 'thrift' | 'chat' | 'escrow' | 'rejected' = 'rent';
+    if (n.type === 'LISTING') { cat = 'listings'; typeBadge = 'LISTING'; typeColor = 'rent'; }
+    else if (n.type === 'THRIFT_ORDER') { cat = 'orders'; typeBadge = 'THRIFT'; typeColor = 'thrift'; }
+    else if (n.type === 'REFUND' || n.type === 'PAYMENT') { cat = 'escrow'; typeBadge = 'ESCROW'; typeColor = 'escrow'; }
+    else if (n.type === 'KYC' || n.type === 'SYSTEM') { cat = 'messages'; typeBadge = 'HỆ THỐNG'; typeColor = 'chat'; }
+
+    return {
+      id: n._id || n.id || String(Math.random()),
+      category: cat,
+      typeBadge,
+      typeColor,
+      badgeTag: n.title,
+      isUnread: !n.isRead,
+      timeAgo: formatTimeAgo(n.createdAt),
+      datetime: n.createdAt,
+      title: n.title,
+      description: n.message,
+      actionText: 'Xem Chi Tiết →',
+      actionLink: n.link || '/shop/rent/orders',
+    };
+  };
+
+  // Load real notifications from backend MongoDB
+  useEffect(() => {
+    let isMounted = true;
+    const loadNotifs = async () => {
+      try {
+        const res = await getNotificationsApi({ page: 1, limit: 50 });
+        if (!isMounted) return;
+        if (res.notifications && res.notifications.length > 0) {
+          const mapped = res.notifications.map(mapApiToShopNotification);
+          setNotifications(mapped);
+        } else {
+          // Fallback to sample if no notifications
+          setNotifications([]);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        console.warn('Lỗi khi tải thông báo shop:', err);
+        setNotifications([]);
+      } finally {
+        /* loading completed */
+      }
+    };
+    loadNotifs();
+
+    window.addEventListener('notification_refresh', loadNotifs);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('notification_refresh', loadNotifs);
+    };
+
+  }, []);
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'orders' | 'listings' | 'messages' | 'escrow'>('all');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
@@ -173,7 +118,7 @@ export const ShopNotifications: React.FC = () => {
 
   // Sync to localStorage
   useEffect(() => {
-    localStorage.setItem('reuse_shop_notifications', JSON.stringify(notifications));
+    // Direct MongoDB data - no local cache
   }, [notifications]);
 
   // Close modals on Escape key press
@@ -185,6 +130,7 @@ export const ShopNotifications: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+
   }, []);
 
   const showToast = (msg: string) => {
@@ -215,8 +161,14 @@ export const ShopNotifications: React.FC = () => {
   }, [notifications]);
 
   // Mark all as read
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
     setNotifications((prev) => prev.map((item) => ({ ...item, isUnread: false })));
+    try {
+      await markAllNotificationsAsReadApi();
+      window.dispatchEvent(new CustomEvent('notification_refresh'));
+    } catch {
+      // ignore
+    }
     showToast('Tất cả thông báo đã được đánh dấu là đã đọc.');
   };
 
@@ -245,10 +197,16 @@ export const ShopNotifications: React.FC = () => {
   };
 
   // Mark single as read
-  const handleToggleRead = (id: string) => {
+  const handleToggleRead = async (id: string) => {
     setNotifications((prev) =>
       prev.map((item) => (item.id === id ? { ...item, isUnread: !item.isUnread } : item))
     );
+    try {
+      await markNotificationAsReadApi(id);
+      window.dispatchEvent(new CustomEvent('notification_refresh'));
+    } catch {
+      // ignore
+    }
   };
 
   return (

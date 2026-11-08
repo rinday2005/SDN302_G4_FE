@@ -1,3 +1,4 @@
+import { useNotification } from "../../hooks/useNotification";
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
@@ -59,28 +60,15 @@ export const Header: React.FC<HeaderProps> = ({
         return userRole || 'GUEST';
     }, [userRole]);
 
-    const [notifSync, setNotifSync] = useState(0);
+    const [, setNotifSync] = useState(0);
+    const { unreadCount: liveUnreadCount } = useNotification();
 
     // Dynamically calculate notifications scoped to currently logged-in user
     const effectiveNotificationCount = useMemo(() => {
         if (notificationCount !== undefined) return notificationCount;
         if (effectiveRole === 'GUEST') return 0;
-        void notifSync;
-        try {
-            const u = localStorage.getItem('user');
-            const parsedUser = u ? JSON.parse(u) : null;
-            const uId = parsedUser?._id || parsedUser?.id;
-            if (!uId) return 0;
-            const raw = localStorage.getItem(`user_notifications_${uId}`);
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed)) return parsed.length;
-            }
-        } catch {
-            // ignore
-        }
-        return 0;
-    }, [notificationCount, effectiveRole, notifSync]);
+        return liveUnreadCount;
+    }, [notificationCount, effectiveRole, liveUnreadCount]);
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
