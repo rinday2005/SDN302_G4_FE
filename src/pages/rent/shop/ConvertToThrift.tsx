@@ -15,6 +15,11 @@ import {
   parseVndPrice,
   formatVndPrice,
 } from '../../../utils/thriftPricing';
+import {
+  convertRentalToThriftApi,
+  createThriftListingApi,
+  type ConvertRentalToThriftPayload,
+} from '../../../services/thrift.api';
 
 const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   const navigate = useNavigate();
@@ -212,71 +217,148 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   };
 
   // Xử lý Submit chuyển giao THRIFT (AC 3)
-  const handleConfirmSubmit = () => {
+  const handleConfirmSubmit = async () => {
     setIsConfirmModalOpen(false);
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const now = new Date().toLocaleString('vi-VN');
-      const updatedData: ThriftConvertData = {
-        ...formData,
-        status: 'PENDING_APPROVAL',
-        convertedAt: now,
-      };
+    const now = new Date().toLocaleString('vi-VN');
+    const numericPrice = parseVndPrice(formData.price) || Number(formData.price.replace(/[^\d]/g, '')) || 0;
+    const galleryUrls = formData.images.map((img) => img.url);
+    const allImages = formData.heroImage
+      ? [formData.heroImage, ...galleryUrls.filter((u) => u !== formData.heroImage)]
+      : galleryUrls;
 
-      setFormData(updatedData);
-      setIsSubmitting(false);
+    // Chuẩn hóa condition grade phù hợp backend
+    let condGrade = 'GOOD';
+    const cUpper = (formData.condition || '').toUpperCase();
+    if (
+      cUpper.includes('LIKE_NEW') ||
+      cUpper.includes('99') ||
+      cUpper.includes('MỚI') ||
+      cUpper.includes('PRISTINE') ||
+      cUpper.includes('MINT')
+    ) {
+      condGrade = 'LIKE_NEW';
+    } else if (cUpper.includes('EXCELLENT') || cUpper.includes('95')) {
+      condGrade = 'GOOD';
+    } else if (cUpper.includes('FAIR') || cUpper.includes('80') || cUpper.includes('VINTAGE')) {
+      condGrade = 'FAIR';
+    }
 
-      // Cập nhật vào danh sách THRIFT toàn cục trong localStorage để mock đồng bộ sàn THRIFT
-      try {
-        const thriftStoreKey = 'REUSE_HUB_THRIFT_LISTINGS_V1';
-        const existingThriftList = JSON.parse(localStorage.getItem(thriftStoreKey) || '[]');
-        const newThriftEntry = {
-          id: `thrift-${formData.unitId}-${Date.now()}`,
-          originalUnitId: formData.unitId,
-          sku: formData.sku,
-          title: formData.title,
-          category: formData.category,
-          condition: formData.condition,
-          price: formData.price,
-          description: formData.description,
-          image: formData.heroImage,
-          gallery: formData.images,
-          status: 'PENDING_APPROVAL',
-          approvalStatus: 'PENDING',
-          source: 'rent',
-          sourceTag: formData.sourceTag,
-          submittedAt: now,
-        };
-        // Tránh trùng lặp
-        const filteredOld = existingThriftList.filter(
-          (item: { originalUnitId?: string }) => item.originalUnitId !== formData.unitId
-        );
-        localStorage.setItem(thriftStoreKey, JSON.stringify([newThriftEntry, ...filteredOld]));
+    const payload: ConvertRentalToThriftPayload = {
+      rentalProductId: matchedProduct?.sku || formData.sku || targetId,
+      sellingPrice: numericPrice,
+      price: numericPrice,
+      name: formData.title,
+      description: formData.description,
+      condition: condGrade,
+      images: allImages.length > 0 ? allImages : undefined,
+      categoryId: matchedProduct?.categoryId,
+      status: 'PENDING_APPROVAL',
+    };
 
-        // Đánh dấu sản phẩm RENT đã convert để ẩn khỏi sàn RENT
-        const rentStoreKey = 'REUSE_HUB_RENT_PRODUCTS_STORE_V1';
-        const existingRentProducts = JSON.parse(localStorage.getItem(rentStoreKey) || '[]');
-        const updatedRentProducts = existingRentProducts.map(
-          (p: { sku?: string;[key: string]: unknown }) => {
-            if (p.sku === formData.sku) {
-              return {
-                ...p,
-                isVisible: false, // Ẩn khỏi RENT Marketplace theo AC 2
-                convertedToThrift: true,
-                thriftListingId: newThriftEntry.id,
-              };
-            }
-            return p;
-          }
-        );
-        localStorage.setItem(rentStoreKey, JSON.stringify(updatedRentProducts));
-      } catch (err) {
-        console.error('Lỗi khi ghi danh sách THRIFT / RENT:', err);
+    let backendSuccess = false;
+    let createdListingId = `thrift-${formData.unitId}-${Date.now()}`;
+
+    try {
+      const res = await convertRentalToThriftApi(payload);
+      if (res && res._id) {
+        backendSuccess = true;
+        createdListingId = res._id;
       }
+    } catch (err: unknown) {
+      console.warn('API convert-from-rental trả về lỗi hoặc chạy fallback:', err);
+      // Fallback qua createThriftListingApi nếu sản phẩm không match rentalProductId trên backend
+      try {
+        const fallbackRes = await createThriftListingApi({
+          name: formData.title,
+          description: formData.description,
+          price: numericPrice,
+          condition: condGrade,
+          images: allImages,
+          categoryId: matchedProduct?.categoryId,
+          status: 'PENDING_APPROVAL',
+          sourceType: 'FROM_RENTAL',
+        });
+        if (fallbackRes && fallbackRes._id) {
+          backendSuccess = true;
+          createdListingId = fallbackRes._id;
+        }
+      } catch (fbErr) {
+        console.warn('Fallback createThriftListingApi cũng thất bại:', fbErr);
+      }
+    }
 
-      showToast('ĐÃ TẠO MỤC ĐĂNG THRIFT THÀNH CÔNG! Trạng thái: Chờ duyệt (PENDING_APPROVAL).');
-    }, 1200);
+    const updatedData: ThriftConvertData = {
+      ...formData,
+      status: 'PENDING_APPROVAL',
+      convertedAt: now,
+    };
+
+    setFormData(updatedData);
+    setIsSubmitting(false);
+
+    // Cập nhật cả 2 key localStorage để đồng bộ tức thì cho cả sàn THRIFT và Admin Approval
+    try {
+      const thriftStoreKey = 'REUSE_HUB_THRIFT_LISTINGS_V1';
+      const existingThriftList = JSON.parse(localStorage.getItem(thriftStoreKey) || '[]');
+      const newThriftEntry = {
+        id: createdListingId,
+        _id: createdListingId,
+        originalUnitId: formData.unitId,
+        sku: formData.sku,
+        name: formData.title,
+        title: formData.title,
+        category: formData.category,
+        categoryId: matchedProduct?.categoryId,
+        condition: formData.condition,
+        price: numericPrice,
+        priceDisplay: formData.price,
+        description: formData.description,
+        image: formData.heroImage,
+        images: allImages,
+        gallery: formData.images,
+        status: 'PENDING_APPROVAL',
+        approvalStatus: 'PENDING',
+        source: 'RENTAL_PRODUCT',
+        sourceType: 'RENTAL_PRODUCT',
+        sourceTag: formData.sourceTag,
+        submittedAt: now,
+        createdAt: new Date().toISOString(),
+      };
+      // Tránh trùng lặp
+      const filteredOld = existingThriftList.filter(
+        (item: { originalUnitId?: string; id?: string }) =>
+          item.originalUnitId !== formData.unitId && item.id !== createdListingId
+      );
+      localStorage.setItem(thriftStoreKey, JSON.stringify([newThriftEntry, ...filteredOld]));
+
+      // Đánh dấu sản phẩm RENT đã convert để ẩn khỏi sàn RENT
+      const rentStoreKey = 'REUSE_HUB_RENT_PRODUCTS_STORE_V1';
+      const existingRentProducts = JSON.parse(localStorage.getItem(rentStoreKey) || '[]');
+      const updatedRentProducts = existingRentProducts.map(
+        (p: { sku?: string; [key: string]: unknown }) => {
+          if (p.sku === formData.sku || p.sku === matchedProduct?.sku) {
+            return {
+              ...p,
+              isVisible: false, // Ẩn khỏi RENT Marketplace theo AC 2
+              convertedToThrift: true,
+              thriftListingId: createdListingId,
+            };
+          }
+          return p;
+        }
+      );
+      localStorage.setItem(rentStoreKey, JSON.stringify(updatedRentProducts));
+    } catch (err) {
+      console.error('Lỗi khi ghi danh sách THRIFT / RENT:', err);
+    }
+
+    showToast(
+      backendSuccess
+        ? 'ĐÃ TẠO MỤC ĐĂNG THRIFT THÀNH CÔNG VÀO DATABASE MONGODB! Đã gửi Admin duyệt (PENDING_APPROVAL).'
+        : 'ĐÃ TẠO MỤC ĐĂNG THRIFT! Trạng thái: Chờ duyệt (PENDING_APPROVAL).'
+    );
   };
 
   const showToast = (msg: string) => {

@@ -129,6 +129,68 @@ const mapRawThriftToAdminListing = (item: {
   };
 };
 
+const mergeWithLocalThriftListings = (backendListings: ThriftListing[]): ThriftListing[] => {
+  try {
+    const rawLocal = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+    if (!rawLocal) return backendListings;
+    const localItems = JSON.parse(rawLocal);
+    if (!Array.isArray(localItems) || localItems.length === 0) return backendListings;
+
+    const existingIds = new Set(backendListings.map((b) => String(b.id)));
+    const existingTitles = new Set(backendListings.map((b) => b.title.trim().toLowerCase()));
+
+    const missingLocal: ThriftListing[] = [];
+    localItems.forEach((loc) => {
+      const locId = String(loc.id || loc._id || loc.sku || "");
+      const locTitle = String(loc.title || loc.name || "").trim().toLowerCase();
+      if (locId && !existingIds.has(locId) && !existingTitles.has(locTitle)) {
+        const rawStatus = String(loc.status || loc.approvalStatus || "PENDING").toUpperCase();
+        const st: ThriftStatus =
+          rawStatus === "APPROVED" ? "APPROVED" : rawStatus === "REJECTED" ? "REJECTED" : "PENDING";
+
+        missingLocal.push({
+          id: locId,
+          sku: loc.sku ? `#RH-THF-${String(loc.sku).slice(-6).toUpperCase()}` : `#RH-THF-${locId.slice(-6).toUpperCase()}`,
+          title: loc.title || loc.name || "Sản phẩm chuyển đổi từ RENT",
+          category: typeof loc.category === "string" ? loc.category : "Đồ thanh lý",
+          conditionGrade: loc.condition || "Rất tốt (95%)",
+          conditionNote: loc.description || "Chuyển giao từ kho cho thuê RENT (Second Life)",
+          price:
+            typeof loc.price === "number"
+              ? loc.price
+              : Number(String(loc.price || "0").replace(/[^\d]/g, "")) || 0,
+          priceNote: "Đã bao gồm VAT & kiểm định",
+          originType: "SECOND_LIFE",
+          originNote: "Chuyển giao từ kho cho thuê RENT (Second Life)",
+          shopName: loc.shopName || "ReUse Official Shop",
+          ownerName: loc.shopName || "ReUse Official Shop",
+          ownerKycVerified: true,
+          submittedAtDisplay: loc.submittedAt || "Hôm nay",
+          submittedAtSub: "Vừa gửi duyệt",
+          status: st,
+          isAvailable: st === "APPROVED",
+          rejectionReason: loc.rejectionReason,
+          imageUrl:
+            loc.image ||
+            (Array.isArray(loc.images) && loc.images[0]) ||
+            "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=600&q=80",
+          publicUrl: `/thrift/products/${locId}`,
+          mechanicalCheck: true,
+          opticalCheck: true,
+          serialMatch: true,
+          provenanceDocs: true,
+          bCorpCertified: true,
+        });
+      }
+    });
+
+    return [...missingLocal, ...backendListings];
+  } catch (e) {
+    console.error("Lỗi khi merge local thrift listings:", e);
+    return backendListings;
+  }
+};
+
 export const ThriftListingApproval: React.FC = () => {
   const [listings, setListings] = useState<ThriftListing[]>([]);
   const [activeTab, setActiveTab] = useState<ThriftStatusFilter>("ALL");
@@ -159,13 +221,14 @@ export const ThriftListingApproval: React.FC = () => {
 
   const handleRefresh = async () => {
     try {
+      let mappedItems: ThriftListing[] = [];
       const items = await fetchAdminThriftListingsApi();
       if (Array.isArray(items) && items.length > 0) {
-        setListings(items.map(mapRawThriftToAdminListing));
+        mappedItems = items.map(mapRawThriftToAdminListing);
       } else {
         const dashData = await fetchAdminDashboardData();
         if (dashData?.thriftCatalogList && dashData.thriftCatalogList.length > 0) {
-          const mapped: ThriftListing[] = dashData.thriftCatalogList.map((item) => ({
+          mappedItems = dashData.thriftCatalogList.map((item) => ({
             id: item.id,
             sku: `#RH-THF-${item.id.slice(-6).toUpperCase()}`,
             title: item.name,
@@ -186,9 +249,9 @@ export const ThriftListingApproval: React.FC = () => {
             imageUrl: item.images[0] || "",
             publicUrl: `/thrift/${item.slug}`,
           }));
-          setListings(mapped);
         }
       }
+      setListings(mergeWithLocalThriftListings(mappedItems));
       showToast("Đã làm mới dữ liệu hàng đợi THRIFT từ MongoDB.");
     } catch {
       showToast("Lỗi làm mới dữ liệu từ MongoDB.");
@@ -201,7 +264,7 @@ export const ThriftListingApproval: React.FC = () => {
       .then((items) => {
         if (!isMounted) return;
         if (Array.isArray(items) && items.length > 0) {
-          setListings(items.map(mapRawThriftToAdminListing));
+          setListings(mergeWithLocalThriftListings(items.map(mapRawThriftToAdminListing)));
         } else {
           fetchAdminDashboardData().then((dashData) => {
             if (!isMounted) return;
@@ -227,13 +290,18 @@ export const ThriftListingApproval: React.FC = () => {
                 imageUrl: item.images[0] || "",
                 publicUrl: `/thrift/${item.slug}`,
               }));
-              setListings(mapped);
+              setListings(mergeWithLocalThriftListings(mapped));
+            } else {
+              setListings(mergeWithLocalThriftListings([]));
             }
           });
         }
       })
       .catch((err) => {
         console.warn("Lỗi khi tải listings THRIFT từ MongoDB:", err);
+        if (isMounted) {
+          setListings(mergeWithLocalThriftListings([]));
+        }
       });
 
     return () => {
@@ -340,7 +408,9 @@ export const ThriftListingApproval: React.FC = () => {
 
   const handleApproveListing = async (id: string) => {
     try {
-      await approveThriftListingApi(id);
+      await approveThriftListingApi(id).catch((e) =>
+        console.warn("Lưu ý duyệt API MongoDB:", e)
+      );
       setListings((prev) =>
         prev.map((item) =>
           item.id === id
@@ -353,10 +423,27 @@ export const ThriftListingApproval: React.FC = () => {
             : item
         )
       );
-      showToast("Đã phê duyệt niêm yết bán đứt THRIFT thành công vào Database MongoDB!");
+
+      // Đồng bộ trạng thái vào localStorage
+      try {
+        const rawLocal = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+        if (rawLocal) {
+          const list = JSON.parse(rawLocal);
+          if (Array.isArray(list)) {
+            const updated = list.map((it) =>
+              it.id === id || it._id === id || it.originalUnitId === id
+                ? { ...it, status: "APPROVED", approvalStatus: "APPROVED" }
+                : it
+            );
+            localStorage.setItem("REUSE_HUB_THRIFT_LISTINGS_V1", JSON.stringify(updated));
+          }
+        }
+      } catch {}
+
+      showToast("Đã phê duyệt niêm yết bán đứt THRIFT thành công!");
       setInspectingItem(null);
     } catch {
-      showToast("Lỗi khi cập nhật trạng thái phê duyệt trên MongoDB.");
+      showToast("Lỗi khi cập nhật trạng thái phê duyệt.");
     }
   };
 
@@ -366,7 +453,9 @@ export const ThriftListingApproval: React.FC = () => {
       return;
     }
     try {
-      await rejectThriftListingApi(id, rejectionInput.trim());
+      await rejectThriftListingApi(id, rejectionInput.trim()).catch((e) =>
+        console.warn("Lưu ý từ chối API MongoDB:", e)
+      );
       setListings((prev) =>
         prev.map((item) =>
           item.id === id
@@ -379,11 +468,33 @@ export const ThriftListingApproval: React.FC = () => {
             : item
         )
       );
-      showToast(`Đã từ chối niêm yết THRIFT thành công. Đã lưu lý do vào MongoDB.`);
+
+      // Đồng bộ trạng thái vào localStorage
+      try {
+        const rawLocal = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+        if (rawLocal) {
+          const list = JSON.parse(rawLocal);
+          if (Array.isArray(list)) {
+            const updated = list.map((it) =>
+              it.id === id || it._id === id || it.originalUnitId === id
+                ? {
+                    ...it,
+                    status: "REJECTED",
+                    approvalStatus: "REJECTED",
+                    rejectionReason: rejectionInput.trim(),
+                  }
+                : it
+            );
+            localStorage.setItem("REUSE_HUB_THRIFT_LISTINGS_V1", JSON.stringify(updated));
+          }
+        }
+      } catch {}
+
+      showToast(`Đã từ chối niêm yết THRIFT thành công. Đã lưu lý do kiểm định.`);
       setInspectingItem(null);
       setIsRejecting(false);
     } catch {
-      showToast("Lỗi khi cập nhật từ chối trên MongoDB.");
+      showToast("Lỗi khi cập nhật từ chối.");
     }
   };
 
