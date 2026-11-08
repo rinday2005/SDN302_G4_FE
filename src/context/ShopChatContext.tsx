@@ -44,8 +44,10 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 ? c.lastMessage?.senderId?._id?.toString()
                 : c.lastMessage?.senderId?.toString();
             // Khách gửi tin nhắn và Shop chưa mở xem -> tính là 1 người có tin chưa đọc
-            const isFromOther = senderIdStr && senderIdStr !== currentUserId;
-            const initialUnread = c.unreadCount !== undefined ? c.unreadCount : (isFromOther ? 1 : 0);
+            const isFromOther = senderIdStr && String(senderIdStr) !== String(currentUserId);
+            const isCurrent = activeConvRef.current && String(activeConvRef.current._id) === String(c._id);
+            // Nếu là tin do Shop gửi (isFromOther === false) hoặc đang mở phòng chat này -> unreadCount = 0
+            const initialUnread = (isCurrent || !isFromOther) ? 0 : 1;
             uniqueMap.set(String(c._id), {
               ...c,
               unreadCount: initialUnread,
@@ -73,8 +75,9 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 typeof c.lastMessage?.senderId === "object"
                   ? c.lastMessage?.senderId?._id?.toString()
                   : c.lastMessage?.senderId?.toString();
-              const isFromOther = senderIdStr && senderIdStr !== currentUserId;
-              const initialUnread = c.unreadCount !== undefined ? c.unreadCount : (isFromOther ? 1 : 0);
+              const isFromOther = senderIdStr && String(senderIdStr) !== String(currentUserId);
+              const isCurrent = activeConvRef.current && String(activeConvRef.current._id) === String(c._id);
+              const initialUnread = (isCurrent || !isFromOther) ? 0 : 1;
               uniqueMap.set(String(c._id), {
                 ...c,
                 unreadCount: initialUnread,
@@ -187,13 +190,21 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const handleConversationUpdated = (updatedConv: ConversationItem) => {
       setConversations((prev) => {
         const convIdStr = String(updatedConv._id);
+        const isCurrent = activeConvRef.current && String(activeConvRef.current._id) === convIdStr;
+        const senderIdStr =
+          typeof updatedConv.lastMessage?.senderId === "object"
+            ? updatedConv.lastMessage?.senderId?._id?.toString()
+            : updatedConv.lastMessage?.senderId?.toString();
+        const isFromOther = senderIdStr && String(senderIdStr) !== String(currentUserId);
+        const unread = (isCurrent || !isFromOther) ? 0 : 1;
+
         const index = prev.findIndex((c) => String(c._id) === convIdStr);
         if (index > -1) {
           const clone = [...prev];
           clone[index] = {
             ...clone[index],
             ...updatedConv,
-            unreadCount: clone[index].unreadCount,
+            unreadCount: unread,
             serviceType: updatedConv.serviceType || clone[index].serviceType || "RENT",
           };
           return clone.sort(
@@ -203,7 +214,7 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return [
           {
             ...updatedConv,
-            unreadCount: 1,
+            unreadCount: unread,
             serviceType: updatedConv.serviceType || "RENT",
           },
           ...prev,
@@ -386,6 +397,25 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Optimistic UI update
     setMessages((prev) => [...prev, newMsg]);
 
+    // Ngay khi Shop Owner bấm gửi tin nhắn rep, xóa ngay số badge chưa đọc của cuộc trò chuyện này
+    setConversations((prev) =>
+      prev.map((c) =>
+        String(c._id) === String(activeConversation._id)
+          ? {
+              ...c,
+              unreadCount: 0,
+              lastMessage: {
+                text: trimmed || (imageUrl ? "[Hình ảnh]" : ""),
+                senderId: currentUserId || "shop_owner",
+                imageUrl,
+                createdAt: new Date().toISOString(),
+              },
+              updatedAt: new Date().toISOString(),
+            }
+          : c
+      )
+    );
+
     if (socket.connected) {
       const currentToken = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
       // Gửi qua Socket.IO kèm clientMsgId để đối soát không bị nhân đôi
@@ -406,6 +436,13 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 m._id === tempId ? { ...returned, clientMsgId: tempId } : m
               )
             );
+            setConversations((prev) =>
+              prev.map((c) =>
+                String(c._id) === String(activeConversation._id)
+                  ? { ...c, unreadCount: 0 }
+                  : c
+              )
+            );
           }
         }
       );
@@ -415,6 +452,13 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const saved = await sendMessageApi(activeConversation._id, { text: trimmed, imageUrl });
         setMessages((prev) =>
           prev.map((m) => (m._id === tempId ? saved : m))
+        );
+        setConversations((prev) =>
+          prev.map((c) =>
+            String(c._id) === String(activeConversation._id)
+              ? { ...c, unreadCount: 0 }
+              : c
+          )
         );
       } catch (err) {
         console.warn("⚠️ [ShopChat] HTTP API fallback send notice:", err);

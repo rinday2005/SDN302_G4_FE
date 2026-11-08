@@ -65,14 +65,15 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
             ? c.lastMessage?.senderId?._id?.toString()
             : c.lastMessage?.senderId?.toString();
 
-        const isFromOther = senderIdStr && senderIdStr !== currentUserId;
+        const isFromOther = senderIdStr && String(senderIdStr) !== String(currentUserId);
+        const isCurrent = activeConvRef.current && String(activeConvRef.current._id) === String(c._id);
         const lastReadTime = localStorage.getItem(`customer_chat_read_${c._id}`);
         const msgTime = c.lastMessage?.createdAt
           ? new Date(c.lastMessage.createdAt).getTime()
           : 0;
 
         let unread = 0;
-        if (isFromOther) {
+        if (isFromOther && !isCurrent) {
           if (!lastReadTime || msgTime > parseInt(lastReadTime, 10)) {
             unread = 1;
           }
@@ -391,6 +392,26 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
       };
 
       setMessages((prev) => [...prev, optimisticMsg]);
+
+      // Khi người dùng gửi tin nhắn, đánh dấu đã đọc và xóa số badge chưa đọc ngay lập tức
+      localStorage.setItem(`customer_chat_read_${activeConversation._id}`, Date.now().toString());
+      setConversations((prev) =>
+        prev.map((c) =>
+          String(c._id) === String(activeConversation._id)
+            ? {
+                ...c,
+                unreadCount: 0,
+                lastMessage: {
+                  text: text.trim(),
+                  senderId: currentUserId,
+                  imageUrl: imageUrl || null,
+                  createdAt: new Date().toISOString(),
+                },
+                updatedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
 
       const socket = getSocket();
       socket.emit("stop_typing", { conversationId: activeConversation._id });
