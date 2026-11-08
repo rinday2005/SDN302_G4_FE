@@ -1422,35 +1422,13 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   <span>Thao tác không thể hoàn tác:</span>
                 </p>
                 <p className="opacity-90">
-                  Hiện vật <strong>#{formData.unitId}</strong> sẽ ngừng cho thuê vĩnh viễn và được ẩn khỏi kho RENT để mở bán THRIFT.
+                  Hiện vật <strong>#{formData.unitId}</strong> sẽ ngừng cho thuê vĩnh viễn và được chuyển sang danh mục mở bán THRIFT.
                 </p>
               </div>
 
-              <div className="space-y-1.5 py-1 text-on-surface-variant text-[11px]">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[15px] shrink-0">
-                    check_circle
-                  </span>
-                  <span>
-                    Kho RENT: <strong className="text-on-surface">Chuyển sang CONVERTED_TO_THRIFT</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[15px] shrink-0">
-                    check_circle
-                  </span>
-                  <span>
-                    Sàn THRIFT: <strong className="text-on-surface">Tạo mục đăng PENDING_APPROVAL</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[15px] shrink-0">
-                    check_circle
-                  </span>
-                  <span>
-                    Giá bán niêm yết: <strong className="text-error font-semibold">{formData.price}</strong>
-                  </span>
-                </div>
+              <div className="flex items-center justify-between px-3 py-2 bg-surface-container rounded-lg text-xs">
+                <span className="text-on-surface-variant font-medium">Giá bán đứt thiết lập:</span>
+                <span className="font-bold text-sm text-error">{formData.price}</span>
               </div>
             </div>
 
