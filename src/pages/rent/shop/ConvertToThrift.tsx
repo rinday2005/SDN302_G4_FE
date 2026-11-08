@@ -110,7 +110,17 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
         return;
       }
       const total = Number(p.totalUnits) || 1;
-      for (let i = 1; i <= total; i++) {
+      const cand = total <= 2 ? Array.from({ length: total }, (_, idx) => idx + 1) : [1, total];
+      if (targetId && targetId.toUpperCase().includes(p.sku.slice(-4).toUpperCase())) {
+        const parts = targetId.split('-');
+        const idxNum = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(idxNum) && idxNum >= 1 && idxNum <= total) {
+          cand.push(idxNum);
+        }
+      }
+      const uniqueCand = Array.from(new Set(cand)).sort((a, b) => a - b);
+
+      for (const i of uniqueCand) {
         const id = `INV-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(2, '0')}`;
         const vInfo = getUnitVariantAndCondition(
           p.name,
@@ -130,7 +140,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
       }
     });
     return list.length > 0 ? list : AVAILABLE_CONVERT_SPECIMENS;
-  }, [products]);
+  }, [products, targetId]);
 
   // UI state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);

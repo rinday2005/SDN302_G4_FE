@@ -65,6 +65,15 @@ export const InventoryDashboard: React.FC = () => {
       return !isMockOrCamera;
     });
 
+    let cachedThriftList: any[] = [];
+    const rawThrift = localStorage.getItem('REUSE_HUB_THRIFT_LISTINGS_V1');
+    if (rawThrift) {
+      try {
+        const parsed = JSON.parse(rawThrift);
+        if (Array.isArray(parsed)) cachedThriftList = parsed;
+      } catch {}
+    }
+
     realProducts.forEach((p) => {
       const total = Number(p.totalUnits) || 1;
       const renting = Number(p.rentingUnits) || 0;
@@ -74,7 +83,27 @@ export const InventoryDashboard: React.FC = () => {
           ? (p.category as { name?: string }).name || 'Thời trang Rent'
           : String(p.category || 'Thời trang Rent');
 
-      for (let i = 1; i <= total; i++) {
+      // Phương án A: Tinh gọn kho hiện vật xuống 2 chiếc đại diện cho mỗi mẫu sản phẩm
+      // (1 chiếc đại diện đang vận hành/sẵn sàng và 1 chiếc thâm niên đủ chuẩn THRIFT)
+      // Đồng thời tự động bảo lưu bất kỳ chiếc nào đã được bấm chuyển sang THRIFT
+      const candidateIndices = total <= 2 ? Array.from({ length: total }, (_, idx) => idx + 1) : [1, total];
+
+      if (total > 2) {
+        for (let checkI = 2; checkI < total; checkI++) {
+          const testId = `INV-${p.sku.slice(-4).toUpperCase()}-${String(checkI).padStart(2, '0')}`;
+          const hasLocalConvert = !!localStorage.getItem(`REUSE_HUB_THRIFT_CONVERT_${testId}`);
+          const hasThriftRecord = cachedThriftList.some(
+            (it) => it.originalUnitId === testId || it.unitId === testId || it.id === testId
+          );
+          if (hasLocalConvert || hasThriftRecord) {
+            candidateIndices.push(checkI);
+          }
+        }
+      }
+
+      const uniqueIndices = Array.from(new Set(candidateIndices)).sort((a, b) => a - b);
+
+      for (const i of uniqueIndices) {
         const variantInfo = getUnitVariantAndCondition(
           p.name,
           categoryName,
@@ -105,33 +134,25 @@ export const InventoryDashboard: React.FC = () => {
           }
         } catch {}
 
-        if (thriftStatus === 'NONE') {
-          try {
-            const rawThrift = localStorage.getItem('REUSE_HUB_THRIFT_LISTINGS_V1');
-            if (rawThrift) {
-              const list = JSON.parse(rawThrift);
-              if (Array.isArray(list)) {
-                const matched = list.find(
-                  (it: any) =>
-                    it.originalUnitId === unitId ||
-                    it.unitId === unitId ||
-                    it.id === unitId ||
-                    it._id === unitId
-                );
-                if (matched) {
-                  const s = String(matched.status || matched.approvalStatus || '').toUpperCase();
-                  if (s === 'REJECTED') {
-                    thriftStatus = 'REJECTED';
-                    thriftRejectionReason = matched.rejectionReason;
-                  } else if (s === 'PENDING' || s === 'PENDING_APPROVAL') {
-                    thriftStatus = 'PENDING';
-                  } else if (s === 'APPROVED') {
-                    thriftStatus = 'APPROVED';
-                  }
-                }
-              }
+        if (thriftStatus === 'NONE' && cachedThriftList.length > 0) {
+          const matched = cachedThriftList.find(
+            (it: any) =>
+              it.originalUnitId === unitId ||
+              it.unitId === unitId ||
+              it.id === unitId ||
+              it._id === unitId
+          );
+          if (matched) {
+            const s = String(matched.status || matched.approvalStatus || '').toUpperCase();
+            if (s === 'REJECTED') {
+              thriftStatus = 'REJECTED';
+              thriftRejectionReason = matched.rejectionReason;
+            } else if (s === 'PENDING' || s === 'PENDING_APPROVAL') {
+              thriftStatus = 'PENDING';
+            } else if (s === 'APPROVED') {
+              thriftStatus = 'APPROVED';
             }
-          } catch {}
+          }
         }
 
         let status: 'AVAILABLE' | 'RENTING' | 'MAINTENANCE' | 'INSPECTION' | 'ELIGIBLE_FOR_THRIFT';
