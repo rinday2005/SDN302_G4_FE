@@ -73,6 +73,7 @@ export const DisputeManagement: React.FC = () => {
   const [thriftFeeInput, setThriftFeeInput] = useState<number>(8);
   const [isSavingFee, setIsSavingFee] = useState<boolean>(false);
   const [isResolving, setIsResolving] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [disputes, setDisputes] = useState<DisputeItem[]>(INITIAL_DISPUTES);
   const [currentStatus, setCurrentStatus] = useState<"ALL" | DisputeStatus>("ALL");
@@ -135,6 +136,9 @@ export const DisputeManagement: React.FC = () => {
       .catch((err) => {
         console.warn("Lỗi tải danh sách tranh chấp từ API:", err);
         setDisputes([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -889,7 +893,18 @@ export const DisputeManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#ece7e4]">
-                {filteredDisputes.length === 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={8} className="py-14 text-center text-[#7e766a]">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-10 h-10 rounded-full border-4 border-[#cfc5b8] border-t-[#6c5937] animate-spin"></div>
+                        <p className="text-sm font-semibold text-[#1c1b19]">
+                          Đang đồng bộ hồ sơ tranh chấp từ cơ sở dữ liệu MongoDB...
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredDisputes.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-14 text-center text-[#7e766a]">
                       <div className="flex flex-col items-center justify-center gap-3">
@@ -1115,13 +1130,15 @@ export const DisputeManagement: React.FC = () => {
               </button>
               <button
                 type="button"
+                style={{ display: filteredDisputes.length > 10 ? "flex" : "none" }}
                 className="w-7 h-7 rounded bg-white hover:bg-[#ece7e4] text-[#1c1b19] flex items-center justify-center transition-colors border border-[#cfc5b8]/30"
               >
                 2
               </button>
               <button
                 type="button"
-                className="px-2.5 py-1 rounded bg-white hover:bg-[#ece7e4] text-[#1c1b19] transition-colors border border-[#cfc5b8]/30 flex items-center"
+                disabled={filteredDisputes.length <= 10}
+                className="px-2.5 py-1 rounded bg-white hover:bg-[#ece7e4] text-[#1c1b19] transition-colors border border-[#cfc5b8]/30 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>Sau</span>
                 <span className="material-symbols-outlined text-[14px]">chevron_right</span>

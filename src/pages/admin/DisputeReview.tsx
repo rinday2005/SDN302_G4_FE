@@ -99,98 +99,6 @@ interface DisputeDetailData {
   };
 }
 
-const DEFAULT_DISPUTE: DisputeDetailData = {
-  disputeCode: "RH-D7CD7",
-  orderType: "RENT",
-  orderCode: "RO-1794168986317-X8O7",
-  status: "RESOLVED",
-  title: "Khiếu nại: Rách hỏng vải / Hư hại cấu trúc trang phục: Váy bị rách",
-  categoryTag: "RENT • DEPOSIT DISPUTE",
-  reason: "Rách hỏng vải / Hư hại cấu trúc trang phục: Váy bị rách",
-  slaDeadline: "18:00 hôm nay",
-  slaRemaining: "ĐÃ BAN HÀNH PHÁN QUYẾT",
-  labCode: "LAB-TEXTILE-D7",
-  escrowAmount: 800000,
-  claimAmount: 800000,
-  product: {
-    name: "Đầm Dự Tiệc Cúp Ngực Dáng Xòe Công Chúa Đính Ren & Vòng Cổ Pha Lê",
-    image: "https://res.cloudinary.com/qs6kyqau/image/upload/v1793387030/reuse_hub/bflchtdek95r7xq9d2wb.jpg",
-    sku: "#HB-X8O7",
-    detail: "Đầm dạ hội dáng xòe công chúa cao cấp đính ren tinh xảo • Cơ sở: Trạm kiểm định ReUse Hub",
-    rentalDuration: "Kỳ thuê 3 ngày",
-    rentalFee: 750000,
-    pricePerDay: 250000,
-  },
-  renter: {
-    code: "#USR-HON01",
-    fullName: "Nguyễn Hơn",
-    email: "hon@gmail.com",
-    phoneNumber: "0987 *** 892",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
-    trustScore: "98.5%",
-    cleanOrdersText: "Phản đối yêu cầu trừ toàn bộ 800.000 ₫ cọc",
-    tier: "Tier-2 Verified",
-    statement: "Khách hàng khẳng định: Sản phẩm được giữ gìn cẩn thận trong quá trình sử dụng, phản đối yêu cầu trừ toàn bộ 800.000 ₫ cọc.",
-    statementTime: "Hôm nay • 08:30",
-    request: "Hoàn trả 100% tiền cọc (800.000 ₫)",
-  },
-  shopOwner: {
-    code: "#SHP-NHI01",
-    shopName: "Nguyễn Thị Phương Nhi",
-    representative: "Nguyễn Thị Phương Nhi",
-    phoneNumber: "0901 *** 567",
-    rating: "4.96 ★",
-    statsText: "Tỷ lệ tranh chấp thấp 0.3%",
-    stationName: "Trạm kiểm định Đà Nẵng",
-    stationDetail: "Trạm kiểm định chất lượng ReUse Hub",
-    tier: "Tier-3 Certified Partner",
-    claimStatement: "Chủ xưởng báo cáo: Váy bị rách hỏng cấu trúc trang phục khi kiểm định nhận về, yêu cầu khấu trừ 800.000 ₫ tiền cọc để phục hồi.",
-    claimTime: "Hôm qua • 18:00",
-    reportCode: "RT-KHO-7CD7",
-  },
-  timeline: [
-    { time: "Bàn giao", title: "Xuất kho niêm phong", desc: "Bàn giao hiện vật tại quầy", type: "dispatch" },
-    { time: "Hoàn trả", title: "Tiếp nhận thu hồi", desc: "Trạm kiểm định tiếp nhận sản phẩm sau kỳ thuê", type: "return" },
-    { time: "Hôm qua 18:00", title: "Lập biên bản tổn hại", desc: "Chủ xưởng báo cáo váy bị rách, đề xuất trừ 800.000 ₫", type: "claim" },
-    { time: "Hôm nay 08:30", title: "Kích hoạt Trọng tài ReUse Hub", desc: "Khách từ chối trừ cọc, chuyển hồ sơ trọng tài", type: "dispute", highlight: true },
-  ],
-  evidences: [
-    {
-      tag: "HIỆN TRẠNG KIỂM ĐỊNH",
-      badgeColor: "#ba1a1a",
-      evidenceNumber: "Evidence #01: Inspection Photo",
-      title: "Ảnh Ghi Nhận Hư Hại Trang Phục",
-      desc: "Ảnh chụp macro ghi nhận tổn hại: Rách hỏng vải / Hư hại cấu trúc trang phục: Váy bị rách",
-      image: "https://res.cloudinary.com/qs6kyqau/image/upload/v1793387030/reuse_hub/bflchtdek95r7xq9d2wb.jpg",
-      hash: "SHA-256 7CD7...",
-      statusText: "BIÊN BẢN",
-    },
-  ],
-  benchAudit: {
-    gaugePercent: 91,
-    gaugeLabel: "Độ Nguyên Bản",
-    damageClassification: "CẦN PHỤC HỒI / SỬA CHỮA",
-    title: "Báo Cáo Phòng Kỹ Thuật & Giám Định Vải Sợi",
-    reportText: "Biên bản giám định xác nhận: Váy có vết rách cần phục hồi tiệm may chuyên dụng. Chi phí may lại đường rách ước tính 200.000 ₫ - 300.000 ₫.",
-    auditor: "TECH-LAB-TEXTILE",
-    conclusion: "CẦN TRỌNG TÀI PHÂN XỬ",
-  },
-  dialogue: [
-    { sender: "SHOP", senderName: "Nguyễn Thị Phương Nhi", time: "Hôm qua 18:05", text: "Chào bạn Hơn, bên mình nhận lại váy kiểm tra thì thấy có vết rách ở vải. Shop xin phép yêu cầu giữ 800.000 ₫ tiền cọc để sửa chữa phục hồi." },
-    { sender: "CUSTOMER", senderName: "Nguyễn Hơn", time: "Hôm qua 18:42", text: "Chào Shop, mình mặc rất cẩn thận tại tiệc và không làm rách như vậy. Yêu cầu trừ toàn bộ 800.000 ₫ cọc là quá cao. Nhờ Admin ReUse Hub vào đối chiếu biên bản giúp mình." },
-    { sender: "CUSTOMER", senderName: "Nguyễn Hơn", time: "Hôm nay 08:30", text: "Mình đã bấm nút chuyển hồ sơ trọng tài để Admin sàn phân xử công bằng." },
-  ],
-  arbitration: {
-    selectedPreset: "opt_1",
-    resolution: "REFUND_RENTER",
-    refundToRenter: 800000,
-    payoutToShop: 0,
-    adminNotes: "Căn cứ ảnh đối soát xuất kho và kết quả giám định của Phòng Kỹ Thuật ReUse Hub (LAB-TEXTILE-D7):\n- Tổn hại được xác định là hao mòn tự nhiên (Fair Wear & Tear), không có dấu hiệu can thiệp trái phép.\nHội đồng Trọng tài quyết định: Hoàn trả 100% tiền ký quỹ (800.000 ₫) cho khách hàng Nguyễn Hơn. Xưởng Nguyễn Thị Phương Nhi nhận hỗ trợ bảo dưỡng phòng sạch từ Quỹ Lưu Hành Tuần Hoàn ReUse Hub.",
-    multiSigTxHash: "0x406a43062082af97843e6654a919e7a83551870bd2f791b24500e1b3503c5f2f",
-    resolvedAt: "2026-11-08T21:21:32.621Z",
-  },
-};
-
 export const DisputeReview: React.FC = () => {
   const { id } = useParams<{ id: string }>();
 
@@ -202,10 +110,12 @@ export const DisputeReview: React.FC = () => {
     : "#RH-D7CD7";
 
   // Data State loaded from MongoDB
-  const [data, setData] = useState<DisputeDetailData>(DEFAULT_DISPUTE);
+  const [data, setData] = useState<DisputeDetailData | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Form State
-  const [disputeStatus, setDisputeStatus] = useState<DisputeReviewStatus>("RESOLVED");
+  const [disputeStatus, setDisputeStatus] = useState<DisputeReviewStatus>("OPEN");
   const [arbitrationPreset, setArbitrationPreset] = useState<ArbitrationPreset>("opt_1");
   const [resolutionNote, setResolutionNote] = useState<string>("");
 
@@ -230,24 +140,30 @@ export const DisputeReview: React.FC = () => {
     isVerdictExecuted ||
     disputeStatus === "RESOLVED" ||
     disputeStatus === "CLOSED" ||
-    data.status === "RESOLVED" ||
-    data.status === "CLOSED" ||
-    Boolean(data.arbitration?.resolvedAt) ||
-    Boolean(data.arbitration?.multiSigTxHash && data.arbitration.multiSigTxHash.length > 5);
+    data?.status === "RESOLVED" ||
+    data?.status === "CLOSED" ||
+    Boolean(data?.arbitration?.resolvedAt) ||
+    Boolean(data?.arbitration?.multiSigTxHash && data.arbitration.multiSigTxHash.length > 5);
 
   // Load real dispute details from MongoDB via API
   useEffect(() => {
     if (!id) return;
     const cleanId = id.replace("#", "").trim();
+    setIsLoading(true);
+    setFetchError(null);
 
     getDisputeByIdApi(cleanId)
       .then((res: any) => {
         const d = res?.dispute || res?.order || res;
         const verdict = res?.verdict || d?.verdict;
-        if (!d) return;
+        if (!d || (!d.disputeCode && !d._id && !d.orderCode)) {
+          setFetchError(`Không tìm thấy hồ sơ tranh chấp #${cleanId} trong cơ sở dữ liệu MongoDB.`);
+          setIsLoading(false);
+          return;
+        }
 
-        const escrow = Number(d.escrowAmount ?? d.depositAmount ?? d.totalAmount) || DEFAULT_DISPUTE.escrowAmount;
-        const claim = Number(d.claimAmount ?? (escrow > 500000 ? Math.min(escrow, 2500000) : 500000));
+        const escrow = Number(d.escrowAmount ?? d.depositAmount ?? d.totalAmount) || 0;
+        const claim = Number(d.claimAmount ?? escrow);
         const isResolvedFromApi =
           d.status === "RESOLVED" ||
           d.status === "CLOSED" ||
@@ -262,56 +178,80 @@ export const DisputeReview: React.FC = () => {
           orderType: d.orderType || "RENT",
           orderCode: d.orderCode || `RO-${cleanId.slice(-4).toUpperCase()}`,
           status: statusVal,
-          title: d.title || d.reason || DEFAULT_DISPUTE.title,
+          title: d.title || d.reason || `Khiếu nại tranh chấp #${d.disputeCode || id}`,
           categoryTag: d.categoryTag || `${d.orderType || "RENT"} • DEPOSIT DISPUTE`,
-          reason: d.reason || d.title || DEFAULT_DISPUTE.reason,
-          slaDeadline: d.slaDeadline || DEFAULT_DISPUTE.slaDeadline,
-          slaRemaining: d.slaRemaining || DEFAULT_DISPUTE.slaRemaining,
-          labCode: d.labCode || DEFAULT_DISPUTE.labCode,
+          reason: d.reason || d.title || "Khiếu nại đối soát chất lượng hiện vật & tiền ký quỹ",
+          slaDeadline: d.slaDeadline || "18:00 hôm nay",
+          slaRemaining: d.slaRemaining || (isResolvedFromApi ? "ĐÃ BAN HÀNH PHÁN QUYẾT" : "SLA: Trong 24h"),
+          labCode: d.labCode || `LAB-${cleanId.slice(-4).toUpperCase()}`,
           escrowAmount: escrow,
           claimAmount: claim,
           createdAt: d.createdAt,
           product: {
-            name: d.product?.name || d.items?.[0]?.productId?.name || d.items?.[0]?.name || DEFAULT_DISPUTE.product.name,
-            image: d.product?.image || d.items?.[0]?.productId?.images?.[0] || d.items?.[0]?.images?.[0] || DEFAULT_DISPUTE.product.image,
+            name: d.product?.name || d.items?.[0]?.productId?.name || d.items?.[0]?.name || "Hiện vật đối soát",
+            image: d.product?.image || d.items?.[0]?.productId?.images?.[0] || d.items?.[0]?.images?.[0] || "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=600&q=80",
             sku: d.product?.sku || `#HB-${d.orderCode || cleanId.slice(-4).toUpperCase()}`,
-            detail: d.product?.detail || DEFAULT_DISPUTE.product.detail,
-            rentalDuration: d.product?.rentalDuration || DEFAULT_DISPUTE.product.rentalDuration,
-            rentalFee: Number(d.product?.rentalFee ?? d.rentalFee) || DEFAULT_DISPUTE.product.rentalFee,
-            pricePerDay: Number(d.product?.pricePerDay) || DEFAULT_DISPUTE.product.pricePerDay,
+            detail: d.product?.detail || `Hiện vật đối soát trong đơn ${d.orderCode || cleanId}`,
+            rentalDuration: d.product?.rentalDuration || "Kỳ thuê 3 ngày",
+            rentalFee: Number(d.product?.rentalFee ?? d.rentalFee) || 0,
+            pricePerDay: Number(d.product?.pricePerDay) || 0,
           },
           renter: {
-            code: d.renter?.code || (d.renter?._id ? `#USR-${String(d.renter._id).slice(-5).toUpperCase()}` : DEFAULT_DISPUTE.renter.code),
-            fullName: d.renter?.fullName || DEFAULT_DISPUTE.renter.fullName,
-            email: d.renter?.email || DEFAULT_DISPUTE.renter.email,
-            phoneNumber: d.renter?.phoneNumber || DEFAULT_DISPUTE.renter.phoneNumber,
-            avatarUrl: d.renter?.avatarUrl || DEFAULT_DISPUTE.renter.avatarUrl,
-            trustScore: d.renter?.trustScore || DEFAULT_DISPUTE.renter.trustScore,
-            cleanOrdersText: d.renter?.cleanOrdersText || DEFAULT_DISPUTE.renter.cleanOrdersText,
-            tier: d.renter?.tier || DEFAULT_DISPUTE.renter.tier,
-            statement: d.renter?.statement || DEFAULT_DISPUTE.renter.statement,
-            statementTime: d.renter?.statementTime || DEFAULT_DISPUTE.renter.statementTime,
-            request: d.renter?.request || `Hoàn trả 100% cọc (${escrow.toLocaleString("vi-VN")} ₫)`,
+            code: d.renter?.code || (d.renter?._id || d.renter?.id ? `#USR-${String(d.renter._id || d.renter.id).slice(-5).toUpperCase()}` : "#USR-KH"),
+            fullName: d.renter?.fullName || d.renter?.name || "Khách Hàng",
+            email: d.renter?.email || "",
+            phoneNumber: d.renter?.phoneNumber || "",
+            avatarUrl: d.renter?.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+            trustScore: d.renter?.trustScore || "98.5%",
+            cleanOrdersText: d.renter?.cleanOrdersText || "Phản đối khấu trừ toàn bộ tiền cọc",
+            tier: d.renter?.tier || "KYC Verified Tier",
+            statement: d.renter?.statement || "Khách hàng khẳng định đã bảo quản hiện vật cẩn thận, không chấp thuận yêu cầu trừ cọc.",
+            statementTime: d.renter?.statementTime || "08:30 hôm nay",
+            request: d.renter?.request || `Hoàn trả 100% tiền cọc (${escrow.toLocaleString("vi-VN")} ₫)`,
           },
           shopOwner: {
-            code: d.shopOwner?.code || (d.shopOwner?._id ? `#SHP-${String(d.shopOwner._id).slice(-4).toUpperCase()}` : DEFAULT_DISPUTE.shopOwner.code),
-            shopName: d.shopOwner?.shopName || d.shopOwner?.fullName || DEFAULT_DISPUTE.shopOwner.shopName,
-            representative: d.shopOwner?.representative || d.shopOwner?.fullName || DEFAULT_DISPUTE.shopOwner.representative,
-            phoneNumber: d.shopOwner?.phoneNumber || DEFAULT_DISPUTE.shopOwner.phoneNumber,
-            rating: d.shopOwner?.rating || DEFAULT_DISPUTE.shopOwner.rating,
-            statsText: d.shopOwner?.statsText || DEFAULT_DISPUTE.shopOwner.statsText,
-            stationName: d.shopOwner?.stationName || DEFAULT_DISPUTE.shopOwner.stationName,
-            stationDetail: d.shopOwner?.stationDetail || DEFAULT_DISPUTE.shopOwner.stationDetail,
-            tier: d.shopOwner?.tier || DEFAULT_DISPUTE.shopOwner.tier,
-            claimStatement: d.shopOwner?.claimStatement || d.reason || DEFAULT_DISPUTE.shopOwner.claimStatement,
-            claimTime: d.shopOwner?.claimTime || DEFAULT_DISPUTE.shopOwner.claimTime,
-            reportCode: d.shopOwner?.reportCode || DEFAULT_DISPUTE.shopOwner.reportCode,
+            code: d.shopOwner?.code || (d.shopOwner?._id || d.shopOwner?.id ? `#SHP-${String(d.shopOwner._id || d.shopOwner.id).slice(-4).toUpperCase()}` : "#SHP-CH"),
+            shopName: d.shopOwner?.shopName || d.shopOwner?.fullName || "Chủ Xưởng",
+            representative: d.shopOwner?.representative || d.shopOwner?.fullName || "Chủ Xưởng",
+            phoneNumber: d.shopOwner?.phoneNumber || "",
+            rating: d.shopOwner?.rating || "4.96 ★",
+            statsText: d.shopOwner?.statsText || "Tỷ lệ tranh chấp thấp",
+            stationName: d.shopOwner?.stationName || "Trạm kiểm định ReUse Hub",
+            stationDetail: d.shopOwner?.stationDetail || "Trạm kiểm định chất lượng",
+            tier: d.shopOwner?.tier || "Tier-3 Certified Partner",
+            claimStatement: d.shopOwner?.claimStatement || d.reason || "Chủ xưởng báo cáo hiện vật tổn hại khi nhận về, yêu cầu khấu trừ cọc bồi thường phục hồi.",
+            claimTime: d.shopOwner?.claimTime || "18:00 hôm qua",
+            reportCode: d.shopOwner?.reportCode || `RT-${cleanId.slice(-4).toUpperCase()}`,
           },
-          timeline: d.timeline && d.timeline.length > 0 ? d.timeline : DEFAULT_DISPUTE.timeline,
-          evidences: d.evidences && d.evidences.length > 0 ? d.evidences : DEFAULT_DISPUTE.evidences,
-          benchAudit: d.benchAudit || DEFAULT_DISPUTE.benchAudit,
-          dialogue: d.dialogue && d.dialogue.length > 0 ? d.dialogue : DEFAULT_DISPUTE.dialogue,
-          arbitration: d.arbitration || d.dispute,
+          timeline: Array.isArray(d.timeline) && d.timeline.length > 0 ? d.timeline : [
+            { time: "Bàn giao", title: "Xuất kho niêm phong", desc: "Bàn giao hiện vật tại quầy", type: "dispatch" },
+            { time: "Hoàn trả", title: "Tiếp nhận thu hồi", desc: "Trạm kiểm định tiếp nhận sản phẩm sau kỳ thuê", type: "return" },
+            { time: "Báo cáo", title: "Lập biên bản tổn hại", desc: d.reason || "Chủ xưởng gửi yêu cầu đối soát", type: "claim" },
+            { time: "Hôm nay", title: "Kích hoạt Trọng tài", desc: "Chuyển hồ sơ sang Hội Đồng Giám Định ReUse Hub", type: "dispute", highlight: true },
+          ],
+          evidences: Array.isArray(d.evidences) && d.evidences.length > 0 ? d.evidences : (
+            Array.isArray(d.damageImages) && d.damageImages.length > 0 ? d.damageImages.map((img: string, i: number) => ({
+              tag: "HIỆN TRẠNG KIỂM ĐỊNH",
+              badgeColor: "#ba1a1a",
+              evidenceNumber: `Evidence #0${i + 1}: Inspection Photo`,
+              title: "Ảnh Ghi Nhận Hư Hại Hiện Vật",
+              desc: d.reason || "Ảnh chụp hiện trạng lúc kiểm định tiếp nhận",
+              image: img,
+              hash: `SHA-256 ${cleanId.slice(-4).toUpperCase()}...`,
+              statusText: "BIÊN BẢN",
+            })) : []
+          ),
+          benchAudit: d.benchAudit || {
+            gaugePercent: 91,
+            gaugeLabel: "Độ Nguyên Bản",
+            damageClassification: "CẦN PHỤC HỒI / SỬA CHỮA",
+            title: "Báo Cáo Phòng Kỹ Thuật ReUse Hub",
+            reportText: `Biên bản giám định xác nhận: ${d.reason || "Hiện vật cần phục hồi chuyên dụng. Căn cứ hồ sơ đối soát để phân xử công bằng."}`,
+            auditor: "TECH-LAB-REUSE",
+            conclusion: isResolvedFromApi ? "ĐÃ BAN HÀNH PHÁN QUYẾT" : "CẦN TRỌNG TÀI PHÂN XỬ",
+          },
+          dialogue: Array.isArray(d.dialogue) && d.dialogue.length > 0 ? d.dialogue : [],
+          arbitration: d.arbitration || verdict || d.dispute,
         };
 
         setData(merged);
@@ -335,6 +275,8 @@ export const DisputeReview: React.FC = () => {
             refundToRenter: Number(verdict?.refundToRenter ?? d.arbitration?.refundToRenter ?? escrow),
             payoutToShop: Number(verdict?.payoutToShop ?? d.arbitration?.payoutToShop ?? 0),
             txHash: hash,
+            renterWalletBalance: verdict?.renter?.walletBalanceAfter,
+            shopWalletBalance: verdict?.shopOwner?.walletBalanceAfter,
           });
           setDisputeStatus("CLOSED");
         }
@@ -355,6 +297,10 @@ export const DisputeReview: React.FC = () => {
       })
       .catch((err) => {
         console.warn("Lỗi tải chi tiết tranh chấp từ API MongoDB:", err);
+        setFetchError("Không thể kết nối đến cơ sở dữ liệu MongoDB để tải hồ sơ tranh chấp.");
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
   }, [id]);
 
@@ -383,11 +329,14 @@ export const DisputeReview: React.FC = () => {
 
   const handleSelectPreset = (preset: ArbitrationPreset) => {
     setArbitrationPreset(preset);
-    setResolutionNote(generatePresetNote(preset, data));
+    if (data) {
+      setResolutionNote(generatePresetNote(preset, data));
+    }
     showToast(`Đã áp dụng mẫu phán quyết: ${preset === "opt_1" ? "Phương án 1 (Khuyến nghị B-Corp)" : preset === "opt_2" ? "Phương án 2 (Hòa giải chia sẻ)" : "Phương án 3 (Chấp thuận yêu cầu xưởng)"}`);
   };
 
   const handleConfirmVerdict = () => {
+    if (!data) return;
     const cleanId = (id || data.disputeCode || "RH-D7CD7").replace(/^#/, "");
     const escrow = data.escrowAmount;
     const claim = data.claimAmount;
@@ -576,7 +525,7 @@ export const DisputeReview: React.FC = () => {
               Tranh Chấp Sàn
             </Link>
             <span className="text-[#cfc5b8]">/</span>
-            <span className="text-[#1c1b19] font-semibold">Chi Tiết Tranh Chấp {data.disputeCode || disputeCode}</span>
+            <span className="text-[#1c1b19] font-semibold">Chi Tiết Tranh Chấp {data?.disputeCode || disputeCode}</span>
           </div>
 
           <div className="flex items-center gap-3 text-[11px] font-mono">
@@ -592,6 +541,34 @@ export const DisputeReview: React.FC = () => {
         </div>
       </div>
 
+      {isLoading ? (
+        <div className="max-w-7xl mx-auto w-full py-20 px-4 flex flex-col items-center justify-center gap-4">
+          <div className="w-12 h-12 rounded-full border-4 border-[#cfc5b8] border-t-[#6c5937] animate-spin"></div>
+          <span className="text-sm font-semibold text-[#4c463c]">
+            Đang tải hồ sơ tranh chấp #{disputeCode.replace("#", "")} từ cơ sở dữ liệu MongoDB...
+          </span>
+        </div>
+      ) : fetchError || !data ? (
+        <div className="max-w-3xl mx-auto w-full py-16 px-4 text-center">
+          <div className="p-8 bg-white rounded-2xl border border-[#cfc5b8]/30 shadow-sm flex flex-col items-center gap-3">
+            <span className="material-symbols-outlined text-4xl text-[#ba1a1a]">search_off</span>
+            <h2 className="text-xl font-bold font-serif text-[#1c1b19]">
+              Không tìm thấy hồ sơ tranh chấp
+            </h2>
+            <p className="text-xs sm:text-sm text-[#7e766a] max-w-md">
+              {fetchError || `Hồ sơ ${disputeCode} không tồn tại hoặc đã bị xóa khỏi cơ sở dữ liệu MongoDB.`}
+            </p>
+            <Link
+              to="/admin/disputes"
+              className="mt-4 px-4 py-2 rounded-lg bg-[#1c1b19] hover:bg-[#6c5937] text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+              Quay lại danh sách tranh chấp
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
       {/* Header Dossier Banner */}
       <section className="w-full bg-[#fdf8f5] py-6 px-4 md:px-12 border-b border-[#cfc5b8]/20">
         <div className="max-w-7xl mx-auto flex flex-col gap-6">
@@ -1438,7 +1415,7 @@ export const DisputeReview: React.FC = () => {
                     </span>
                   </div>
                   <div className="w-full bg-white p-5 rounded-xl text-[#1c1b19] text-xs sm:text-sm border border-[#cfc5b8]/50 leading-relaxed shadow-sm whitespace-pre-line font-serif italic bg-gradient-to-br from-white to-[#fbf8f5]">
-                    {resolutionNote || data.arbitration?.adminNotes || DEFAULT_DISPUTE.arbitration?.adminNotes}
+                    {resolutionNote || data.arbitration?.adminNotes || "Biên bản phán quyết được lưu vĩnh viễn trên sổ cái MongoDB Smart Escrow."}
                   </div>
                 </div>
 
@@ -1749,9 +1726,11 @@ export const DisputeReview: React.FC = () => {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* MODAL 1: MULTI-SIG CONFIRMATION MODAL */}
-      {isSignModalOpen && (
+      {isSignModalOpen && data && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#fdf8f5] w-full max-w-lg rounded-2xl p-6 shadow-2xl border border-[#cfc5b8]/40 flex flex-col gap-5">
             <div className="flex items-center justify-between pb-3 border-b border-[#cfc5b8]/30">
@@ -1824,7 +1803,7 @@ export const DisputeReview: React.FC = () => {
       )}
 
       {/* MODAL 2: FULL CHAT MODAL */}
-      {isChatModalOpen && (
+      {isChatModalOpen && data && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#fdf8f5] w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-[#cfc5b8]/40 flex flex-col gap-4 max-h-[85vh]">
             <div className="flex items-center justify-between pb-3 border-b border-[#cfc5b8]/30">
@@ -1892,7 +1871,7 @@ export const DisputeReview: React.FC = () => {
       )}
 
       {/* MODAL 3: ESCALATE MODAL */}
-      {isEscalateModalOpen && (
+      {isEscalateModalOpen && data && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#fdf8f5] w-full max-w-md rounded-2xl p-6 shadow-2xl border border-[#cfc5b8]/40 flex flex-col gap-4">
             <div className="flex items-center gap-2 pb-2 border-b border-[#cfc5b8]/30 text-[#ba1a1a]">

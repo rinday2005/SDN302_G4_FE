@@ -1,3 +1,4 @@
+import { useNotification } from "../../hooks/useNotification";
 import React, { useContext, useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "../../context/auth-context";
@@ -16,6 +17,7 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
   const user = auth?.user;
   const navigate = useNavigate();
 
+  const { unreadCount } = useNotification();
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -109,7 +111,11 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
             title="Thông báo Shop"
           >
             <span className="material-symbols-outlined text-[20px] block">notifications</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 absolute top-1.5 right-1.5" />
+            {unreadCount > 0 && (
+              <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold absolute -top-1 -right-1 flex items-center justify-center animate-pulse">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </Link>
 
           <div className="h-5 w-px bg-[#dddad3]" />

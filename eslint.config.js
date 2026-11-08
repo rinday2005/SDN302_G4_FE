@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'node_modules', '*.cjs']),
+  globalIgnores(['dist', 'node_modules', '*.cjs', 'recruitment_system']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -24,6 +24,8 @@ export default defineConfig([
       'no-empty': ['warn', { allowEmptyCatch: true }],
       'react-hooks/preserve-manual-memoization': 'off',
       'react-hooks/purity': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/immutability': 'off',
     },
   },
 ])

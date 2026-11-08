@@ -1,6 +1,6 @@
+import { useNotification } from "../../hooks/useNotification";
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import { UserSidebar } from '../../components/layout/UserSidebar';
 
 interface NotificationRecord {
@@ -14,8 +14,8 @@ interface NotificationRecord {
 }
 
 export const NotificationCenter: React.FC = () => {
-  const { user } = useAuth();
-  const uId = user?._id || user?.id || '';
+  // const { user } = useAuth();
+  // uId managed by useNotification
 
   // Track sidebar collapsed state to display inline restore chip when collapsed
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -37,57 +37,61 @@ export const NotificationCenter: React.FC = () => {
     return () => window.removeEventListener('reuse_user_sidebar_toggle', handleSync);
   }, []);
 
-  const [notifications, setNotifications] = useState<NotificationRecord[]>(() => {
-    if (!uId) return [];
-    try {
-      const raw = localStorage.getItem(`user_notifications_${uId}`);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr) && arr.length > 0) return arr;
-      }
-    } catch {
-      // ignore
-    }
-    return [
-      {
-        id: 'notif-1',
-        title: 'Bảo chứng Smart Escrow kích hoạt',
-        message: 'Khoản tiền ký quỹ đơn thuê của bạn đã được khóa an toàn trong hợp đồng lưu ký.',
-        time: 'Vừa xong',
-        type: 'payment',
-        isRead: false,
-        link: '/rent/orders',
-      },
-      {
-        id: 'notif-2',
-        title: 'Xác thực tài khoản KYC thành công',
-        message: 'Hồ sơ định danh căn cước của bạn đã được kiểm duyệt. Hạn mức thuê đã mở rộng lên Tier 2.',
-        time: 'Hôm nay',
-        type: 'security',
-        isRead: true,
-        link: '/profile',
-      },
-      {
-        id: 'notif-3',
-        title: 'Đơn hàng đã được xác nhận',
-        message: 'Shop Partner đã chuẩn bị sẵn sàng thiết bị trong hộp chuyên dụng Nanuk White-Glove.',
-        time: 'Hôm qua',
-        type: 'order',
-        isRead: true,
-        link: '/rent/orders',
-      },
-    ];
-  });
+  const {
+    notifications: rawList,
+    unreadCount,
+    markAsRead,
+    markAllAsRead
+  } = useNotification();
 
-  const markAllRead = () => {
-    const updated = notifications.map((n) => ({ ...n, isRead: true }));
-    setNotifications(updated);
-    if (uId) {
-      localStorage.setItem(`user_notifications_${uId}`, JSON.stringify(updated));
+  const [activeTab, setActiveTab] = useState<'ALL' | 'UNREAD' | 'ORDER' | 'PAYMENT' | 'SECURITY'>('ALL');
+
+  const formatTimeAgo = (dateStr?: string) => {
+    if (!dateStr) return 'Vừa xong';
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return 'Vừa xong';
+      if (diffMins < 60) return `${diffMins} phút trước`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours} giờ trước`;
+      return new Date(dateStr).toLocaleDateString('vi-VN');
+    } catch {
+      return 'Gần đây';
     }
   };
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.isRead).length, [notifications]);
+  const mapType = (type?: string): 'order' | 'security' | 'payment' | 'system' => {
+    if (type === 'RENTAL_ORDER' || type === 'THRIFT_ORDER' || type === 'RETURN') return 'order';
+    if (type === 'PAYMENT' || type === 'REFUND') return 'payment';
+    if (type === 'KYC') return 'security';
+    return 'system';
+  };
+
+  const notifications: NotificationRecord[] = useMemo(() => {
+    if (!rawList || rawList.length === 0) return [];
+    return rawList.map((n) => ({
+      id: n._id || n.id || String(Math.random()),
+      title: n.title,
+      message: n.message,
+      time: formatTimeAgo(n.createdAt),
+      type: mapType(n.type),
+      isRead: n.isRead,
+      link: n.link || '/rent/orders',
+    }));
+  }, [rawList]);
+
+  const filteredNotifications = useMemo(() => {
+    if (activeTab === 'UNREAD') return notifications.filter((n) => !n.isRead);
+    if (activeTab === 'ORDER') return notifications.filter((n) => n.type === 'order');
+    if (activeTab === 'PAYMENT') return notifications.filter((n) => n.type === 'payment');
+    if (activeTab === 'SECURITY') return notifications.filter((n) => n.type === 'security');
+    return notifications;
+  }, [notifications, activeTab]);
+
+  const markAllRead = () => {
+    markAllAsRead();
+  };
 
   return (
     <div className="w-full min-h-screen bg-[#FBF9F5] text-[#1C1A18] antialiased">
@@ -146,23 +150,74 @@ export const NotificationCenter: React.FC = () => {
                 </p>
               </div>
 
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={markAllRead}
-                  className="px-4 py-2 rounded-xl bg-white border border-[#E8E4DC] hover:bg-[#F6F3EE] text-xs font-semibold text-[#1C1A18] shadow-2xs transition-colors cursor-pointer shrink-0"
-                >
-                  Đánh dấu tất cả đã đọc
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    className="px-4 py-2 rounded-xl bg-white border border-[#E8E4DC] hover:bg-[#F6F3EE] text-xs font-semibold text-[#1C1A18] shadow-2xs transition-colors cursor-pointer shrink-0"
+                  >
+                    Đánh dấu tất cả đã đọc
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-2 pb-2">
+              <button
+                type="button"
+                onClick={() => setActiveTab('ALL')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'ALL' ? 'bg-[#1C1A18] text-white shadow-2xs' : 'bg-white text-[#76726B] hover:text-[#1C1A18] border border-[#E8E4DC]'}`}
+              >
+                Tất cả ({notifications.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('UNREAD')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'UNREAD' ? 'bg-[#1C1A18] text-white shadow-2xs' : 'bg-white text-[#76726B] hover:text-[#1C1A18] border border-[#E8E4DC]'}`}
+              >
+                Chưa đọc ({unreadCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('ORDER')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'ORDER' ? 'bg-[#1C1A18] text-white shadow-2xs' : 'bg-white text-[#76726B] hover:text-[#1C1A18] border border-[#E8E4DC]'}`}
+              >
+                Đơn hàng
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('PAYMENT')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'PAYMENT' ? 'bg-[#1C1A18] text-white shadow-2xs' : 'bg-white text-[#76726B] hover:text-[#1C1A18] border border-[#E8E4DC]'}`}
+              >
+                Ký quỹ &amp; Hoàn cọc
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('SECURITY')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${activeTab === 'SECURITY' ? 'bg-[#1C1A18] text-white shadow-2xs' : 'bg-white text-[#76726B] hover:text-[#1C1A18] border border-[#E8E4DC]'}`}
+              >
+                Bảo mật &amp; KYC
+              </button>
             </div>
 
             {/* Notification List */}
             <div className="space-y-3">
-              {notifications.map((notif) => (
+              {filteredNotifications.length === 0 ? (
+                <div className="py-20 text-center bg-white rounded-2xl border border-[#E8E4DC] text-xs text-[#76726B] shadow-2xs space-y-2">
+                  <span className="material-symbols-outlined text-[36px] text-[#A8A29E] block">notifications_off</span>
+                  <p className="font-serif text-base font-bold text-[#1C1A18]">Chưa có thông báo nào trong mục này</p>
+                  <p className="text-xs text-[#76726B]">
+                    Hệ thống cập nhật thông báo trực tiếp từ cơ sở dữ liệu MongoDB theo từng trạng thái đơn hàng và tài khoản.
+                  </p>
+                </div>
+              ) : (
+                filteredNotifications.map((notif) => (
                 <div
                   key={notif.id}
-                  className={`p-5 rounded-2xl border transition-all ${
+                  onClick={() => markAsRead(notif.id)}
+                  className={`p-5 rounded-2xl border transition-all cursor-pointer ${
                     notif.isRead
                       ? 'bg-white border-[#E8E4DC]/80'
                       : 'bg-[#FAF8F5] border-[#D8D2C5] shadow-xs'
@@ -202,7 +257,8 @@ export const NotificationCenter: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+              ))
+              )}
             </div>
           </div>
         </main>
