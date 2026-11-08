@@ -69,29 +69,50 @@ export const ShopChatDrawer: React.FC = () => {
     }
   }, [messages, activeConversation, isCustomerTyping]);
 
+  // Làm sạch câu trích dẫn: loại bỏ mọi tiền tố [Tên]: và >, chỉ lấy câu gần nhất được trả lời
+  const cleanQuoteSnippet = (text: string): string => {
+    if (!text) return "";
+    let cleaned = text.replace(/^(>\s*|\[[^\]]+\]:\s*)+/g, "").trim();
+    cleaned = cleaned.replace(/(\[[^\]]+\]:\s*)+/g, "").replace(/>+/g, "").trim();
+    const lines = cleaned.split("\n").map((l) => l.trim()).filter(Boolean);
+    return lines[lines.length - 1] || cleaned;
+  };
+
   // Bóc tách nội dung tin nhắn cốt lõi (bỏ qua mọi trích dẫn cũ để không bao giờ bị lồng nhau)
   const extractCoreMessage = (rawText: string): string => {
     if (!rawText) return "";
-    const segments = rawText.split("\n\n");
+    const segments = rawText.split(/\n\n+/);
     const lastSegment = segments[segments.length - 1] || rawText;
-    return lastSegment.replace(/^(>\s*(\[[^\]]+\]:\s*)*)+/, "").replace(/^>\s*/, "").trim();
+    let cleaned = lastSegment.replace(/^(>\s*|\[[^\]]+\]:\s*)+/g, "").trim();
+    cleaned = cleaned.replace(/(\[[^\]]+\]:\s*)+/g, "").replace(/>+/g, "").trim();
+    return cleaned;
   };
 
   // Phân tích tin nhắn thành: nội dung câu được trả lời và nội dung tin nhắn chính
   const parseReplyAndContent = (rawText: string) => {
     if (!rawText) return { replySnippet: null, actualContent: "" };
 
-    if (rawText.startsWith("> ")) {
-      const parts = rawText.split("\n\n");
+    if (rawText.startsWith(">") || /^\s*\[[^\]]+\]:/.test(rawText)) {
+      const parts = rawText.split(/\n\n+/);
       if (parts.length >= 2) {
-        const quoteHeader = parts[0];
-        const actualContent = extractCoreMessage(parts.slice(1).join("\n\n"));
+        const quoteHeader = parts.slice(0, parts.length - 1).join("\n\n");
+        const actualContent = extractCoreMessage(parts[parts.length - 1]);
+        const replySnippet = cleanQuoteSnippet(quoteHeader);
+        return {
+          replySnippet: replySnippet || null,
+          actualContent: actualContent || rawText,
+        };
+      }
 
-        // Lấy nội dung câu được trích dẫn (loại bỏ mọi prefix > và [Tên]: nếu có)
-        const lastColonIdx = quoteHeader.lastIndexOf(":");
-        let replySnippet = lastColonIdx !== -1 ? quoteHeader.slice(lastColonIdx + 1) : quoteHeader;
-        replySnippet = replySnippet.replace(/^(>\s*(\[[^\]]+\]:\s*)*)+/, "").replace(/^>\s*/, "").trim();
-
+      // Xử lý cả tin nhắn cũ bị ngắt bởi 1 dấu xuống dòng
+      const singleLines = rawText.split("\n");
+      if (
+        singleLines.length >= 2 &&
+        (singleLines[0].startsWith(">") || /^\s*\[[^\]]+\]:/.test(singleLines[0]))
+      ) {
+        const quoteHeader = singleLines[0];
+        const actualContent = extractCoreMessage(singleLines.slice(1).join("\n"));
+        const replySnippet = cleanQuoteSnippet(quoteHeader);
         return {
           replySnippet: replySnippet || null,
           actualContent: actualContent || rawText,
