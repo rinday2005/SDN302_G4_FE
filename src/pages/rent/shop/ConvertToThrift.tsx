@@ -1393,16 +1393,16 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
         </div>
       </div>
 
-      {/* CONFIRMATION WARNING MODAL (AC 2) */}
+      {/* CONFIRMATION WARNING MODAL (AC 2) - GỌN GÀNG, TINH TẾ */}
       {isConfirmModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-surface rounded-xl shadow-2xl max-w-lg w-full border border-outline-variant overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-surface rounded-xl shadow-2xl max-w-[420px] w-full border border-outline-variant overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-surface-container-high px-6 py-4 flex items-center justify-between border-b border-outline-variant">
+            <div className="bg-surface-container-high px-4 py-3 flex items-center justify-between border-b border-outline-variant">
               <div className="flex items-center gap-2 text-error">
-                <span className="material-symbols-outlined text-[24px]">warning</span>
-                <span className="font-headline-sm text-base font-bold text-on-surface font-serif">
-                  Xác Nhận Chuyển Giao Sang THRIFT Vĩnh Viễn
+                <span className="material-symbols-outlined text-[20px]">warning</span>
+                <span className="text-sm font-bold text-on-surface font-serif">
+                  Xác Nhận Chuyển Sang THRIFT
                 </span>
               </div>
               <button
@@ -1410,65 +1410,66 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 onClick={() => setIsConfirmModalOpen(false)}
                 className="p-1 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer"
               >
-                <span className="material-symbols-outlined text-[18px]">close</span>
+                <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 flex flex-col gap-4 text-xs leading-relaxed text-on-surface">
-              <div className="p-3 bg-error-container/30 border border-error/20 rounded-lg text-on-error-container">
-                <p className="font-bold">
-                  CẢNH BÁO MỘT CHIỀU: THAO TÁC NÀY KHÔNG THỂ HOÀN TÁC!
+            <div className="p-4 flex flex-col gap-3 text-xs leading-relaxed text-on-surface">
+              <div className="p-2.5 bg-error-container/20 border border-error/20 rounded-lg text-on-error-container text-[11px] leading-snug">
+                <p className="font-bold text-error flex items-center gap-1 mb-0.5">
+                  <span className="material-symbols-outlined text-[14px]">error</span>
+                  <span>Thao tác không thể hoàn tác:</span>
                 </p>
-                <p className="mt-1 text-[11px] opacity-90">
-                  Sau khi xác nhận, hiện vật <strong>#{formData.unitId}</strong> ({formData.title}) sẽ lập tức ngừng cung cấp cho thuê vĩnh viễn và bị ẩn khỏi RENT Marketplace.
+                <p className="opacity-90">
+                  Hiện vật <strong>#{formData.unitId}</strong> sẽ ngừng cho thuê vĩnh viễn và được ẩn khỏi kho RENT để mở bán THRIFT.
                 </p>
               </div>
 
-              <div className="space-y-2 text-on-surface-variant">
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[16px] shrink-0 mt-0.5">
-                    check
+              <div className="space-y-1.5 py-1 text-on-surface-variant text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-secondary text-[15px] shrink-0">
+                    check_circle
                   </span>
                   <span>
-                    Hiện vật chuyển trạng thái sang <strong>CONVERTED_TO_THRIFT</strong> trong hệ thống kho RENT.
+                    Kho RENT: <strong className="text-on-surface">Chuyển sang CONVERTED_TO_THRIFT</strong>
                   </span>
                 </div>
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[16px] shrink-0 mt-0.5">
-                    check
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-secondary text-[15px] shrink-0">
+                    check_circle
                   </span>
                   <span>
-                    Tạo mới mục đăng THRIFT ở trạng thái <strong>PENDING_APPROVAL</strong> (Chờ ban kiểm duyệt phê duyệt).
+                    Sàn THRIFT: <strong className="text-on-surface">Tạo mục đăng PENDING_APPROVAL</strong>
                   </span>
                 </div>
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[16px] shrink-0 mt-0.5">
-                    check
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-secondary text-[15px] shrink-0">
+                    check_circle
                   </span>
                   <span>
-                    Giá bán đứt thiết lập: <strong>{formData.price}</strong>.
+                    Giá bán niêm yết: <strong className="text-error font-semibold">{formData.price}</strong>
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-3">
+            <div className="px-4 py-3 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setIsConfirmModalOpen(false)}
-                className="px-4 py-2 rounded text-xs font-semibold text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
               >
-                Hủy Bỏ
+                Hủy bỏ
               </button>
               <button
                 type="button"
                 onClick={handleConfirmSubmit}
-                className="px-5 py-2 rounded text-xs font-semibold uppercase tracking-wider bg-error text-white hover:bg-error/90 shadow transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-1.5 rounded text-xs font-semibold bg-error text-white hover:bg-error/90 shadow-sm transition-colors flex items-center gap-1 cursor-pointer"
               >
-                <span>Xác Nhận Chuyển Đổi Vĩnh Viễn</span>
-                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                <span>Xác nhận chuyển đổi</span>
+                <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
               </button>
             </div>
           </div>
