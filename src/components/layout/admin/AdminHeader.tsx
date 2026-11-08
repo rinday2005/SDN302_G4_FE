@@ -1,6 +1,7 @@
 import React, { useState, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "../../../context/auth-context";
+import { useNotification } from "../../../hooks/useNotification";
 
 interface AdminHeaderProps {
   onToggleSidebar?: () => void;
@@ -17,30 +18,21 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotification();
 
-  const notifications = [
-    {
-      id: "n1",
-      title: "Hồ sơ KYC mới cần phê duyệt",
-      desc: "Người dùng Lê Văn C - Chưa KYC (user_c_nokyc_test_s3@reuse.vn) đã nộp hồ sơ CCCD gắn chip",
-      time: "15 phút trước",
-      urgent: true,
-    },
-    {
-      id: "n2",
-      title: "Kho hàng RENT sẵn sàng",
-      desc: "Sản phẩm 'Áo dài cách tân gấm hoa mai' của ReUse Official Shop đang hoạt động",
-      time: "45 phút trước",
-      urgent: false,
-    },
-    {
-      id: "n3",
-      title: "Sổ cái lưu ký an toàn",
-      desc: "Đã đồng bộ 11 thành viên và 5 danh mục trên cơ sở dữ liệu MongoDB",
-      time: "1 giờ trước",
-      urgent: false,
-    },
-  ];
+  const formatTimeAgo = (dateStr: string) => {
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      if (diffMins < 1) return "Vừa xong";
+      if (diffMins < 60) return `${diffMins} phút trước`;
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) return `${diffHours} giờ trước`;
+      return new Date(dateStr).toLocaleDateString("vi-VN");
+    } catch {
+      return "Gần đây";
+    }
+  };
 
   const handleLogout = () => {
     if (auth?.logout) {
@@ -121,13 +113,17 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className="relative p-2 rounded-lg text-[#4a463f] hover:text-[#1c1c18] hover:bg-[#f1ede6] transition-all"
+                  className="relative p-2 rounded-lg text-[#4a463f] hover:text-[#1c1c18] hover:bg-[#f1ede6] transition-all cursor-pointer"
                   aria-label="Thông báo"
                 >
                   <span className="material-symbols-outlined text-[20px]">
                     notifications
                   </span>
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#ba1a1a] animate-pulse"></span>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-[#ba1a1a] text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
                 </button>
 
                 {/* Notifications Dropdown */}
@@ -137,37 +133,67 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                       <span className="font-semibold text-sm text-[#1c1c18]">
                         Thông Báo Hệ Thống
                       </span>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#ffdad6] text-[#ba1a1a]">
-                        3 khẩn cấp
-                      </span>
-                    </div>
-                    <div className="divide-y divide-[#f1ede6] max-h-72 overflow-y-auto">
-                      {notifications.map((n) => (
-                        <div
-                          key={n.id}
-                          className="p-3.5 hover:bg-[#f7f3ec] transition-colors cursor-pointer"
+                      <div className="flex items-center gap-2">
+                        {unreadCount > 0 && (
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#ffdad6] text-[#ba1a1a]">
+                            {unreadCount} chưa đọc
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => markAllAsRead()}
+                          className="text-[11px] text-[#576151] hover:underline cursor-pointer"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <h4 className="text-xs font-semibold text-[#1c1c18]">
-                              {n.title}
-                            </h4>
-                            <span className="text-[10px] text-[#7b766f] whitespace-nowrap">
-                              {n.time}
-                            </span>
-                          </div>
-                          <p className="text-[12px] text-[#4a463f] mt-1 line-clamp-2">
-                            {n.desc}
-                          </p>
-                        </div>
-                      ))}
+                          Đọc tất cả
+                        </button>
+                      </div>
                     </div>
-                    <div className="px-4 pt-2 border-t border-[#f1ede6] text-center">
+                    <div className="divide-y divide-[#f1ede6] max-h-80 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-[#7b766f]">
+                          Hiện tại không có thông báo nào
+                        </div>
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n._id || n.id}
+                            onClick={() => {
+                              markAsRead(n._id || n.id || "");
+                              setShowNotifications(false);
+                              if (n.link) navigate(n.link);
+                            }}
+                            className={`p-3.5 transition-colors cursor-pointer ${!n.isRead ? "bg-[#fbf7f0] hover:bg-[#f5efe3]" : "hover:bg-[#f7f3ec]"}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className={`text-xs ${!n.isRead ? "font-bold text-[#1c1c18]" : "font-medium text-[#4a463f]"}`}>
+                                {!n.isRead && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ba1a1a] mr-1.5 mb-0.5" />}
+                                {n.title}
+                              </h4>
+                              <span className="text-[10px] text-[#7b766f] whitespace-nowrap">
+                                {formatTimeAgo(n.createdAt)}
+                              </span>
+                            </div>
+                            <p className="text-[12px] text-[#4a463f] mt-1 line-clamp-2">
+                              {n.message}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="px-4 pt-2 border-t border-[#f1ede6] flex items-center justify-between text-xs text-[#576151]">
                       <Link
                         to="/admin/kyc"
                         onClick={() => setShowNotifications(false)}
-                        className="text-xs text-[#576151] hover:underline font-medium"
+                        className="hover:underline font-medium"
                       >
-                        Xem tất cả thông báo hệ thống →
+                        Kiểm duyệt KYC →
+                      </Link>
+                      <Link
+                        to="/admin/disputes"
+                        onClick={() => setShowNotifications(false)}
+                        className="hover:underline font-medium"
+                      >
+                        Xử lý tranh chấp →
                       </Link>
                     </div>
                   </div>

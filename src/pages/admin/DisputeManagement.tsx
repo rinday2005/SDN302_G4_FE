@@ -44,14 +44,20 @@ export interface DisputeItem {
 const INITIAL_DISPUTES: DisputeItem[] = [];
 
 interface RawDisputeApiItem {
+  disputeCode?: string;
+  productName?: string;
+  product?: { name?: string; image?: string };
+  claimAmount?: number;
   id?: string;
   _id?: string;
   orderCode?: string;
+  orderStatus?: string;
   items?: Array<{ productId?: { name?: string }; name?: string }>;
   escrowLocked?: number;
   depositAmount?: number;
-  renter?: { fullName?: string };
-  shopOwner?: { fullName?: string };
+  escrowAmount?: number;
+  renter?: { fullName?: string; name?: string; tier?: string };
+  shopOwner?: { fullName?: string; shopName?: string; representative?: string };
   orderType?: string;
   reason?: string;
   reportedAt?: string;
@@ -67,6 +73,7 @@ export const DisputeManagement: React.FC = () => {
   const [thriftFeeInput, setThriftFeeInput] = useState<number>(8);
   const [isSavingFee, setIsSavingFee] = useState<boolean>(false);
   const [isResolving, setIsResolving] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [disputes, setDisputes] = useState<DisputeItem[]>(INITIAL_DISPUTES);
   const [currentStatus, setCurrentStatus] = useState<"ALL" | DisputeStatus>("ALL");
@@ -93,31 +100,33 @@ export const DisputeManagement: React.FC = () => {
         if (!isMounted || !data) return;
         const rawList = data.disputes || (Array.isArray(data) ? data : []);
         const dbDisputes: DisputeItem[] = (Array.isArray(rawList) ? rawList : []).map((d: RawDisputeApiItem) => {
-          const rawId = String(d.id || d._id || "");
+          const rawId = String(d.disputeCode || d.id || d._id || "");
           const isThrift = d.orderType === "THRIFT";
           const orderCode = d.orderCode || (isThrift ? `#TO-${rawId.slice(-4).toUpperCase()}` : `#RO-${rawId.slice(-4).toUpperCase()}`);
+          const depositVal = Number(d.depositAmount ?? d.escrowAmount ?? d.escrowLocked) || 0;
+          const isResolved = d.disputeStatus === "RESOLVED" || d.orderStatus === "RESOLVED" || d.orderStatus === "CLOSED";
           return {
-            id: rawId.startsWith("#") ? rawId : `#RH-D${rawId.slice(-4).toUpperCase() || Math.floor(Math.random() * 8999 + 1000)}`,
+            id: rawId.startsWith("#") ? rawId : (rawId.startsWith("RH-") ? `#${rawId}` : `#RH-D${rawId.slice(-4).toUpperCase()}`),
             rawId,
             orderCode,
             orderUrl: isThrift ? `/thrift/orders/${rawId}` : `/rent/orders/${rawId}`,
-            productName: d.items?.[0]?.productId?.name || d.items?.[0]?.name || "Hiện vật đối soát",
-            orderPriceNote: `Ký quỹ: ${(Number(d.escrowLocked ?? d.depositAmount) || 0).toLocaleString("vi-VN")} ₫`,
-            customerName: d.renter?.fullName || "Khách hàng ReUse",
+            productName: d.productName || d.product?.name || d.items?.[0]?.productId?.name || d.items?.[0]?.name || "Hiện vật đối soát",
+            orderPriceNote: `Ký quỹ: ${depositVal.toLocaleString("vi-VN")} ₫`,
+            customerName: d.renter?.fullName || d.renter?.name || "Khách hàng ReUse",
             customerUrl: "/admin/users",
-            customerTrust: "KYC Verified Tier",
-            shopName: d.shopOwner?.fullName || "ReUse Official Shop",
-            shopOwner: d.shopOwner?.fullName || "Chủ Xưởng",
+            customerTrust: d.renter?.tier || "KYC Verified Tier",
+            shopName: d.shopOwner?.shopName || d.shopOwner?.fullName || "ReUse Official Shop",
+            shopOwner: d.shopOwner?.representative || d.shopOwner?.fullName || "Chủ Xưởng",
             shopUrl: "/admin/users",
             categoryTag: `${d.orderType || "RENT"} • DEPOSIT DISPUTE`,
             description: d.reason || "Tranh chấp tiền ký quỹ và hư hại hiện vật sau hoàn trả",
             createdAtDisplay: new Date(d.reportedAt || Date.now()).toLocaleDateString("vi-VN"),
             createdAtTime: new Date(d.reportedAt || Date.now()).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-            slaDisplay: d.disputeStatus === "RESOLVED" ? "Đã giải quyết" : "SLA: Trong 24h",
-            isUrgentSla: d.disputeStatus !== "RESOLVED",
-            status: (d.disputeStatus === "RESOLVED" ? "RESOLVED" : "OPEN") as DisputeStatus,
+            slaDisplay: isResolved ? "Đã giải quyết" : "SLA: Trong 24h",
+            isUrgentSla: !isResolved,
+            status: (isResolved ? "RESOLVED" : "OPEN") as DisputeStatus,
             disputeType: (d.orderType || "RENT") as DisputeType,
-            escrowAmount: Number(d.escrowLocked ?? d.depositAmount) || 0,
+            escrowAmount: depositVal,
             arbitrationVerdict: d.resolution || undefined,
             damageImages: Array.isArray(d.damageImages) ? d.damageImages : [],
           };
@@ -127,6 +136,9 @@ export const DisputeManagement: React.FC = () => {
       .catch((err) => {
         console.warn("Lỗi tải danh sách tranh chấp từ API:", err);
         setDisputes([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -881,7 +893,18 @@ export const DisputeManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#ece7e4]">
-                {filteredDisputes.length === 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={8} className="py-14 text-center text-[#7e766a]">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-10 h-10 rounded-full border-4 border-[#cfc5b8] border-t-[#6c5937] animate-spin"></div>
+                        <p className="text-sm font-semibold text-[#1c1b19]">
+                          Đang đồng bộ hồ sơ tranh chấp từ cơ sở dữ liệu MongoDB...
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredDisputes.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-14 text-center text-[#7e766a]">
                       <div className="flex flex-col items-center justify-center gap-3">
@@ -1107,13 +1130,15 @@ export const DisputeManagement: React.FC = () => {
               </button>
               <button
                 type="button"
+                style={{ display: filteredDisputes.length > 10 ? "flex" : "none" }}
                 className="w-7 h-7 rounded bg-white hover:bg-[#ece7e4] text-[#1c1b19] flex items-center justify-center transition-colors border border-[#cfc5b8]/30"
               >
                 2
               </button>
               <button
                 type="button"
-                className="px-2.5 py-1 rounded bg-white hover:bg-[#ece7e4] text-[#1c1b19] transition-colors border border-[#cfc5b8]/30 flex items-center"
+                disabled={filteredDisputes.length <= 10}
+                className="px-2.5 py-1 rounded bg-white hover:bg-[#ece7e4] text-[#1c1b19] transition-colors border border-[#cfc5b8]/30 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>Sau</span>
                 <span className="material-symbols-outlined text-[14px]">chevron_right</span>

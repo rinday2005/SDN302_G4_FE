@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import api from '../../services/api';
 
 export const PaymentReturn: React.FC = () => {
   const location = useLocation();
@@ -57,6 +58,27 @@ interface StoredOrder {
   bankCode?: string;
   [key: string]: unknown;
 }
+
+  // Gọi Backend xác thực checksum và cập nhật MongoDB (Luồng 1)
+  useEffect(() => {
+    if (location.search) {
+      api.get('/payments/vnpay-return' + location.search)
+        .then((res) => {
+          const data = res.data?.data || res.data;
+          if (data?.success) {
+            console.log('Đã đối soát VNPay thành công với Backend MongoDB');
+          }
+        })
+        .catch((err) => {
+          console.warn('Lỗi gọi API đối soát với Backend:', err);
+        })
+        .finally(() => {
+          setIsProcessing(false);
+        });
+    } else {
+      setIsProcessing(false);
+    }
+  }, [location.search]);
 
   // Update localStorage orders if successful
   useEffect(() => {
