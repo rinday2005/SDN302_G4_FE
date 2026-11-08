@@ -213,10 +213,12 @@ export const ThriftDetail: React.FC = () => {
   const handleChat = () =>
     handleProtected(`chat với Shop Owner về "${product.title}"`, `/thrift/${product.slug}`, () => {
       openChat({
+        shopId: shopOwnerInfo.id,
         product: {
           title: product.title,
           image: product.mainImage,
           price: product.price,
+          shopId: shopOwnerInfo.id,
         },
       });
     });

@@ -6,6 +6,12 @@ export interface ChatParticipant {
   email?: string;
   avatarUrl?: string;
   role?: string;
+  shopProfile?: {
+    shopName?: string;
+    description?: string;
+    avatarUrl?: string;
+    rating?: number;
+  };
 }
 
 export interface ChatLastMessage {
@@ -100,6 +106,7 @@ export const sendMessageApi = async (
  * Lấy hoặc khởi tạo conversation giữa User và Shop Owner
  */
 export const getMyConversationApi = async (params?: {
+  shopId?: string;
   serviceType?: "RENT" | "THRIFT";
   orderCode?: string;
   orderTitle?: string;

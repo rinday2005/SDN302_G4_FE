@@ -36,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
     onLogout
 }) => {
     const { wishlistCount: ctxWishlistCount, cartCount: ctxCartCount } = useCartWishlist();
-    const { unreadCount: chatUnreadCount, openChat } = useCustomerChat();
+    const { unreadTotal: chatUnreadCount, openChat } = useCustomerChat();
     const effectiveWishlistCount = wishlistCount !== undefined ? wishlistCount : ctxWishlistCount;
     const effectiveCartCount = cartCount !== undefined ? cartCount : ctxCartCount;
 

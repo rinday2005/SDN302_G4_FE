@@ -300,10 +300,12 @@ export const RentProductDetail: React.FC = () => {
   const handleChat = () => {
     handleProtectedAction('trò chuyện trực tiếp với Shop Owner', () => {
       openChat({
+        shopId: product.ownerId,
         product: {
           title: product.title,
           image: product.images[0]?.src || '',
           price: product.pricePerDay,
+          shopId: product.ownerId,
         },
       });
     });

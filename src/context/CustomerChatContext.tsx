@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   CustomerChatContext,
   type CustomerChatContextType,
@@ -22,11 +22,12 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const currentUserId = user?._id || user?.id || "";
 
   const [isOpen, setIsOpen] = useState(false);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConversation, setActiveConversation] = useState<ConversationItem | null>(null);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isShopTyping, setIsShopTyping] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [productContext, setProductContext] = useState<CustomerProductContext | null>(null);
 
   const activeConvRef = useRef<ConversationItem | null>(null);
@@ -40,94 +41,184 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
     isOpenRef.current = isOpen;
   }, [isOpen]);
 
-  // Đếm số tin nhắn chưa đọc ban đầu từ các conversation của User
-  const refreshUnread = useCallback(async () => {
+  // Tính số lượng tin nhắn chưa đọc tổng cộng của User across all shops
+  const unreadTotal = useMemo(() => {
+    return conversations.reduce((acc, conv) => acc + (conv.unreadCount || 0), 0);
+  }, [conversations]);
+
+  // Tải danh sách các cuộc trò chuyện của User với các Shop khác nhau
+  const refreshConversations = useCallback(async () => {
     if (!currentUserId) return;
     try {
-      const convs = await getConversationsApi();
-      if (!Array.isArray(convs)) return;
+      const data = await getConversationsApi();
+      if (!Array.isArray(data)) return;
 
-      let totalUnread = 0;
-      convs.forEach((c) => {
-        if (!c?._id || !c.lastMessage) return;
+      const mapped: ConversationItem[] = data.map((c) => {
+        if (!c?._id) return c;
         const senderIdStr =
-          typeof c.lastMessage.senderId === "object"
-            ? c.lastMessage.senderId?._id?.toString()
-            : c.lastMessage.senderId?.toString();
+          typeof c.lastMessage?.senderId === "object"
+            ? c.lastMessage?.senderId?._id?.toString()
+            : c.lastMessage?.senderId?.toString();
 
-        if (senderIdStr && senderIdStr !== currentUserId) {
-          const lastReadTime = localStorage.getItem(`customer_chat_read_${c._id}`);
-          const msgTime = c.lastMessage.createdAt
-            ? new Date(c.lastMessage.createdAt).getTime()
-            : 0;
+        const isFromOther = senderIdStr && senderIdStr !== currentUserId;
+        const lastReadTime = localStorage.getItem(`customer_chat_read_${c._id}`);
+        const msgTime = c.lastMessage?.createdAt
+          ? new Date(c.lastMessage.createdAt).getTime()
+          : 0;
 
+        let unread = 0;
+        if (isFromOther) {
           if (!lastReadTime || msgTime > parseInt(lastReadTime, 10)) {
-            totalUnread += 1;
+            unread = 1;
           }
         }
+
+        return {
+          ...c,
+          unreadCount: unread,
+        };
       });
-      setUnreadCount(totalUnread);
+
+      setConversations(mapped);
     } catch {
       // ignore
     }
   }, [currentUserId]);
 
-  // Nạp cuộc hội thoại duy nhất của User với Shop Owner
-  const loadConversation = useCallback(async () => {
-    if (!currentUserId) return;
-    setIsLoading(true);
-    try {
-      const conv = await getMyConversationApi();
+  // Chọn một Shop để trò chuyện và tải tin nhắn
+  const selectConversation = useCallback(
+    async (conv: ConversationItem) => {
       setActiveConversation(conv);
+      setIsLoadingMessages(true);
 
-      // Join socket room
-      const socket = getSocket();
-      socket.emit("join_room", { conversationId: conv._id });
-
-      // Nạp tin nhắn
-      const res = await getMessagesApi(conv._id);
-      setMessages(res.messages || []);
-
-      // Đánh dấu đã đọc hội thoại này
+      // Đánh dấu đã đọc
       localStorage.setItem(`customer_chat_read_${conv._id}`, Date.now().toString());
-      refreshUnread();
-    } catch (err) {
-      console.warn("⚠️ [CustomerChat] Failed to load conversation:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUserId, refreshUnread]);
 
-  // Lắng nghe real-time Socket.IO
+      // Cập nhật unreadCount = 0 cho conversation này
+      setConversations((prev) =>
+        prev.map((c) => (c._id === conv._id ? { ...c, unreadCount: 0 } : c))
+      );
+
+      try {
+        const socket = getSocket();
+        socket.emit("join_room", { conversationId: conv._id });
+
+        const res = await getMessagesApi(conv._id);
+        setMessages(res.messages || []);
+      } catch (err) {
+        console.warn("⚠️ [CustomerChat] Failed to load messages:", err);
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    },
+    []
+  );
+
+  // Mở Chat Drawer với Shop cụ thể hoặc danh sách Shop
+  const openChat = useCallback(
+    async (options?: {
+      shopId?: string;
+      product?: CustomerProductContext;
+    }) => {
+      setIsOpen(true);
+      if (options?.product) {
+        setProductContext(options.product);
+      }
+
+      const targetShopId = options?.shopId || options?.product?.shopId;
+
+      try {
+        setIsLoadingConversations(true);
+        const data = await getConversationsApi();
+        const convList = Array.isArray(data) ? data : [];
+
+        // Tìm cuộc trò chuyện với shop cụ thể
+        let targetConv: ConversationItem | undefined = undefined;
+
+        if (targetShopId) {
+          targetConv = convList.find((c) =>
+            c.participants?.some(
+              (p) => String(p._id) === String(targetShopId) && String(p._id) !== String(currentUserId)
+            )
+          );
+        }
+
+        // Nếu chưa có conversation với shop này, gọi API tạo mới
+        if (!targetConv && targetShopId) {
+          targetConv = await getMyConversationApi({ shopId: targetShopId });
+          convList.unshift(targetConv);
+        } else if (!targetConv && convList.length > 0) {
+          // Nếu không truyền shopId, chọn conversation đầu tiên
+          targetConv = activeConvRef.current || convList[0];
+        } else if (!targetConv) {
+          targetConv = await getMyConversationApi();
+          convList.unshift(targetConv);
+        }
+
+        setConversations(convList);
+
+        if (targetConv) {
+          selectConversation(targetConv);
+        }
+      } catch (err) {
+        console.warn("⚠️ [CustomerChat] Open chat error:", err);
+      } finally {
+        setIsLoadingConversations(false);
+      }
+    },
+    [currentUserId, selectConversation]
+  );
+
+  const closeChat = useCallback(() => {
+    setIsOpen(false);
+    if (activeConversation) {
+      localStorage.setItem(`customer_chat_read_${activeConversation._id}`, Date.now().toString());
+    }
+    refreshConversations();
+  }, [activeConversation, refreshConversations]);
+
+  const clearProductContext = useCallback(() => {
+    setProductContext(null);
+  }, []);
+
+  // Kết nối Socket.IO toàn cục lắng nghe tin nhắn real-time
   useEffect(() => {
     if (!currentUserId) return;
 
     let isSubscribed = true;
 
-    // Lần đầu tải unread bất đồng bộ
+    // Lần đầu tải danh sách bất đồng bộ
     getConversationsApi()
-      .then((convs) => {
-        if (!isSubscribed || !Array.isArray(convs)) return;
-        let totalUnread = 0;
-        convs.forEach((c) => {
-          if (!c?._id || !c.lastMessage) return;
+      .then((data) => {
+        if (!isSubscribed || !Array.isArray(data)) return;
+
+        const mapped: ConversationItem[] = data.map((c) => {
+          if (!c?._id) return c;
           const senderIdStr =
-            typeof c.lastMessage.senderId === "object"
-              ? c.lastMessage.senderId?._id?.toString()
-              : c.lastMessage.senderId?.toString();
+            typeof c.lastMessage?.senderId === "object"
+              ? c.lastMessage?.senderId?._id?.toString()
+              : c.lastMessage?.senderId?.toString();
 
-          if (senderIdStr && senderIdStr !== currentUserId) {
-            const lastReadTime = localStorage.getItem(`customer_chat_read_${c._id}`);
-            const msgTime = c.lastMessage.createdAt
-              ? new Date(c.lastMessage.createdAt).getTime()
-              : 0;
+          const isFromOther = senderIdStr && senderIdStr !== currentUserId;
+          const lastReadTime = localStorage.getItem(`customer_chat_read_${c._id}`);
+          const msgTime = c.lastMessage?.createdAt
+            ? new Date(c.lastMessage.createdAt).getTime()
+            : 0;
 
+          let unread = 0;
+          if (isFromOther) {
             if (!lastReadTime || msgTime > parseInt(lastReadTime, 10)) {
-              totalUnread += 1;
+              unread = 1;
             }
           }
+
+          return {
+            ...c,
+            unreadCount: unread,
+          };
         });
-        setUnreadCount(totalUnread);
+
+        setConversations(mapped);
       })
       .catch(() => {});
 
@@ -142,20 +233,18 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const isCurrentConversation =
         currentActive && String(currentActive._id) === String(msg.conversationId);
 
+      // Nếu đang mở đúng conversation đó
       if (isCurrentConversation) {
         setMessages((prev) => {
           const msgIdStr = String(msg._id);
           const clientMsgIdStr = msg.clientMsgId ? String(msg.clientMsgId) : "";
 
-          // Bỏ qua nếu đã tồn tại
           if (prev.some((m) => String(m._id) === msgIdStr)) return prev;
 
-          // Thay thế nếu trùng clientMsgId
           if (clientMsgIdStr && prev.some((m) => String(m._id) === clientMsgIdStr)) {
             return prev.map((m) => (String(m._id) === clientMsgIdStr ? msg : m));
           }
 
-          // Thay thế tin tạm của chính mình
           if (!isFromShop) {
             const tempIdx = prev.findIndex(
               (m) => String(m._id).startsWith("temp-") && m.text === msg.text
@@ -170,18 +259,43 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
           return [...prev, msg];
         });
 
-        // Nếu chat box đang mở, cập nhật thời gian đã đọc
         if (isOpenRef.current) {
           localStorage.setItem(`customer_chat_read_${msg.conversationId}`, Date.now().toString());
         }
       }
 
-      // Nếu tin nhắn từ Shop và Box Chat đang đóng (hoặc đang xem conv khác) -> tăng unread
-      if (isFromShop && (!isOpenRef.current || !isCurrentConversation)) {
-        if (isSubscribed) {
-          setUnreadCount((prev) => prev + 1);
+      // Cập nhật lastMessage và unreadCount trong danh sách conversations
+      setConversations((prev) => {
+        let found = false;
+        const nextList = prev.map((c) => {
+          if (String(c._id) === String(msg.conversationId)) {
+            found = true;
+            const isUnread =
+              isFromShop && (!isOpenRef.current || !isCurrentConversation);
+            return {
+              ...c,
+              lastMessage: {
+                text: msg.text,
+                senderId: msg.senderId,
+                imageUrl: msg.imageUrl,
+                createdAt: msg.createdAt,
+              },
+              unreadCount: isUnread ? (c.unreadCount || 0) + 1 : 0,
+              updatedAt: msg.createdAt || new Date().toISOString(),
+            };
+          }
+          return c;
+        });
+
+        if (!found) {
+          refreshConversations();
+          return prev;
         }
-      }
+
+        return nextList.sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+      });
     };
 
     const handleUserTyping = (data: { conversationId: string; userId: string }) => {
@@ -198,42 +312,31 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
+    const handleConversationUpdated = (updatedConv: ConversationItem) => {
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c._id === updatedConv._id);
+        if (idx !== -1) {
+          const clone = [...prev];
+          clone[idx] = { ...clone[idx], ...updatedConv };
+          return clone;
+        }
+        return [updatedConv, ...prev];
+      });
+    };
+
     socket.on("new_message", handleNewMessage);
+    socket.on("conversation_updated", handleConversationUpdated);
     socket.on("user_typing", handleUserTyping);
     socket.on("user_stop_typing", handleUserStopTyping);
 
     return () => {
       isSubscribed = false;
       socket.off("new_message", handleNewMessage);
+      socket.off("conversation_updated", handleConversationUpdated);
       socket.off("user_typing", handleUserTyping);
       socket.off("user_stop_typing", handleUserStopTyping);
     };
-  }, [currentUserId, refreshUnread]);
-
-  const openChat = useCallback(
-    (options?: {
-      product?: CustomerProductContext;
-    }) => {
-      if (options?.product) {
-        setProductContext(options.product);
-      }
-      setIsOpen(true);
-      loadConversation();
-    },
-    [loadConversation]
-  );
-
-  const closeChat = useCallback(() => {
-    setIsOpen(false);
-    if (activeConversation) {
-      localStorage.setItem(`customer_chat_read_${activeConversation._id}`, Date.now().toString());
-    }
-    refreshUnread();
-  }, [activeConversation, refreshUnread]);
-
-  const clearProductContext = useCallback(() => {
-    setProductContext(null);
-  }, []);
+  }, [currentUserId, refreshConversations]);
 
   const sendMessage = useCallback(
     async (text: string, imageUrl?: string) => {
@@ -302,16 +405,21 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const contextValue: CustomerChatContextType = {
     isOpen,
-    unreadCount,
+    conversations,
+    activeConversation,
     messages,
-    isLoading,
+    unreadTotal,
+    isLoadingConversations,
+    isLoadingMessages,
     isShopTyping,
     productContext,
     openChat,
     closeChat,
+    selectConversation,
     sendMessage,
     sendTyping,
     clearProductContext,
+    refreshConversations,
   };
 
   return (
