@@ -381,52 +381,36 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Optimistic UI update
     setMessages((prev) => [...prev, newMsg]);
 
-    // Gửi qua Socket.IO kèm clientMsgId để đối soát không bị nhân đôi
-    socket.emit(
-      "send_message",
-      {
-        conversationId: activeConversation._id,
-        text: trimmed,
-        imageUrl,
-        clientMsgId: tempId,
-      },
-      (ack: { success?: boolean; data?: ChatMessageItem }) => {
-        if (ack?.success && ack?.data) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m._id === tempId ? { ...ack.data!, clientMsgId: tempId } : m
-            )
-          );
-        }
-      }
-    );
-
-    // Cập nhật conversation list
-    setConversations((prev) =>
-      prev
-        .map((c) => {
-          if (c._id === activeConversation._id) {
-            return {
-              ...c,
-              lastMessage: {
-                text: trimmed,
-                senderId: currentUserId,
-                imageUrl,
-                createdAt: newMsg.createdAt,
-              },
-              updatedAt: newMsg.createdAt,
-            };
+    if (socket.connected) {
+      // Gửi qua Socket.IO kèm clientMsgId để đối soát không bị nhân đôi
+      socket.emit(
+        "send_message",
+        {
+          conversationId: activeConversation._id,
+          text: trimmed,
+          imageUrl,
+          clientMsgId: tempId,
+        },
+        (ack: { success?: boolean; data?: ChatMessageItem }) => {
+          if (ack?.success && ack?.data) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m._id === tempId ? { ...ack.data!, clientMsgId: tempId } : m
+              )
+            );
           }
-          return c;
-        })
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    );
-
-    // Call API song song đảm bảo tính bền vững
-    try {
-      await sendMessageApi(activeConversation._id, { text: trimmed, imageUrl });
-    } catch (err) {
-      console.warn("⚠️ [ShopChat] HTTP API fallback send notice:", err);
+        }
+      );
+    } else {
+      // Fallback qua HTTP API khi mất kết nối Socket
+      try {
+        const saved = await sendMessageApi(activeConversation._id, { text: trimmed, imageUrl });
+        setMessages((prev) =>
+          prev.map((m) => (m._id === tempId ? saved : m))
+        );
+      } catch (err) {
+        console.warn("⚠️ [ShopChat] HTTP API fallback send notice:", err);
+      }
     }
   };
 

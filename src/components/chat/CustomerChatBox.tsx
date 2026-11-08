@@ -382,31 +382,56 @@ export const CustomerChatBox: React.FC = () => {
                           typeof m.senderId === "object"
                             ? String(m.senderId._id)
                             : String(m.senderId);
-                        const isMe = senderIdStr === currentUserId;
+
+                        const senderRole =
+                          typeof m.senderId === "object" ? m.senderId.role : undefined;
+
+                        // Rõ ràng: Nếu người gửi có role SHOP_OWNER hoặc trùng với ID của Shop đang chat -> chắc chắn là tin của Shop
+                        const isShopSender =
+                          senderRole === "SHOP_OWNER" ||
+                          (activeShopParticipant?._id &&
+                            String(senderIdStr) === String(activeShopParticipant._id));
+
+                        const isMe =
+                          !isShopSender &&
+                          (senderRole === "USER" || String(senderIdStr) === String(currentUserId));
 
                         return (
                           <div
                             key={m._id}
                             className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
                           >
-                            <div
-                              className={`max-w-[82%] rounded-2xl p-3 text-xs leading-relaxed shadow-xs ${
-                                isMe
-                                  ? "bg-[#141310] text-white rounded-br-xs"
-                                  : "bg-white text-[#141310] border border-[#e5e0d8] rounded-bl-xs"
-                              }`}
-                            >
-                              {m.imageUrl && (
+                            <div className="flex items-end gap-2 max-w-[85%]">
+                              {!isMe && (
                                 <img
-                                  src={m.imageUrl}
-                                  alt="Đính kèm"
-                                  className="rounded-xl max-h-48 w-auto object-cover mb-2 border border-black/10"
+                                  src={activeShopAvatar}
+                                  alt={activeShopName}
+                                  className="w-7 h-7 rounded-full object-cover shrink-0 mb-1 border border-[#dddad3]"
                                 />
                               )}
-                              <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                              <div
+                                className={`rounded-2xl p-3 text-xs leading-relaxed shadow-xs ${
+                                  isMe
+                                    ? "bg-[#141310] text-white rounded-br-xs"
+                                    : "bg-white text-[#141310] border border-[#e5e0d8] rounded-bl-xs"
+                                }`}
+                              >
+                                {m.imageUrl && (
+                                  <img
+                                    src={m.imageUrl}
+                                    alt="Đính kèm"
+                                    className="rounded-xl max-h-48 w-auto object-cover mb-2 border border-black/10"
+                                  />
+                                )}
+                                <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                              </div>
                             </div>
 
-                            <span className="text-[10px] text-[#a8a29e] mt-1 px-1">
+                            <span
+                              className={`text-[10px] text-[#a8a29e] mt-1 px-1 ${
+                                !isMe ? "ml-9" : ""
+                              }`}
+                            >
                               {m.createdAt
                                 ? new Date(m.createdAt).toLocaleTimeString("vi-VN", {
                                     hour: "2-digit",

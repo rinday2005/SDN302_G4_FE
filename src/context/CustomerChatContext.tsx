@@ -227,7 +227,10 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
     const handleNewMessage = (msg: ChatMessageItem) => {
       const senderIdStr =
         typeof msg.senderId === "object" ? String(msg.senderId._id) : String(msg.senderId);
-      const isFromShop = senderIdStr !== currentUserId;
+      const senderRole =
+        typeof msg.senderId === "object" ? msg.senderId.role : undefined;
+      const isFromShop =
+        senderRole === "SHOP_OWNER" || String(senderIdStr) !== String(currentUserId);
 
       const currentActive = activeConvRef.current;
       const isCurrentConversation =
