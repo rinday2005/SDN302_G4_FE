@@ -355,8 +355,8 @@ export const ShopThriftListings: React.FC = () => {
       )}
 
       {/* Atelier Top Banner & Identity Ledger */}
-      <div className="w-full bg-surface-container-high py-space-sm px-margin-mobile lg:px-margin border-b border-surface-dim">
-        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-space-sm text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
+      <div className="w-full bg-surface-container-high py-space-sm px-4 sm:px-6 lg:px-8 border-b border-surface-dim">
+        <div className="max-w-full lg:max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-space-sm text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
           <div className="flex items-center gap-space-sm flex-wrap">
             <span className="w-2 h-2 rounded-full bg-secondary"></span>
             <span className="font-semibold text-on-surface">Atelier Chronos &amp; Optics</span>
@@ -379,7 +379,7 @@ export const ShopThriftListings: React.FC = () => {
 
 
       {/* Main Content Canvas */}
-      <div className="w-full px-margin-mobile lg:px-margin py-space-xl max-w-[1440px] mx-auto flex flex-col gap-space-xl flex-1">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-space-lg max-w-full lg:max-w-[1600px] mx-auto flex flex-col gap-space-lg flex-1">
         {/* Breadcrumb & Header Action Strip */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-space-lg">
           <div className="flex flex-col gap-space-xs">
@@ -770,172 +770,172 @@ export const ShopThriftListings: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded border border-[#ebe8e1] overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#f1ede6] uppercase tracking-wider font-semibold text-[#4a463f]">
-                  <tr>
-                    <th className="py-3 px-4">Ảnh &amp; Tên món đồ</th>
-                    <th className="py-3 px-4">Giá gốc</th>
-                    <th className="py-3 px-4">Số lần đã cho thuê</th>
-                    <th className="py-3 px-4">% Giảm giá khấu hao</th>
-                    <th className="py-3 px-4">Giá bán Thrift đề xuất</th>
-                    <th className="py-3 px-4">Tình trạng hiện vật</th>
-                    <th className="py-3 px-4">Trạng thái</th>
-                    <th className="py-3 px-4 text-right">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#f1ede6]">
-                  {paginatedListings.map((item) => {
-                    const isSold = item.status === 'SOLD' || item.isSold;
-                    const isApproved = item.status === 'APPROVED';
-                    const isPending = item.status === 'PENDING';
-                    const isRejected = item.status === 'REJECTED';
-                    const isDraft = item.status === 'DRAFT';
-                    const isHidden = item.status === 'HIDDEN';
+          <div className="bg-white rounded border border-[#ebe8e1] overflow-hidden shadow-sm w-full">
+            <table className="w-full table-fixed text-left text-sm">
+              <thead className="bg-[#f1ede6] uppercase tracking-wider font-semibold text-[#4a463f] text-xs">
+                <tr>
+                  <th className="py-3.5 px-3.5 w-[26%]">Ảnh &amp; Tên món đồ</th>
+                  <th className="py-3.5 px-3.5 w-[10%]">Giá gốc</th>
+                  <th className="py-3.5 px-3.5 w-[9%]">Đã cho thuê</th>
+                  <th className="py-3.5 px-3.5 w-[11%]">% Giảm khấu hao</th>
+                  <th className="py-3.5 px-3.5 w-[12%]">Giá Thrift đề xuất</th>
+                  <th className="py-3.5 px-3.5 w-[10%]">Tình trạng</th>
+                  <th className="py-3.5 px-3.5 w-[10%]">Trạng thái</th>
+                  <th className="py-3.5 px-3.5 w-[12%] text-right">Hành động</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f1ede6]">
+                {paginatedListings.map((item) => {
+                  const isSold = item.status === 'SOLD' || item.isSold;
+                  const isApproved = item.status === 'APPROVED';
+                  const isPending = item.status === 'PENDING';
+                  const isRejected = item.status === 'REJECTED';
+                  const isDraft = item.status === 'DRAFT';
+                  const isHidden = item.status === 'HIDDEN';
 
-                    // Tính giá gốc và mức khấu hao
-                    const origPrice =
-                      item.originalPrice ||
-                      (item.price ? Math.max(item.price, Math.round((item.price * 1.45) / 1000) * 1000) : 1000000);
-                    const rentalCount = item.rentalCycles ?? (item.source === 'RETURNED_RENTAL' ? 8 : 0);
-                    const depreciation = calculateThriftDiscount(rentalCount, origPrice);
+                  // Tính giá gốc và mức khấu hao
+                  const origPrice =
+                    item.originalPrice ||
+                    (item.price ? Math.max(item.price, Math.round((item.price * 1.45) / 1000) * 1000) : 1000000);
+                  const rentalCount = item.rentalCycles ?? (item.source === 'RETURNED_RENTAL' ? 8 : 0);
+                  const depreciation = calculateThriftDiscount(rentalCount, origPrice);
 
-                    return (
-                      <tr key={item.id} className="hover:bg-[#f7f3ec]/50 transition-colors">
-                        {/* 1. Ảnh & Tên món đồ */}
-                        <td className="py-4 px-4 flex items-center gap-3">
+                  return (
+                    <tr key={item.id} className="hover:bg-[#f7f3ec]/50 transition-colors">
+                      {/* 1. Ảnh & Tên món đồ */}
+                      <td className="py-4 px-3.5">
+                        <div className="flex items-center gap-3">
                           <Link to={`/shop/thrift/listings/${item.id}/view`} className="shrink-0 hover:opacity-80 transition-opacity">
                             <img
                               src={item.image}
                               alt={item.title}
-                              className="w-12 h-12 object-cover rounded border border-[#ebe8e1]"
+                              className="w-12 h-12 object-cover rounded border border-[#ebe8e1] shrink-0 shadow-2xs"
                               loading="lazy"
                             />
                           </Link>
-                          <div className="min-w-0 max-w-xs">
+                          <div className="min-w-0 flex-1">
                             <Link
                               to={`/shop/thrift/listings/${item.id}/view`}
-                              className="font-semibold text-sm hover:underline block text-[#141310] truncate"
+                              className="font-semibold text-sm text-[#141310] hover:underline line-clamp-2 break-words leading-snug block"
                               title={item.title}
                             >
                               {item.title}
                             </Link>
-                            <div className="flex items-center gap-2 mt-0.5 text-[#7b766f]">
-                              <span className="font-mono text-[11px]">SKU: {item.sku}</span>
-                              {item.category && <span className="text-[11px] truncate">• {item.category}</span>}
+                            <div className="flex flex-wrap items-center gap-x-2 mt-1 text-[#7b766f] text-xs leading-tight">
+                              <span className="font-mono">SKU: {item.sku}</span>
+                              {item.category && <span className="truncate max-w-[120px]">• {item.category}</span>}
                             </div>
                           </div>
-                        </td>
+                        </div>
+                      </td>
 
-                        {/* 2. Giá gốc */}
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="font-semibold text-[#141310]">
-                            {origPrice.toLocaleString('vi-VN')} ₫
+                      {/* 2. Giá gốc */}
+                      <td className="py-4 px-3.5">
+                        <div className="font-semibold text-sm text-[#141310] break-words leading-tight">
+                          {origPrice.toLocaleString('vi-VN')} ₫
+                        </div>
+                        <div className="text-xs text-[#7b766f] leading-tight mt-1">Giá gốc</div>
+                      </td>
+
+                      {/* 3. Số lần đã cho thuê */}
+                      <td className="py-4 px-3.5">
+                        <div className="font-semibold text-sm text-[#141310] flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[16px] text-amber-700 shrink-0">sync_alt</span>
+                          <span>{rentalCount} lần</span>
+                        </div>
+                        <div className="text-xs text-[#7b766f] leading-tight mt-1 break-words">
+                          {item.source === 'RETURNED_RENTAL' ? 'Kho RENT' : 'Kho xưởng'}
+                        </div>
+                      </td>
+
+                      {/* 4. % Giảm giá khấu hao */}
+                      <td className="py-4 px-3.5">
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                          <span className="material-symbols-outlined text-[14px]">trending_down</span>
+                          -{depreciation.discountPercent}%
+                        </span>
+                        <div className="text-xs text-[#7b766f] mt-1 leading-tight break-words" title={depreciation.tierDescription}>
+                          {rentalCount > 12
+                            ? '>12 lần (-60%)'
+                            : rentalCount >= 8
+                            ? '8-12 lần (-45%)'
+                            : rentalCount >= 4
+                            ? '4-7 lần (-30%)'
+                            : rentalCount >= 1
+                            ? '1-3 lần (-15%)'
+                            : 'Chưa thuê (-10%)'}
+                        </div>
+                      </td>
+
+                      {/* 5. Giá bán Thrift đề xuất */}
+                      <td className="py-4 px-3.5">
+                        <div className="font-bold text-sm text-emerald-700 break-words leading-tight">
+                          {(item.price || 0).toLocaleString('vi-VN')} ₫
+                        </div>
+                        {depreciation.suggestedPrice !== item.price && (
+                          <div className="text-xs text-[#7b766f] leading-tight mt-1 break-words">
+                            Đ/xuất: {depreciation.suggestedPrice.toLocaleString('vi-VN')} ₫
                           </div>
-                          <div className="text-[10px] text-[#7b766f]">Giá mua mới/gốc</div>
-                        </td>
+                        )}
+                      </td>
 
-                        {/* 3. Số lần đã cho thuê */}
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="font-semibold text-xs sm:text-sm text-[#141310] flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[15px] text-amber-700">sync_alt</span>
-                            <span>{rentalCount} lần</span>
-                          </div>
-                          <div className="text-[10px] text-[#7b766f]">
-                            {item.source === 'RETURNED_RENTAL' ? 'Hàng hoàn từ RENT' : 'Kho xưởng'}
-                          </div>
-                        </td>
+                      {/* 6. Tình trạng hiện vật */}
+                      <td className="py-4 px-3.5">
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-[#f1ede6] text-[#4a463f] border border-[#ebe8e1] inline-block max-w-full truncate" title={item.conditionGrade || 'Rất tốt (95%)'}>
+                          {item.conditionGrade || 'Rất tốt (95%)'}
+                        </span>
+                      </td>
 
-                        {/* 4. % Giảm giá khấu hao */}
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
-                            <span className="material-symbols-outlined text-[13px]">trending_down</span>
-                            -{depreciation.discountPercent}%
-                          </span>
-                          <div className="text-[10px] text-[#7b766f] mt-0.5 truncate max-w-[120px]" title={depreciation.tierDescription}>
-                            {rentalCount > 12
-                              ? 'Bậc >12 lần (-60%)'
-                              : rentalCount >= 8
-                              ? 'Bậc 8-12 lần (-45%)'
-                              : rentalCount >= 4
-                              ? 'Bậc 4-7 lần (-30%)'
-                              : rentalCount >= 1
-                              ? 'Bậc 1-3 lần (-15%)'
-                              : 'Chưa thuê (-10%)'}
-                          </div>
-                        </td>
-
-                        {/* 5. Giá bán Thrift đề xuất */}
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="font-bold text-sm text-emerald-700">
-                            {(item.price || 0).toLocaleString('vi-VN')} ₫
-                          </div>
-                          {depreciation.suggestedPrice !== item.price && (
-                            <div className="text-[10px] text-[#7b766f]">
-                              Đề xuất: {depreciation.suggestedPrice.toLocaleString('vi-VN')} ₫
-                            </div>
-                          )}
-                        </td>
-
-                        {/* 6. Tình trạng hiện vật */}
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <span className="px-2 py-1 rounded text-[11px] font-medium bg-[#f1ede6] text-[#4a463f] border border-[#ebe8e1] inline-block">
-                            {item.conditionGrade || 'Rất tốt (95%)'}
-                          </span>
-                        </td>
-
-                        {/* 7. Trạng thái */}
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-block ${
-                              isApproved
-                                ? 'bg-[#d8e3ce] text-[#3f4a3a]'
-                                : isPending
-                                ? 'bg-amber-100 text-amber-900'
-                                : isSold
-                                ? 'bg-gray-200 text-gray-800'
-                                : isRejected
-                                ? 'bg-red-100 text-red-900'
-                                : isHidden
-                                ? 'bg-slate-200 text-slate-700'
-                                : 'bg-zinc-100 text-zinc-700'
-                            }`}
-                          >
-                            {isApproved
-                              ? 'ĐANG BÁN'
+                      {/* 7. Trạng thái */}
+                      <td className="py-4 px-3.5">
+                        <span
+                          className={`px-2 py-1 rounded text-[11px] font-bold uppercase inline-block whitespace-nowrap ${
+                            isApproved
+                              ? 'bg-[#d8e3ce] text-[#3f4a3a]'
                               : isPending
-                              ? 'CHỜ DUYỆT'
+                              ? 'bg-amber-100 text-amber-900'
                               : isSold
-                              ? 'HẾT HÀNG'
+                              ? 'bg-gray-200 text-gray-800'
                               : isRejected
-                              ? 'TỪ CHỐI'
+                              ? 'bg-red-100 text-red-900'
                               : isHidden
-                              ? 'ĐANG ẨN'
-                              : 'BẢN NHÁP'}
-                          </span>
-                        </td>
+                              ? 'bg-slate-200 text-slate-700'
+                              : 'bg-zinc-100 text-zinc-700'
+                          }`}
+                        >
+                          {isApproved
+                            ? 'ĐANG BÁN'
+                            : isPending
+                            ? 'CHỜ DUYỆT'
+                            : isSold
+                            ? 'HẾT HÀNG'
+                            : isRejected
+                            ? 'TỪ CHỐI'
+                            : isHidden
+                            ? 'ĐANG ẨN'
+                            : 'BẢN NHÁP'}
+                        </span>
+                      </td>
 
-                        {/* 8. Cột Hành động (Sửa, Xem chi tiết, Đăng bán) */}
-                        <td className="py-4 px-4 text-right space-x-2 whitespace-nowrap">
+                      {/* 8. Cột Hành động (Icon thu gọn rộng rãi) */}
+                      <td className="py-4 px-3.5 text-right">
+                        <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
                           {/* Nút Xem chi tiết */}
                           <Link
                             to={`/shop/thrift/listings/${item.id}/view`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#141310] hover:bg-[#292724] text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                            className="w-8 h-8 inline-flex items-center justify-center bg-[#141310] hover:bg-[#292724] text-white rounded transition-colors shadow-xs"
                             title="Xem chi tiết mục đăng THRIFT"
                           >
-                            <span className="material-symbols-outlined text-[13px]">visibility</span>
-                            Chi tiết
+                            <span className="material-symbols-outlined text-[17px]">visibility</span>
                           </Link>
 
                           {/* Nút Sửa */}
                           <Link
                             to={`/shop/thrift/listings/${item.id}/edit`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#141310] rounded font-semibold text-[11px] transition-colors"
+                            className="w-8 h-8 inline-flex items-center justify-center bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#141310] rounded transition-colors"
                             title="Chỉnh sửa thông tin món đồ"
                           >
-                            <span className="material-symbols-outlined text-[13px]">edit</span>
-                            Sửa
+                            <span className="material-symbols-outlined text-[17px]">edit</span>
                           </Link>
 
                           {/* Nút Đăng bán / Thao tác */}
@@ -944,59 +944,54 @@ export const ShopThriftListings: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handlePublishListing(item.id)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                                className="w-8 h-8 inline-flex items-center justify-center bg-emerald-700 hover:bg-emerald-800 text-white rounded transition-colors shadow-xs cursor-pointer"
                                 title="Đăng bán bản nháp"
                               >
-                                <span className="material-symbols-outlined text-[12px]">publish</span>
-                                Đăng bán
+                                <span className="material-symbols-outlined text-[17px]">publish</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteDraft(item.id, item.title)}
-                                className="inline-flex items-center gap-1 px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded font-semibold text-[10px] transition-colors"
+                                className="w-8 h-8 inline-flex items-center justify-center bg-rose-50 hover:bg-rose-100 text-rose-700 rounded transition-colors cursor-pointer"
                                 title="Xóa bản nháp"
                               >
-                                <span className="material-symbols-outlined text-[12px]">delete</span>
-                                Xóa
+                                <span className="material-symbols-outlined text-[17px]">delete</span>
                               </button>
                             </>
                           ) : isHidden ? (
                             <button
                               type="button"
                               onClick={() => handleToggleVisibility(item.id)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-semibold text-[11px] shadow-xs transition-colors"
+                              className="w-8 h-8 inline-flex items-center justify-center bg-emerald-700 hover:bg-emerald-800 text-white rounded transition-colors shadow-xs cursor-pointer"
                               title="Mở bán lại mục này"
                             >
-                              <span className="material-symbols-outlined text-[12px]">visibility</span>
-                              Mở bán
+                              <span className="material-symbols-outlined text-[17px]">visibility</span>
                             </button>
                           ) : isApproved ? (
                             <button
                               type="button"
                               onClick={() => handleToggleVisibility(item.id)}
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#4a463f] rounded font-semibold text-[10px] transition-colors"
+                              className="w-8 h-8 inline-flex items-center justify-center bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#4a463f] rounded transition-colors cursor-pointer"
                               title="Tạm ẩn sản phẩm khỏi sàn"
                             >
-                              <span className="material-symbols-outlined text-[12px]">visibility_off</span>
-                              Tạm ẩn
+                              <span className="material-symbols-outlined text-[17px]">visibility_off</span>
                             </button>
                           ) : isRejected ? (
                             <Link
                               to={`/shop/thrift/listings/${item.id}/edit`}
-                              className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded font-semibold text-[10px] transition-colors"
+                              className="w-8 h-8 inline-flex items-center justify-center bg-amber-100 hover:bg-amber-200 text-amber-900 rounded transition-colors"
                               title="Cập nhật lại hồ sơ bị từ chối"
                             >
-                              <span className="material-symbols-outlined text-[12px]">refresh</span>
-                              Gửi lại
+                              <span className="material-symbols-outlined text-[17px]">refresh</span>
                             </Link>
                           ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
         
