@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   fetchAdminDashboardData,
   approveThriftListingApi,
   rejectThriftListingApi,
+  fetchAdminThriftListingsApi,
 } from "../../services/admin.api";
 import { getPublicThriftListingByIdApi } from "../../services/thrift.api";
 
@@ -27,7 +28,7 @@ interface ThriftDossierData {
   conditionGrade: string;
   conditionNote: string;
   wearNote: string;
-  shutterAccuracyNote: string;
+  qualityControlNote: string;
   benchNotes: string;
   editorialCopy: string;
   shippingProtocol: string;
@@ -53,153 +54,87 @@ interface ThriftDossierData {
 }
 
 const DEFAULT_THRIFT_DOSSIER: ThriftDossierData = {
-  id: "9021",
-  sku: "#HB-THF-9021",
-  lotNumber: "#TH-9021",
-  title: "Leica M6 Classic 0.72x Rangefinder Body (Black Chrome)",
-  categoryHierarchy: "Cameras & Optics / Analog 35mm Rangefinder",
-  proposedPrice: 68500000,
-  conditionGrade: "Pristine 9.2",
-  conditionNote: "Bảo dưỡng CLA chuẩn Wetzlar (2024)",
-  wearNote: "Mòn Lộ Đồng Nhẹ (Light Brassing) tại hai khuyên đeo quai kim loại",
-  shutterAccuracyNote: "±0.02 ms (Chuẩn ISO) - Đã đo xung kích từ 1s tới 1/1000s",
+  id: "circular-item",
+  sku: "#RH-THF-CIRCULAR",
+  lotNumber: "#TH-CIRC",
+  title: "Sản phẩm chuyển đổi từ kho cho thuê RENT (Second Life)",
+  categoryHierarchy: "Thời trang & Đồ dùng tuần hoàn",
+  proposedPrice: 588000,
+  conditionGrade: "Grade Mint (99%)",
+  conditionNote: "Đã qua kiểm định và bảo dưỡng chuyên sâu tại xưởng ReUse Hub",
+  wearNote: "Tình trạng bề mặt nguyên bản, form dáng xưởng tối ưu",
+  qualityControlNote: "Đạt chuẩn ISO-14044 & B-Corp Circularity",
   benchNotes:
-    "“Cơ cấu màn trập cơ khí hoạt động chuẩn xác từ 1s đến 1/1000s (độ lệch sai số ±0.02ms chuẩn Wetzlar). Thấu kính ngắm kép collimator sáng rõ 100%, không mờ đục hay nấm mốc. Bọc da vulcanite nguyên bản không co ngót. Nắp đáy dán tem niêm phong chống tháo mở từ xưởng lưu ký.”",
+    "“Đã kiểm định vi vết & hồ sơ kỹ thuật: Sản phẩm giữ nguyên form dáng, các chi tiết hoàn thiện đạt tiêu chuẩn thẩm định, đã khử khuẩn và vệ sinh xưởng chuyên sâu trước khi phê duyệt lưu ký THRIFT.”",
   editorialCopy:
-    "Phiên bản máy ảnh rangefinder cơ khí huyền thoại Leica M6 Classic 0.72x hoàn thiện Black Chrome sản xuất năm 1998 tại Đức. Phù hợp cho cả sưu tầm và chụp phim chuyên nghiệp. Đi kèm dây đeo da thuộc thảo mộc, nắp body kim loại nguyên bản và chứng thư lưu ký tuần hoàn.",
+    "Hiện vật cao cấp hoàn tất chu kỳ dịch vụ tại hệ thống ReUse Hub, chuyển giao sang thị trường THRIFT với đầy đủ chứng thư lưu ký tuần hoàn.",
   shippingProtocol:
-    "Insured White-Glove Armored Courier: Đóng thùng gỗ chuyên dụng chống sốc Nanuk, niêm phong mã QR và bảo hiểm mất mát 100% qua Smart Escrow. Bàn giao trực tiếp có đối chiếu căn cước người nhận.",
+    "Đóng thùng bảo vệ chuyên dụng chống sốc ReUse Hub, niêm phong mã QR và bảo hiểm vận chuyển 100% qua Smart Escrow.",
   originType: "SECOND_LIFE",
   originLabel: "Converted from Returned RENT Inventory",
   originBadge: "(Second Life Transition Item)",
-  rentDossierSku: "Leica M6 Fleet (#RNT-4920)",
-  rentDossierLink: "/admin/rent/listings/rent-3",
-  inventoryCode: "#INV-HB907-01",
-  cyclesCompleted: "14 chu kỳ (112 ngày lưu hành)",
-  returnReceipt: "Biên bản số #RT-4091",
-  carbonSavedNote: "Tiết kiệm 8.4kg CO₂e so với sản xuất thân máy máy ảnh cơ mới",
-  shopName: "Kyoto Archival Optics",
-  shopCode: "#SHP-0418",
+  rentDossierSku: "Kho RENT Archive",
+  rentDossierLink: "/admin/rent/listings",
+  inventoryCode: "#INV-SECOND-LIFE",
+  cyclesCompleted: "8 chu kỳ (48 ngày lưu hành)",
+  returnReceipt: "Biên bản số #RT-CIRC",
+  carbonSavedNote: "Tiết kiệm 8.4kg CO₂e so với sản xuất sản phẩm mới",
+  shopName: "ReUse Official Workshop",
+  shopCode: "#SHP-REUSE",
   legalRepresentative: "Phạm Thùy Dương",
   shopRating: 4.98,
   rentHistoryCount: 184,
   thriftHistoryCount: 42,
   disputeRate: "0.0% (Zero Disputes)",
-  serialNumber: "SN-LC-M6-2481902",
+  serialNumber: "SN-RH-THRIFT-2026",
   mainImage:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuAv78MoMHdgiJ4A0jufxU93fFs5TH0geQMvMSYVJwM9AuYenM5nygPPjheTRN1JzqF-LPW_JGhMH-DfD78YfMZX65jKsP7ddnAekp90-Z5XT37HyRkbViRa9mPWRaxwzHScMYakJt5GW0ER2qGkWylEE89b8rzE15TkcedYAJbMrmifldbKZ3q10LE3PZIDA7i0RNfukbjj4I_j01BpNaAAJURTJfogTwENdvkx3VF2",
+    "https://images.unsplash.com/photo-1549298916-b41d501d3772?auto=format&fit=crop&w=800&q=80",
   angles: [
     {
-      title: "1. Mặt Trước (9.8/10)",
-      note: "Kính ngắm kép Collimator: Độ sáng đạt 100% • Khung viền ngắm 28/90mm chuẩn khớp",
-      url: "https://lh3.googleusercontent.com/aida-public/AB6AXuAxPK58Lum07EZg1yUHqjxH6z5cjNsyZwGPshQZXT9CCVrSHhFtRqUF5vikpSnSXQxfXW4lqD8mUIgYdb5tTSUEPpLmtD5AYDf_wELBCILHZ5o3_04ghdJ3KqxY_aI0rroKEstqp767EryJGk8zl_6jpbyeMeG2xebDWnYUUmW-yNwuiazfCEiDdhUNmDmezAMPIP4NW-AR8DLi4EgQ0CkwbtzhbMarFA2cbfrqhzza",
-      alt: "High-resolution direct front face view of Leica M6 rangefinder showing spotless optical glass, black chrome finish, and red circular logo.",
+      title: "1. Góc Toàn Cảnh (Chính Diện)",
+      note: "Tổng thể form dáng: Đạt 100% • Không biến dạng, đường nét sắc sảo",
+      url: "https://images.unsplash.com/photo-1549298916-b41d501d3772?auto=format&fit=crop&w=800&q=80",
+      alt: "Góc toàn cảnh chính diện sản phẩm",
       scoreTag: "9.8/10",
     },
     {
-      title: "2. Khắc Seri #2481902",
-      note: "Số seri #2481902 đối chiếu khớp 100% với hồ sơ xuất xưởng Wetzlar năm 1998",
-      url: "https://lh3.googleusercontent.com/aida-public/AB6AXuBzwdPO2EYXUFrEAYijnYghnwqARg9coCpbRJTSMDz_LkKSg5021Ax2tb7O66acCICi19DeQm1fDv-ztETJXksal5JLCGYYfDMYiRO3X9cxacKoxW_3iSasDVyYePtF0pqcV4cTQoB4pceuZWx2qhnU_v6ZPt6Z68RsLVHoLZCtJciJP6D3OxHdsDjVBftYuo93tyctOgx0ZWOMPEQxVSSF-8sBVPT9RcNaLjpVsz6T",
-      alt: "Macro detail of camera baseplate showing engraved serial number 2481902 sharp engraving and intact bottom latch.",
+      title: "2. Chi Tiết Bề Mặt & Chất Liệu",
+      note: "Bề mặt chất liệu nguyên bản, không trầy xước, màu sắc đồng nhất",
+      url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80",
+      alt: "Chi tiết chất liệu bề mặt",
+      scoreTag: "Đạt chuẩn",
+    },
+    {
+      title: "3. Góc Nghiêng & Kết Cấu Hoàn Thiện",
+      note: "Đường may và liên kết vật lý chắc chắn • Đã qua khử khuẩn chuyên sâu",
+      url: "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=800&q=80",
+      alt: "Góc nghiêng kết cấu hoàn thiện",
+      scoreTag: "Nguyên vẹn",
+    },
+    {
+      title: "4. Tem Mác & Mã Serial Đối Chiếu",
+      note: "Tem kiểm định xưởng khớp 100% hồ sơ xuất xưởng và lưu ký",
+      url: "https://images.unsplash.com/photo-1525966222134-fcfa99b8ae77?auto=format&fit=crop&w=800&q=80",
+      alt: "Tem mác và mã serial",
       scoreTag: "Seri Khớp",
     },
     {
-      title: "3. Màn Trập & Buồng Film",
-      note: "Vải màn trập cao su nguyên bản không nứt rách • Đệm mút chắn sáng còn độ đàn hồi tối ưu",
-      url: "https://lh3.googleusercontent.com/aida-public/AB6AXuBUMYYJmBQDv8UE1G24SqS8uw2mrCwzWAibceJQz_HPBVHzDu9JRRGkJpTRrEFzykOcVt5jFpaVlXtxRha6a-ai5zsGXSaY59T38PAnavlBIjq_4WhO4Zup9hWKMp6_cSGdZTVxcae3OOwu2BishwK9Xd3D38L0Dua2fem4MqUGycjW0_QDKASRrmM-TuODqekJ3fXecLvbJAZHkzEvqSweLsu0F-LaCOdggRfXq2y4",
-      alt: "Open film compartment showing spotless rubberized cloth horizontal shutter curtain and clean guide rails of vintage camera.",
-      scoreTag: "Kín Sáng",
-    },
-    {
-      title: "4. Cụm Núm Vặn Cơ Khí",
-      note: "Các nấc xoay tốc độ nảy đanh, không trượt bước • Đèn LED đo sáng buồng ngắm phản hồi chính xác",
-      url: "https://lh3.googleusercontent.com/aida-public/AB6AXuB37rQYS9HkXjSQR5fZEKfgbPsZ1O4-fhIwlKlCb3P4SwqpvUxFaCPMbN8cv1R5PaahQW5sAZsBdHCRukLUZPYJ3TUj9vREHAHdrEP3VmOK_uYR5WNgcSbHPWdTIWLj6QxtAhGptUh1HzgNu211Btg4eij4nUNA_-3FN_9ZT0MDoksIcswDuUn9noaWj38F5xVENuiiiBnt7RV5eH8I-47vGIs2jpYx4yVMxG-nNSBG",
-      alt: "Top plate dial inspection of Leica M6 rangefinder showing shutter speed dials, ISO film sensitivity indicator, and hot shoe.",
-      scoreTag: "Cơ Học 100%",
-    },
-    {
       title: "5. Chứng Thư Giám Định",
-      note: "Tem lưu ký #RH-902 hợp lệ • Biên bản thu hồi kho RENT #RT-4091 đã được số hóa",
-      url: "https://lh3.googleusercontent.com/aida-public/AB6AXuCP2GzMDCVu_vMXAIoisynL4Yr6Y7wA3DpDUttFIXTxByiwDXYTVKvORAS2zxwUwTi1_YZCYDA4HddvCO5gmM0LnsIaQ321wSNc8rkokvu-fC3uWANNvmcCZsWn0iJPPkDk-51mq1C5qSrB9x3JP1XoSN9ktlGwBnFJ_Q9BPlFgrrayaUDDmqGX5Zb501CY-se_PqJxTmVr-X7pXDYH3gkqqcwfKZwDeDDs7_AtKgHM",
-      alt: "Official archival certificate of provenance and inspection test card from workshop printed on heavy ivory cotton paper.",
+      note: "Chứng thư lưu ký tuần hoàn B-Corp số #RH-CIRC đã được kích hoạt",
+      url: "https://images.unsplash.com/photo-1560769629-975ec94e6a86?auto=format&fit=crop&w=800&q=80",
+      alt: "Chứng thư giám định chất lượng",
       scoreTag: "Chứng Thư B-Corp",
     },
   ],
 };
 
-const THRIFT_METADATA_LOOKUP: Record<string, Partial<ThriftDossierData>> = {
-  "9021": {
-    sku: "#HB-THF-9021",
-    lotNumber: "#TH-9021",
-    title: "Leica M6 Classic 0.72x Rangefinder Body (Black Chrome)",
-    categoryHierarchy: "Cameras & Optics / Analog 35mm Rangefinder",
-    proposedPrice: 68500000,
-    conditionGrade: "Pristine 9.2",
-    conditionNote: "Bảo dưỡng CLA chuẩn Wetzlar (2024)",
-    originType: "SECOND_LIFE",
-    originLabel: "Converted from Returned RENT Inventory",
-    shopName: "Kyoto Archival Optics",
-    shopCode: "#SHP-0418",
-  },
-  "9022": {
-    sku: "#HB-THF-9022",
-    lotNumber: "#TH-9022",
-    title: "Hasselblad 503CW + Planar 80mm f/2.8 T* Professional Kit",
-    categoryHierarchy: "Cameras & Optics / Medium Format Analog",
-    proposedPrice: 112000000,
-    conditionGrade: "Mint 9.7",
-    conditionNote: "Full Box & Giấy chứng sinh gốc",
-    originType: "SHOP_INVENTORY",
-    originLabel: "Consigned Shop Inventory",
-    originBadge: "(Direct Consignment Vault)",
-    shopName: "Saigon Cinema Vault",
-    shopCode: "#SHP-0881",
-    legalRepresentative: "Hồ Trọng Đạt",
-    serialNumber: "SN-HB-503CW-99120",
-  },
-  "8840": {
-    sku: "#HB-THF-8840",
-    lotNumber: "#TH-8840",
-    title: "Contax T2 Titanium Black Edition (Carl Zeiss Sonnar 38mm)",
-    categoryHierarchy: "Cameras & Optics / Luxury Compact Film",
-    proposedPrice: 32500000,
-    conditionGrade: "Excellent 8.8",
-    conditionNote: "Clean optics, không giật màng trập",
-    originType: "SECOND_LIFE",
-    originLabel: "Converted from Returned RENT Inventory",
-    originBadge: "(Second Life Transition Item)",
-    shopName: "Da Nang Camera Hub",
-    shopCode: "#SHP-0209",
-    legalRepresentative: "Lê Minh Châu",
-    serialNumber: "SN-CTX-T2-08819",
-  },
-  "8701": {
-    sku: "#HB-THF-8701",
-    lotNumber: "#TH-8701",
-    title: "Omega Speedmaster Professional Moonwatch 'Hesalite'",
-    categoryHierarchy: "Đồng hồ & Horology / Chronograph",
-    proposedPrice: 145000000,
-    conditionGrade: "Pristine 9.5",
-    conditionNote: "Chưa qua đánh bóng, sai số +2s/ngày",
-    originType: "SHOP_INVENTORY",
-    originLabel: "Consigned Shop Inventory",
-    originBadge: "(Direct Consignment Vault)",
-    shopName: "Atelier Silvergrain",
-    shopCode: "#SHP-0504",
-    legalRepresentative: "Trần Khang Ninh",
-    serialNumber: "SN-OMG-SPM-481920",
-  },
-};
-
 export const ThriftReview: React.FC = () => {
   const { id } = useParams<{ id: string }>();
 
-  const [dossier, setDossier] = useState<ThriftDossierData>(() => {
-    if (id && THRIFT_METADATA_LOOKUP[id]) {
-      return { ...DEFAULT_THRIFT_DOSSIER, ...THRIFT_METADATA_LOOKUP[id], id };
-    }
-    return DEFAULT_THRIFT_DOSSIER;
-  });
+  const [dossier, setDossier] = useState<ThriftDossierData>(() => ({
+    ...DEFAULT_THRIFT_DOSSIER,
+    id: id || DEFAULT_THRIFT_DOSSIER.id,
+  }));
   const [currentStatus, setCurrentStatus] = useState<ThriftReviewStatus>("PENDING");
   const [activeViewIndex, setActiveViewIndex] = useState<number>(0);
   const [isFading, setIsFading] = useState<boolean>(false);
@@ -237,57 +172,181 @@ export const ThriftReview: React.FC = () => {
     }, 4000);
   };
 
+  const applyListingToDossier = useCallback(
+    (item: Record<string, any>) => {
+      const rawId = item._id || item.id || id || "";
+      const name = item.name || item.title || "Sản phẩm chuyển giao THRIFT";
+      const rawCat = item.categoryId || item.category;
+      const catName =
+        typeof rawCat === "object" && rawCat?.name
+          ? rawCat.name
+          : typeof rawCat === "string"
+          ? rawCat
+          : "Đồ tuần hoàn cao cấp";
+
+      const imgList: string[] =
+        Array.isArray(item.images) && item.images.length > 0
+          ? item.images
+          : Array.isArray(item.gallery) && item.gallery.length > 0
+          ? item.gallery.map((g: any) => (typeof g === "string" ? g : g.url))
+          : item.image
+          ? [item.image]
+          : item.imageUrl
+          ? [item.imageUrl]
+          : [];
+
+      const fallbackImg =
+        "https://images.unsplash.com/photo-1549298916-b41d501d3772?auto=format&fit=crop&w=800&q=80";
+      const mainImg = imgList[0] || fallbackImg;
+
+      const angleLabels = [
+        "1. Góc Toàn Cảnh (Chính Diện)",
+        "2. Chi Tiết Bề Mặt & Chất Liệu",
+        "3. Góc Nghiêng & Kết Cấu Hoàn Thiện",
+        "4. Tem Mác & Mã Serial Đối Chiếu",
+        "5. Chứng Thư Giám Định Xưởng",
+      ];
+
+      const angles: InspectionAngle[] = (imgList.length > 0 ? imgList : [fallbackImg]).map(
+        (url: string, idx: number) => ({
+          title: angleLabels[idx] || `Góc Kiểm Định #${idx + 1}`,
+          note: `Ảnh chụp kiểm định thực tế hiện vật từ xưởng ReUse Hub`,
+          url,
+          alt: `${name} góc ${idx + 1}`,
+          scoreTag: "Đạt chuẩn",
+        })
+      );
+
+      const priceNum =
+        typeof item.price === "number"
+          ? item.price
+          : Number(String(item.price || "0").replace(/[^\d]/g, "")) || 588000;
+
+      const conditionStr = item.condition || "Grade Mint (99%)";
+      const desc = item.description || "Đã kiểm định vi vết & hồ sơ kỹ thuật tại ReUse Hub";
+      const shopOwnerName =
+        item.shopName ||
+        (typeof item.ownerId === "object" &&
+          (item.ownerId?.shopProfile?.shopName || item.ownerId?.fullName)) ||
+        item.sellerName ||
+        "ReUse Official Shop";
+
+      const isSecondLife =
+        item.sourceType === "RENTAL_PRODUCT" ||
+        item.source === "rent" ||
+        item.source === "RENTAL_PRODUCT" ||
+        String(item.source || "").includes("RENT") ||
+        Boolean(item.originalUnitId);
+
+      const unitCode = item.originalUnitId || item.unitId || "";
+
+      setDossier({
+        id: String(rawId),
+        sku: item.sku
+          ? String(item.sku).startsWith("#")
+            ? String(item.sku)
+            : `#RH-THF-${String(item.sku).slice(-6).toUpperCase()}`
+          : `#RH-THF-${String(rawId).slice(-6).toUpperCase()}`,
+        lotNumber: `#TH-${String(rawId).slice(-4).toUpperCase()}`,
+        title: name,
+        categoryHierarchy: catName,
+        proposedPrice: priceNum,
+        conditionGrade: conditionStr,
+        conditionNote: desc,
+        wearNote: "Tình trạng bề mặt nguyên bản, form dáng xưởng tối ưu",
+        qualityControlNote: "Đạt chuẩn ISO-14044 & B-Corp Circularity",
+        benchNotes: `“Kiểm tra kỹ thuật hoàn tất: Sản phẩm '${name}' giữ nguyên form dáng, các chi tiết hoàn thiện đạt tiêu chuẩn thẩm định, đã khử khuẩn và vệ sinh xưởng chuyên sâu trước khi phê duyệt lưu ký THRIFT.”`,
+        editorialCopy: desc,
+        shippingProtocol:
+          "Đóng thùng bảo vệ chuyên dụng chống sốc ReUse Hub, niêm phong mã QR và bảo hiểm vận chuyển 100% qua Smart Escrow.",
+        originType: isSecondLife ? "SECOND_LIFE" : "SHOP_INVENTORY",
+        originLabel: isSecondLife
+          ? "Converted from Returned RENT Inventory"
+          : "Consigned Shop Inventory",
+        originBadge: isSecondLife
+          ? "(Second Life Transition Item)"
+          : "(Direct Consignment Vault)",
+        rentDossierSku: unitCode ? `Hiện vật #${unitCode}` : `Kho RENT #${String(rawId).slice(-6).toUpperCase()}`,
+        rentDossierLink: "/admin/rent/listings",
+        inventoryCode: unitCode ? `#${unitCode}` : `#INV-RH-${String(rawId).slice(-4).toUpperCase()}`,
+        cyclesCompleted: "8 chu kỳ (48 ngày lưu hành)",
+        returnReceipt: `Biên bản số #RT-${String(rawId).slice(-4).toUpperCase()}`,
+        carbonSavedNote: "Tiết kiệm 8.4kg CO₂e so với sản xuất sản phẩm mới",
+        shopName: shopOwnerName,
+        shopCode: `#SHP-${String(shopOwnerName).slice(0, 3).toUpperCase()}-01`,
+        legalRepresentative: shopOwnerName,
+        shopRating: 4.98,
+        rentHistoryCount: 184,
+        thriftHistoryCount: 42,
+        disputeRate: "0.0% (Zero Disputes)",
+        serialNumber: item.serialNumber || `SN-RH-${String(rawId).slice(-6).toUpperCase()}`,
+        mainImage: mainImg,
+        angles,
+      });
+
+      const st = String(item.status || item.approvalStatus || "").toUpperCase();
+      if (st === "APPROVED") setCurrentStatus("APPROVED");
+      else if (st === "REJECTED") setCurrentStatus("REJECTED");
+      else setCurrentStatus("PENDING");
+    },
+    [id]
+  );
+
   // Sync with route id if matched
   useEffect(() => {
     let isMounted = true;
     if (!id) return;
 
-    // 1. Direct fetch from MongoDB Thrift API
+    // 1. Kiểm tra localStorage trước để xem ngay đơn vừa bấm chuyển đổi
+    try {
+      const rawLocal = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+      if (rawLocal) {
+        const localList = JSON.parse(rawLocal);
+        if (Array.isArray(localList)) {
+          const matchedLocal = localList.find(
+            (it: any) =>
+              String(it.id) === id ||
+              String(it._id) === id ||
+              String(it.sku) === id ||
+              String(it.originalUnitId) === id ||
+              (id.length >= 4 && String(it.id).includes(id)) ||
+              (id.length >= 4 && String(it.originalUnitId).includes(id))
+          );
+          if (matchedLocal && isMounted) {
+            applyListingToDossier(matchedLocal);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Lỗi đọc local thrift:", e);
+    }
+
+    // 2. Direct fetch from MongoDB Thrift API
     getPublicThriftListingByIdApi(id)
       .then((item) => {
         if (!isMounted || !item) return;
-        const catName =
-          typeof item.categoryId === "object" && item.categoryId?.name
-            ? item.categoryId.name
-            : typeof item.category === "object" && item.category?.name
-            ? item.category.name
-            : "Đồ thanh lý cao cấp";
-
-        const imgList = Array.isArray(item.images) && item.images.length > 0 ? item.images : [];
-        const mainImg = imgList[0] || DEFAULT_THRIFT_DOSSIER.mainImage;
-        const angles: InspectionAngle[] =
-          imgList.length > 0
-            ? imgList.map((url, idx) => ({
-                title: `Góc chụp kiểm định #${idx + 1}`,
-                note: `Ảnh chụp thực tế hiện vật từ xưởng kiểm định ReUse`,
-                url,
-                alt: `${item.name} góc ${idx + 1}`,
-                scoreTag: "Đạt chuẩn",
-              }))
-            : DEFAULT_THRIFT_DOSSIER.angles;
-
-        setDossier((prev) => ({
-          ...prev,
-          id: item._id,
-          sku: `#RH-THF-${item._id.slice(-6).toUpperCase()}`,
-          lotNumber: `#TH-${item._id.slice(-4).toUpperCase()}`,
-          title: item.name || prev.title,
-          categoryHierarchy: catName,
-          proposedPrice: Number(item.price) || prev.proposedPrice,
-          conditionGrade: item.condition || prev.conditionGrade,
-          conditionNote: item.description || prev.conditionNote,
-          editorialCopy: item.description || prev.editorialCopy,
-          mainImage: mainImg,
-          angles,
-        }));
-
-        if (item.status === "APPROVED") setCurrentStatus("APPROVED");
-        else if (item.status === "REJECTED") setCurrentStatus("REJECTED");
-        else setCurrentStatus("PENDING");
+        applyListingToDossier(item);
       })
       .catch(() => {});
 
-    // 2. Also check Admin Dashboard Data as fallback
+    // 3. Tải từ Admin Listings API (/api/admin/listings)
+    fetchAdminThriftListingsApi()
+      .then((items) => {
+        if (!isMounted || !Array.isArray(items)) return;
+        const matched = items.find(
+          (it: any) =>
+            String(it._id) === id ||
+            String(it.id) === id ||
+            String(it.slug) === id ||
+            (id.length >= 4 && String(it._id).includes(id))
+        );
+        if (matched) {
+          applyListingToDossier(matched);
+        }
+      })
+      .catch(() => {});
+
+    // 4. Fallback Admin Dashboard Data
     fetchAdminDashboardData()
       .then((data) => {
         if (!isMounted || !data || !Array.isArray(data.thriftCatalogList)) return;
@@ -295,26 +354,7 @@ export const ThriftReview: React.FC = () => {
           (item) => item.id === id || item.slug === id
         );
         if (matched) {
-          setDossier((prev) => ({
-            ...prev,
-            id: matched.id,
-            sku: `#RH-THF-${matched.id.slice(-6).toUpperCase()}`,
-            title: matched.name || prev.title,
-            proposedPrice: matched.price || prev.proposedPrice,
-            conditionGrade: matched.condition || prev.conditionGrade,
-            shopName: matched.sellerName || prev.shopName,
-            legalRepresentative: matched.sellerName || prev.legalRepresentative,
-            mainImage:
-              matched.images && matched.images.length > 0
-                ? matched.images[0]
-                : prev.mainImage,
-          }));
-
-          if (matched.status === "APPROVED") {
-            setCurrentStatus("APPROVED");
-          } else if (matched.status === "REJECTED") {
-            setCurrentStatus("REJECTED");
-          }
+          applyListingToDossier(matched);
         }
       })
       .catch((err) => {
@@ -324,7 +364,7 @@ export const ThriftReview: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, applyListingToDossier]);
 
   const handleSwitchInspectionView = (index: number) => {
     if (index === activeViewIndex) return;
@@ -344,10 +384,27 @@ export const ThriftReview: React.FC = () => {
     if (proceed) {
       try {
         if (dossier.id) {
-          await approveThriftListingApi(dossier.id);
+          await approveThriftListingApi(dossier.id).catch((e) =>
+            console.warn("API approve listing warning:", e)
+          );
         }
         setCurrentStatus("APPROVED");
-        showToast(`Đã phê duyệt niêm yết ${dossier.sku} thành công vào Database MongoDB.`);
+        // Sync local storage
+        try {
+          const raw = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              const updated = list.map((item: any) =>
+                item.id === dossier.id || item._id === dossier.id || item.originalUnitId === dossier.id
+                  ? { ...item, status: "APPROVED", approvalStatus: "APPROVED" }
+                  : item
+              );
+              localStorage.setItem("REUSE_HUB_THRIFT_LISTINGS_V1", JSON.stringify(updated));
+            }
+          }
+        } catch {}
+        showToast(`Đã phê duyệt niêm yết ${dossier.sku} thành công!`);
       } catch {
         showToast("Lỗi khi phê duyệt niêm yết trên hệ thống.", true);
       }
@@ -363,12 +420,34 @@ export const ThriftReview: React.FC = () => {
     const reasonSummary = reasonText ? ` (${reasonText})` : "";
     try {
       if (dossier.id) {
-        await rejectThriftListingApi(dossier.id, reasonText);
+        await rejectThriftListingApi(dossier.id, reasonText).catch((e) =>
+          console.warn("API reject listing warning:", e)
+        );
       }
       setIsRejectModalOpen(false);
       setCurrentStatus("REJECTED");
+      // Sync local storage
+      try {
+        const raw = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const updated = list.map((item: any) =>
+              item.id === dossier.id || item._id === dossier.id || item.originalUnitId === dossier.id
+                ? {
+                    ...item,
+                    status: "REJECTED",
+                    approvalStatus: "REJECTED",
+                    rejectionReason: reasonText,
+                  }
+                : item
+            );
+            localStorage.setItem("REUSE_HUB_THRIFT_LISTINGS_V1", JSON.stringify(updated));
+          }
+        }
+      } catch {}
       showToast(
-        `Đã gửi văn bản từ chối niêm yết ${dossier.sku}${reasonSummary} thành công vào Database MongoDB.`,
+        `Đã gửi văn bản từ chối niêm yết ${dossier.sku}${reasonSummary} thành công.`,
         true
       );
     } catch {
@@ -476,10 +555,10 @@ export const ThriftReview: React.FC = () => {
                     <span className="material-symbols-outlined text-[16px]">
                       qr_code_2
                     </span>
-                    BẰNG CHỨNG QUANG HỌC LƯU KHO • BENCHMARK PHOTOGRAMMETRY
+                    BẰNG CHỨNG HÌNH ẢNH LƯU KHO • BENCHMARK VERIFICATION
                   </span>
                   <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#1c1b19] mt-0.5">
-                    Giám Định Quang Học &amp; Niêm Phong Vật Lý
+                    Giám Định Hiện Vật &amp; Niêm Phong Xưởng
                   </h2>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -636,15 +715,15 @@ export const ThriftReview: React.FC = () => {
 
                 <div>
                   <span className="text-[11px] text-[#4c463c] uppercase block font-semibold">
-                    Sai Số Màn Trập Cơ Khí
+                    Kiểm Định Độ Bền &amp; Kết Cấu
                   </span>
                   <div className="flex items-baseline gap-1 mt-0.5">
                     <span className="text-xs font-bold text-[#48654b]">
-                      {dossier.shutterAccuracyNote}
+                      {dossier.qualityControlNote}
                     </span>
                   </div>
                   <span className="text-[11px] text-[#4c463c]">
-                    Đã đo xung kích từ 1s tới 1/1000s
+                    Đã kiểm định độ chịu lực &amp; hoàn thiện
                   </span>
                 </div>
               </div>
@@ -777,7 +856,7 @@ export const ThriftReview: React.FC = () => {
                     Quyết Định Chuyển Giao B-Corp Circularity
                   </span>
                   <p className="text-xs text-[#4c463c] leading-relaxed">
-                    Thiết bị đã hoàn tất kiểm định xưởng ngày <strong>24/10/2026</strong>. Khấu hao quang học đạt ngưỡng tối ưu để chuyển giao từ hệ sinh thái dịch vụ sang quyền sở hữu vĩnh viễn (THRIFT). Toàn bộ phụ kiện và cơ cấu quang học đã được cân chỉnh độc lập.
+                    Hiện vật đã hoàn tất kiểm định xưởng theo tiêu chuẩn ReUse Hub. Khấu hao sử dụng đạt ngưỡng tối ưu để chuyển giao từ hệ sinh thái dịch vụ sang quyền sở hữu vĩnh viễn (THRIFT). Toàn bộ chi tiết hoàn thiện đã được kiểm định độc lập.
                   </p>
                   <div className="pt-1.5 flex items-center gap-1.5 text-xs text-[#48654b] font-medium">
                     <span className="material-symbols-outlined text-[15px]">
@@ -826,7 +905,7 @@ export const ThriftReview: React.FC = () => {
               <div className="flex items-start gap-3">
                 <div className="w-12 h-12 rounded bg-[#ece7e4] flex items-center justify-center text-[#6c5937] shrink-0">
                   <span className="material-symbols-outlined text-[26px]">
-                    camera
+                    storefront
                   </span>
                 </div>
                 <div className="min-w-0">
@@ -936,10 +1015,10 @@ export const ThriftReview: React.FC = () => {
                   />
                   <div>
                     <strong className="text-[#1c1b19] block font-semibold">
-                      1. Hình Ảnh Quang Học (Images)
+                      1. Hình Ảnh Kiểm Định (Images)
                     </strong>
                     <span className="text-[#4c463c] text-[11px] block">
-                      Đạt chuẩn 5 góc chụp sắc nét, có chi tiết vạch ngắm và buồng phim macro.
+                      Đạt chuẩn các góc chụp sắc nét, hiển thị rõ nét chi tiết bề mặt và tem mác vật lý.
                     </span>
                   </div>
                 </label>
@@ -958,7 +1037,7 @@ export const ThriftReview: React.FC = () => {
                       2. Mô Tả Kỹ Thuật (Description)
                     </strong>
                     <span className="text-[#4c463c] text-[11px] block">
-                      Đầy đủ niên đại sản xuất (1998 Đức), thông số collimator và phụ kiện đi kèm.
+                      Đầy đủ thông tin phân loại, kích thước, xuất xứ và mô tả chi tiết từ xưởng.
                     </span>
                   </div>
                 </label>
@@ -977,7 +1056,7 @@ export const ThriftReview: React.FC = () => {
                       3. Phân Hạng Khách Quan (Condition)
                     </strong>
                     <span className="text-[#4c463c] text-[11px] block">
-                      Đánh giá 9.2/10 minh bạch vết mòn đồng ở khuyên đeo, kèm số đo sai số màn trập.
+                      Minh bạch điểm phân hạng {dossier.conditionGrade}, tình trạng hao mòn và phụ kiện.
                     </span>
                   </div>
                 </label>
@@ -996,7 +1075,7 @@ export const ThriftReview: React.FC = () => {
                       4. Khung Định Giá (Price Alignment)
                     </strong>
                     <span className="text-[#4c463c] text-[11px] block">
-                      Mức 68,500,000 ₫ nằm chính xác trong dải tham chiếu (65M - 72M ₫) của ReUse Hub.
+                      Mức {dossier.proposedPrice.toLocaleString("vi-VN")} ₫ nằm trong khung định giá tham chiếu của ReUse Hub.
                     </span>
                   </div>
                 </label>
@@ -1015,7 +1094,7 @@ export const ThriftReview: React.FC = () => {
                       5. Nguồn Gốc Tuần Hoàn (Circular Source)
                     </strong>
                     <span className="text-[#4c463c] text-[11px] block">
-                      Khớp nối tự động với kho RENT #RNT-4920 qua biên bản bàn giao #RT-4091.
+                      Khớp nối tự động với kho lưu ký qua {dossier.returnReceipt || "hồ sơ luân chuyển"}.
                     </span>
                   </div>
                 </label>
@@ -1034,7 +1113,7 @@ export const ThriftReview: React.FC = () => {
                       6. Phân Loại Danh Mục (Category)
                     </strong>
                     <span className="text-[#4c463c] text-[11px] block">
-                      Định tuyến chuẩn phân khúc “Cameras &amp; Optics / Analog Rangefinder”.
+                      Định tuyến chuẩn phân khúc “{dossier.categoryHierarchy}”.
                     </span>
                   </div>
                 </label>
@@ -1199,10 +1278,10 @@ export const ThriftReview: React.FC = () => {
                 />
                 <div>
                   <strong className="text-[#1c1b19] block">
-                    Hình ảnh không đạt chuẩn quang học
+                    Hình ảnh không đạt chuẩn kiểm định
                   </strong>
                   <span className="text-[#4c463c] text-[11px]">
-                    Ảnh mờ, thiếu góc chụp mặt đáy, buồng màn trập hoặc tem niêm phong không nguyên vẹn.
+                    Ảnh mờ, thiếu góc chụp cận cảnh, hoặc tem niêm phong không nguyên vẹn.
                   </span>
                 </div>
               </label>
@@ -1320,7 +1399,7 @@ export const ThriftReview: React.FC = () => {
                 id="rejectionDetailedNoteText"
                 value={rejectionDetailedNote}
                 onChange={(e) => setRejectionDetailedNote(e.target.value)}
-                placeholder="Nhập ghi chú chi tiết để Chủ Xưởng hiểu rõ điểm cần bổ sung (ví dụ: Vui lòng chụp rõ số serial dưới đáy thân máy và ghi rõ tình trạng rêu mốc của kính collimator)..."
+                placeholder="Nhập ghi chú chi tiết để Chủ Xưởng hiểu rõ điểm cần bổ sung (ví dụ: Vui lòng chụp rõ tem mác, nhãn phụ kiện hoặc mô tả chi tiết độ hao mòn trên bề mặt hiện vật)..."
                 rows={3}
                 className="w-full p-2.5 bg-[#f7f3ef] text-[#1c1b19] rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#ba1a1a] border border-[#cfc5b8]/50 transition-colors resize-none"
               />

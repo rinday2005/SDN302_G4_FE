@@ -1343,7 +1343,7 @@ export const ThriftListingApproval: React.FC = () => {
                 Tiêu Chuẩn Giám Định Độc Bản 7 Bước (Standardized 7-Point Appraisal)
               </span>
               <span className="text-xs text-[#4a463f]">
-                Mọi hiện vật THRIFT được duyệt đều phải vượt qua bài kiểm tra cơ khí, thấu kính quang học, niên đại serial và lịch sử bảo dưỡng trước khi cấp mã bảo mật B-Corp.
+                Mọi hiện vật THRIFT được duyệt đều phải vượt qua bài kiểm tra kết cấu vật lý, tình trạng ngoại quan, đối chiếu serial và lịch sử bảo dưỡng trước khi cấp mã bảo mật B-Corp.
               </span>
             </div>
           </div>
@@ -1440,7 +1440,7 @@ export const ThriftListingApproval: React.FC = () => {
                     onChange={(e) => setChecklist({ ...checklist, mechanical: e.target.checked })}
                     className="w-4 h-4 rounded text-[#141310] accent-[#141310]"
                   />
-                  <span>1. Kiểm tra cơ khí, màng trập, vi mạch &amp; độ kín sáng vật lý.</span>
+                  <span>1. Kiểm tra kết cấu, bề mặt chất liệu &amp; độ hoàn thiện vật lý.</span>
                 </label>
                 <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
@@ -1449,7 +1449,7 @@ export const ThriftListingApproval: React.FC = () => {
                     onChange={(e) => setChecklist({ ...checklist, optical: e.target.checked })}
                     className="w-4 h-4 rounded text-[#141310] accent-[#141310]"
                   />
-                  <span>2. Thấu kính quang học sạch, không mốc xước, thấu quang chuẩn studio.</span>
+                  <span>2. Độ mới ngoại quan sạch sẽ, không sờn rách, tem mác nguyên vẹn.</span>
                 </label>
                 <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
@@ -1458,7 +1458,7 @@ export const ThriftListingApproval: React.FC = () => {
                     onChange={(e) => setChecklist({ ...checklist, serial: e.target.checked })}
                     className="w-4 h-4 rounded text-[#141310] accent-[#141310]"
                   />
-                  <span>3. Khớp số serial thân máy với hồ sơ dữ liệu hãng sản xuất.</span>
+                  <span>3. Khớp số serial / mã hiện vật với hồ sơ lưu ký tuần hoàn.</span>
                 </label>
                 <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
@@ -1608,7 +1608,7 @@ export const ThriftListingApproval: React.FC = () => {
                 <ul className="list-disc pl-4 space-y-1 mt-1">
                   <li><strong>Pristine 9.5+:</strong> Như mới, nguyên hộp, sai số cơ học dưới 1%.</li>
                   <li><strong>Mint 9.0+:</strong> Vết xước vi mô không đáng kể, hoạt động hoàn hảo.</li>
-                  <li><strong>Excellent 8.5+:</strong> Có dấu ấn thời gian nhẹ (brassing), quang học trong trẻo.</li>
+                  <li><strong>Excellent 8.5+:</strong> Có dấu ấn thời gian nhẹ tự nhiên, bề mặt sạch đẹp, form dáng nguyên bản.</li>
                   <li><strong>Good Vintage 8.0+:</strong> Hiện vật sưu tầm cổ điển, các tính năng cốt lõi vận hành ổn định.</li>
                 </ul>
               </div>
