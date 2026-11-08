@@ -23,6 +23,7 @@ export interface ChatLastMessage {
 
 export interface ConversationItem {
   _id: string;
+  rawConversationId?: string;
   participants: ChatParticipant[];
   lastMessage?: ChatLastMessage | null;
   serviceType?: "RENT" | "THRIFT";
@@ -39,6 +40,7 @@ export interface ChatMessageItem {
   senderId: string | ChatParticipant;
   text: string;
   imageUrl?: string | null;
+  serviceType?: "RENT" | "THRIFT";
   clientMsgId?: string;
   createdAt: string;
 }
@@ -78,7 +80,7 @@ export const getConversationByIdApi = async (id: string): Promise<ConversationIt
  */
 export const getMessagesApi = async (
   conversationId: string,
-  params?: { page?: number; limit?: number }
+  params?: { page?: number; limit?: number; serviceType?: "RENT" | "THRIFT" }
 ): Promise<MessagesResponse> => {
   const response = await api.get(`/chat/conversations/${conversationId}/messages`, { params });
   const data = response.data?.data || response.data;
@@ -96,7 +98,7 @@ export const getMessagesApi = async (
  */
 export const sendMessageApi = async (
   conversationId: string,
-  payload: { text?: string; imageUrl?: string }
+  payload: { text?: string; imageUrl?: string; serviceType?: "RENT" | "THRIFT" }
 ): Promise<ChatMessageItem> => {
   const response = await api.post(`/chat/conversations/${conversationId}/messages`, payload);
   return response.data?.data || response.data;

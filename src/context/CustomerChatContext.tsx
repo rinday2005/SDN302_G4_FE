@@ -141,38 +141,39 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }) => {
       setIsOpen(true);
       if (options?.product) {
-        setProductContext(options.product);
+        setProductContext({
+          ...options.product,
+          serviceType: options.serviceType || "RENT",
+        });
       }
 
       const targetShopId = options?.shopId || options?.product?.shopId;
-      const targetServiceType: "RENT" | "THRIFT" = options?.serviceType || "RENT";
 
       try {
         setIsLoadingConversations(true);
         const data = await getConversationsApi();
         const convList = Array.isArray(data) ? data : [];
 
-        // Tìm cuộc trò chuyện với shop cụ thể theo đúng loại dịch vụ (RENT hoặc THRIFT)
+        // Tìm cuộc trò chuyện với shop cụ thể (User chỉ có 1 cuộc trò chuyện duy nhất với mỗi Shop)
         let targetConv: ConversationItem | undefined = undefined;
 
         if (targetShopId) {
-          targetConv = convList.find(
-            (c) =>
-              c.participants?.some(
-                (p) => String(p._id) === String(targetShopId) && String(p._id) !== String(currentUserId)
-              ) && (c.serviceType || "RENT") === targetServiceType
+          targetConv = convList.find((c) =>
+            c.participants?.some(
+              (p) => String(p._id) === String(targetShopId) && String(p._id) !== String(currentUserId)
+            )
           );
         }
 
-        // Nếu chưa có conversation với shop này theo đúng serviceType, gọi API tạo mới
+        // Nếu chưa có conversation với shop này, gọi API tạo mới
         if (!targetConv && targetShopId) {
-          targetConv = await getMyConversationApi({ shopId: targetShopId, serviceType: targetServiceType });
+          targetConv = await getMyConversationApi({ shopId: targetShopId, serviceType: options?.serviceType || "RENT" });
           convList.unshift(targetConv);
         } else if (!targetConv && convList.length > 0) {
           // Nếu không truyền shopId, chọn conversation đầu tiên
           targetConv = activeConvRef.current || convList[0];
         } else if (!targetConv) {
-          targetConv = await getMyConversationApi({ serviceType: targetServiceType });
+          targetConv = await getMyConversationApi({ serviceType: options?.serviceType || "RENT" });
           convList.unshift(targetConv);
         }
 
@@ -430,6 +431,8 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const socket = getSocket();
       socket.emit("stop_typing", { conversationId: activeConversation._id });
 
+      const currentServiceType = productContext?.serviceType || "RENT";
+
       try {
         if (socket.connected) {
           const currentToken = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
@@ -439,6 +442,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
               conversationId: activeConversation._id,
               text: text.trim(),
               imageUrl,
+              serviceType: currentServiceType,
               clientMsgId,
               token: currentToken,
             },
@@ -455,6 +459,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
           const saved = await sendMessageApi(activeConversation._id, {
             text: text.trim(),
             imageUrl,
+            serviceType: currentServiceType,
           });
           setMessages((prev) => prev.map((m) => (m._id === clientMsgId ? saved : m)));
         }
@@ -462,7 +467,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
         console.error("⚠️ [CustomerChat] Send message failed:", err);
       }
     },
-    [activeConversation, currentUserId, user?.fullName, user?.avatarUrl]
+    [activeConversation, currentUserId, user?.fullName, user?.avatarUrl, productContext?.serviceType]
   );
 
   const sendTyping = useCallback(

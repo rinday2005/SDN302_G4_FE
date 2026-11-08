@@ -96,8 +96,14 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const handleNewMessage = (msg: ChatMessageItem & { serviceType?: "RENT" | "THRIFT" }) => {
       console.log("📨 [ShopChat] Real-time message received:", msg);
 
+      const msgService = msg.serviceType || "RENT";
+      const rawMsgConvId = String(msg.conversationId).replace(/_(RENT|THRIFT)$/, "");
+
       const currentActive = activeConvRef.current;
-      const isCurrentRoom = currentActive && currentActive._id === msg.conversationId;
+      const rawCurrentId = currentActive?._id ? String(currentActive._id).replace(/_(RENT|THRIFT)$/, "") : "";
+      const isCurrentConv = currentActive && rawCurrentId === rawMsgConvId;
+      const isMatchService = (currentActive?.serviceType || "RENT") === msgService;
+      const isCurrentRoom = isCurrentConv && isMatchService;
 
       if (isCurrentRoom) {
         setMessages((prev) => {
@@ -131,17 +137,18 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Cập nhật conversation list và unread badge chính xác theo từng tab RENT / THRIFT
       setConversations((prev) => {
         let found = false;
-        const convIdStr = String(msg.conversationId);
         const senderIdStr = typeof msg.senderId === "object" ? String(msg.senderId._id) : String(msg.senderId);
         const isFromOther = senderIdStr !== String(currentUserId);
 
         const updated = prev.map((c) => {
-          if (String(c._id) === convIdStr) {
+          const rawCId = (c.rawConversationId || String(c._id)).replace(/_(RENT|THRIFT)$/, "");
+          const cService = c.serviceType || "RENT";
+
+          if (rawCId === rawMsgConvId && cService === msgService) {
             found = true;
-            const targetService = msg.serviceType || c.serviceType || "RENT";
             return {
               ...c,
-              serviceType: targetService,
+              serviceType: msgService,
               lastMessage: {
                 text: msg.text || (msg.imageUrl ? "[Hình ảnh]" : ""),
                 senderId: msg.senderId,
@@ -158,15 +165,15 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (!found) {
           // Thêm hội thoại mới vào danh sách
-          const targetService = msg.serviceType || "RENT";
           const newConv: ConversationItem = {
-            _id: convIdStr,
+            _id: `${rawMsgConvId}_${msgService}`,
+            rawConversationId: rawMsgConvId,
             participants: [
               typeof msg.senderId === "object"
                 ? msg.senderId
                 : { _id: msg.senderId, fullName: "Khách hàng mới", role: "USER" },
             ],
-            serviceType: targetService,
+            serviceType: msgService,
             lastMessage: {
               text: msg.text || (msg.imageUrl ? "[Hình ảnh]" : ""),
               senderId: msg.senderId,
@@ -329,7 +336,8 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     if (!conversation) {
       if (activeConversation) {
-        socket.emit("leave_room", { conversationId: activeConversation._id });
+        const activeRawId = (activeConversation.rawConversationId || activeConversation._id).replace(/_(RENT|THRIFT)$/, "");
+        socket.emit("leave_room", { conversationId: activeRawId });
       }
       setActiveConversation(null);
       setMessages([]);
@@ -343,9 +351,12 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setActiveTab(convTab);
     }
 
+    const rawId = (conversation.rawConversationId || conversation._id).replace(/_(RENT|THRIFT)$/, "");
+
     // Rời room cũ nếu có
     if (activeConversation && activeConversation._id !== conversation._id) {
-      socket.emit("leave_room", { conversationId: activeConversation._id });
+      const activeRawId = (activeConversation.rawConversationId || activeConversation._id).replace(/_(RENT|THRIFT)$/, "");
+      socket.emit("leave_room", { conversationId: activeRawId });
     }
 
     setActiveConversation(conversation);
@@ -357,12 +368,12 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
 
     // Tham gia room qua Socket
-    socket.emit("join_room", { conversationId: conversation._id });
+    socket.emit("join_room", { conversationId: rawId });
 
-    // Tải tin nhắn chi tiết THẬT từ MongoDB
+    // Tải tin nhắn chi tiết THẬT từ MongoDB (lọc theo serviceType của tab này)
     try {
       setIsLoadingMessages(true);
-      const res = await getMessagesApi(conversation._id);
+      const res = await getMessagesApi(rawId, { serviceType: convTab });
       setMessages(res.messages || []);
     } catch (err) {
       console.warn("⚠️ [ShopChat] Lỗi tải tin nhắn cuộc trò chuyện:", err);
@@ -375,11 +386,13 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Xóa một cuộc trò chuyện vĩnh viễn
   const deleteConversation = async (conversationId: string): Promise<boolean> => {
     try {
-      await deleteConversationApi(conversationId);
-      setConversations((prev) => prev.filter((c) => c._id !== conversationId));
-      if (activeConversation && activeConversation._id === conversationId) {
+      const convToDelete = conversations.find((c) => c._id === conversationId);
+      const rawId = (convToDelete?.rawConversationId || conversationId).replace(/_(RENT|THRIFT)$/, "");
+      await deleteConversationApi(rawId);
+      setConversations((prev) => prev.filter((c) => c._id !== conversationId && c.rawConversationId !== rawId));
+      if (activeConversation && (activeConversation._id === conversationId || activeConversation.rawConversationId === rawId)) {
         const socket = getSocket();
-        socket.emit("leave_room", { conversationId });
+        socket.emit("leave_room", { conversationId: rawId });
         setActiveConversation(null);
         setMessages([]);
       }
@@ -399,9 +412,12 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const socket = getSocket();
     const tempId = `temp-${Date.now()}`;
+    const rawId = (activeConversation.rawConversationId || activeConversation._id).replace(/_(RENT|THRIFT)$/, "");
+    const targetService = activeConversation.serviceType === "THRIFT" ? "THRIFT" : "RENT";
+
     const newMsg: ChatMessageItem = {
       _id: tempId,
-      conversationId: activeConversation._id,
+      conversationId: rawId,
       senderId: {
         _id: currentUserId || "shop_owner",
         fullName: user?.shopProfile?.shopName || user?.fullName || "Shop Owner",
@@ -410,6 +426,7 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       },
       text: trimmed,
       imageUrl: imageUrl || null,
+      serviceType: targetService,
       clientMsgId: tempId,
       createdAt: new Date().toISOString(),
     };
@@ -442,7 +459,8 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       socket.emit(
         "send_message",
         {
-          conversationId: activeConversation._id,
+          conversationId: rawId,
+          serviceType: targetService,
           text: trimmed,
           imageUrl,
           clientMsgId: tempId,
@@ -469,7 +487,7 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } else {
       // Fallback qua HTTP API khi mất kết nối Socket
       try {
-        const saved = await sendMessageApi(activeConversation._id, { text: trimmed, imageUrl });
+        const saved = await sendMessageApi(rawId, { text: trimmed, imageUrl, serviceType: targetService });
         setMessages((prev) =>
           prev.map((m) => (m._id === tempId ? saved : m))
         );
@@ -490,8 +508,9 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const sendTyping = (typing: boolean) => {
     if (!activeConversation) return;
     const socket = getSocket();
+    const rawId = (activeConversation.rawConversationId || activeConversation._id).replace(/_(RENT|THRIFT)$/, "");
     socket.emit(typing ? "typing" : "stop_typing", {
-      conversationId: activeConversation._id,
+      conversationId: rawId,
     });
   };
 

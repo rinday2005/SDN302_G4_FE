@@ -6,6 +6,7 @@ export interface CustomerProductContext {
   image?: string;
   price?: number | string;
   shopId?: string;
+  serviceType?: "RENT" | "THRIFT";
 }
 
 export interface CustomerChatContextType {
