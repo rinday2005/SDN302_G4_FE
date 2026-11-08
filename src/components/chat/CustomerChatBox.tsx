@@ -31,7 +31,6 @@ export const CustomerChatBox: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{
     _id?: string;
-    senderName: string;
     text: string;
   } | null>(null);
 
@@ -73,12 +72,12 @@ export const CustomerChatBox: React.FC = () => {
     if (!rawText) return "";
     const segments = rawText.split("\n\n");
     const lastSegment = segments[segments.length - 1] || rawText;
-    return lastSegment.replace(/^(>\s*(\[[^\]]+\]:\s*)*)+/, "").trim();
+    return lastSegment.replace(/^(>\s*(\[[^\]]+\]:\s*)*)+/, "").replace(/^>\s*/, "").trim();
   };
 
-  // Phân tích tin nhắn thành: Tên người được trả lời, nội dung câu được trả lời, và nội dung tin nhắn chính
+  // Phân tích tin nhắn thành: nội dung câu được trả lời và nội dung tin nhắn chính
   const parseReplyAndContent = (rawText: string) => {
-    if (!rawText) return { replySender: null, replySnippet: null, actualContent: "" };
+    if (!rawText) return { replySnippet: null, actualContent: "" };
 
     if (rawText.startsWith("> ")) {
       const parts = rawText.split("\n\n");
@@ -86,25 +85,19 @@ export const CustomerChatBox: React.FC = () => {
         const quoteHeader = parts[0];
         const actualContent = extractCoreMessage(parts.slice(1).join("\n\n"));
 
-        // Lấy tên người gửi trong dấu ngoặc vuông []
-        const nameMatch = quoteHeader.match(/\[([^\]]+)\]/);
-        const replySender = nameMatch ? nameMatch[1].replace(/^reply:/, "") : "Đã trả lời";
-
-        // Lấy nội dung câu được trích dẫn (loại bỏ các prefix > và [Tên]:)
+        // Lấy nội dung câu được trích dẫn (loại bỏ mọi prefix > và [Tên]: nếu có)
         const lastColonIdx = quoteHeader.lastIndexOf(":");
         let replySnippet = lastColonIdx !== -1 ? quoteHeader.slice(lastColonIdx + 1) : quoteHeader;
-        replySnippet = replySnippet.replace(/^(>\s*(\[[^\]]+\]:\s*)*)+/, "").trim();
+        replySnippet = replySnippet.replace(/^(>\s*(\[[^\]]+\]:\s*)*)+/, "").replace(/^>\s*/, "").trim();
 
         return {
-          replySender,
-          replySnippet,
+          replySnippet: replySnippet || null,
           actualContent: actualContent || rawText,
         };
       }
     }
 
     return {
-      replySender: null,
       replySnippet: null,
       actualContent: rawText,
     };
@@ -118,7 +111,7 @@ export const CustomerChatBox: React.FC = () => {
     let messageToSend = text;
     if (replyingTo) {
       const coreQuoted = extractCoreMessage(replyingTo.text);
-      messageToSend = `> [${replyingTo.senderName}]: ${coreQuoted}\n\n${text}`;
+      messageToSend = `> ${coreQuoted}\n\n${text}`;
     }
 
     setInputVal("");
@@ -129,9 +122,9 @@ export const CustomerChatBox: React.FC = () => {
     await sendMessage(messageToSend);
   };
 
-  // Helper hiển thị tin nhắn chuẩn phong cách Zalo / Messenger (khối trích dẫn gọn gàng, không lặp lại)
+  // Helper hiển thị tin nhắn chuẩn phong cách Zalo / Messenger (khối trích dẫn tối giản, không hiện tên người)
   const renderMessageContent = (rawText: string, isMe: boolean) => {
-    const { replySender, replySnippet, actualContent } = parseReplyAndContent(rawText);
+    const { replySnippet, actualContent } = parseReplyAndContent(rawText);
 
     return (
       <div className="flex flex-col">
@@ -143,11 +136,7 @@ export const CustomerChatBox: React.FC = () => {
                 : "bg-black/5 border-[#141310] text-[#57534e]"
             }`}
           >
-            <div className="font-bold flex items-center gap-1 text-[10px] uppercase tracking-wider mb-0.5 opacity-90">
-              <span className="material-symbols-outlined text-[13px]">reply</span>
-              <span>{replySender || "Đã trả lời"}</span>
-            </div>
-            <p className="line-clamp-1 italic truncate opacity-85">
+            <p className="line-clamp-2 italic opacity-90 break-words">
               {replySnippet}
             </p>
           </div>
@@ -561,10 +550,6 @@ export const CustomerChatBox: React.FC = () => {
                         // Ở phía màn hình Customer: Tin của Customer (Me) là tin KHÔNG PHẢI của Shop
                         const isMe = !isShopSender;
 
-                        const senderDisplayName = isMe
-                          ? "Bạn"
-                          : activeShopName || "Shop";
-
                         return (
                           <div
                             key={m._id}
@@ -601,7 +586,6 @@ export const CustomerChatBox: React.FC = () => {
                                 onClick={() =>
                                   setReplyingTo({
                                     _id: m._id,
-                                    senderName: senderDisplayName,
                                     text: extractCoreMessage(m.text) || (m.imageUrl ? "[Hình ảnh]" : ""),
                                   })
                                 }
@@ -650,11 +634,9 @@ export const CustomerChatBox: React.FC = () => {
                           reply
                         </span>
                         <div className="truncate">
-                          <span className="font-semibold text-[#141310]">
-                            Đang trả lời {replyingTo.senderName}:{" "}
-                          </span>
+                          <span className="font-semibold text-[#141310]">Đang trả lời: </span>
                           <span className="text-[#78716c] italic">
-                            {replyingTo.text.length > 50 ? `${replyingTo.text.slice(0, 50)}...` : replyingTo.text}
+                            &quot;{replyingTo.text.length > 50 ? `${replyingTo.text.slice(0, 50)}...` : replyingTo.text}&quot;
                           </span>
                         </div>
                       </div>
