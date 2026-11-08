@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { getSocket } from "../services/socket";
 import {
   getConversationsApi,
@@ -11,30 +11,7 @@ import type {
   ChatMessageItem,
 } from "../services/chat.api";
 import { useAuth } from "../hooks/useAuth";
-
-interface ShopChatContextType {
-  isOpen: boolean;
-  activeTab: "RENT" | "THRIFT";
-  conversations: ConversationItem[];
-  activeConversation: ConversationItem | null;
-  messages: ChatMessageItem[];
-  unreadTotal: number;
-  unreadRent: number;
-  unreadThrift: number;
-  isCustomerTyping: boolean;
-  isLoadingConversations: boolean;
-  isLoadingMessages: boolean;
-  openChatDrawer: (tab?: "RENT" | "THRIFT", conversationId?: string) => void;
-  closeChatDrawer: () => void;
-  setActiveTab: (tab: "RENT" | "THRIFT") => void;
-  selectConversation: (conversation: ConversationItem | null) => void;
-  sendMessage: (text: string, imageUrl?: string) => Promise<void>;
-  sendTyping: (isTyping: boolean) => void;
-  deleteConversation: (conversationId: string) => Promise<boolean>;
-  refreshConversations: () => Promise<void>;
-}
-
-const ShopChatContext = createContext<ShopChatContextType | undefined>(undefined);
+import { ShopChatContext } from "./shop-chat-context";
 
 export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -46,16 +23,17 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [activeConversation, setActiveConversation] = useState<ConversationItem | null>(null);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [isCustomerTyping, setIsCustomerTyping] = useState(false);
-  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [isLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   const activeConvRef = useRef<ConversationItem | null>(null);
-  activeConvRef.current = activeConversation;
+  useEffect(() => {
+    activeConvRef.current = activeConversation;
+  }, [activeConversation]);
 
   // Tải danh sách cuộc trò chuyện THẬT từ MongoDB
   const refreshConversations = useCallback(async () => {
     try {
-      setIsLoadingConversations(true);
       const data = await getConversationsApi();
       if (Array.isArray(data)) {
         const uniqueMap = new Map<string, ConversationItem>();
@@ -78,14 +56,37 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     } catch (err) {
       console.warn("⚠️ [ShopChat] Could not load conversations from server:", err);
-    } finally {
-      setIsLoadingConversations(false);
     }
   }, [currentUserId]);
 
   // Kết nối Socket.IO toàn cục lắng nghe tin nhắn real-time
   useEffect(() => {
-    refreshConversations();
+    let isSubscribed = true;
+    getConversationsApi()
+      .then((data) => {
+        if (!isSubscribed) return;
+        if (Array.isArray(data)) {
+          const uniqueMap = new Map<string, ConversationItem>();
+          data.forEach((c) => {
+            if (c?._id) {
+              const senderIdStr =
+                typeof c.lastMessage?.senderId === "object"
+                  ? c.lastMessage?.senderId?._id?.toString()
+                  : c.lastMessage?.senderId?.toString();
+              const isFromOther = senderIdStr && senderIdStr !== currentUserId;
+              const initialUnread = c.unreadCount !== undefined ? c.unreadCount : (isFromOther ? 1 : 0);
+              uniqueMap.set(String(c._id), {
+                ...c,
+                unreadCount: initialUnread,
+              });
+            }
+          });
+          setConversations(Array.from(uniqueMap.values()));
+        }
+      })
+      .catch((err) => {
+        console.warn("⚠️ [ShopChat] Could not load conversations from server:", err);
+      });
 
     const socket = getSocket();
 
@@ -244,6 +245,7 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, 5000);
 
     return () => {
+      isSubscribed = false;
       clearInterval(pollInterval);
       socket.off("new_message", handleNewMessage);
       socket.off("conversation_updated", handleConversationUpdated);
@@ -466,12 +468,4 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
-export const useShopChat = (): ShopChatContextType => {
-  const context = useContext(ShopChatContext);
-  if (!context) {
-    throw new Error("useShopChat must be used within a ShopChatProvider");
-  }
-  return context;
-};
-
-export default ShopChatContext;
+export default ShopChatProvider;

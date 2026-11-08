@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { UserSidebar } from '../../components/layout/UserSidebar';
@@ -6,7 +6,6 @@ import { getSocket } from '../../services/socket';
 import {
   getMyConversationApi,
   getMessagesApi,
-  sendMessageApi,
   deleteConversationApi,
 } from '../../services/chat.api';
 import type {
@@ -65,7 +64,6 @@ export const ChatPage: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [conversation, setConversation] = useState<ConversationItem | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
   const navigate = useNavigate();
 
@@ -93,7 +91,7 @@ export const ChatPage: React.FC = () => {
       setConversation(null);
       setShowDeleteModal(false);
       showToast('Đã xóa toàn bộ lịch sử cuộc trò chuyện thành công!');
-    } catch (err) {
+    } catch {
       showToast('Có lỗi xảy ra khi xóa cuộc trò chuyện. Vui lòng thử lại!');
     } finally {
       setIsDeleting(false);
@@ -101,7 +99,7 @@ export const ChatPage: React.FC = () => {
   };
 
   // Hàm chuyển đổi từ ChatMessageItem (DB) sang ChatMessage (UI)
-  const mapApiMessageToUi = (m: ChatMessageItem, currentUid: string): ChatMessage => {
+  const mapApiMessageToUi = useCallback((m: ChatMessageItem, currentUid: string): ChatMessage => {
     const senderIdStr = typeof m.senderId === 'object' ? m.senderId._id : m.senderId;
     const isMe = senderIdStr === currentUid;
     const senderFullName = typeof m.senderId === 'object' ? m.senderId.fullName : undefined;
@@ -119,14 +117,13 @@ export const ChatPage: React.FC = () => {
       content: m.text || '',
       photos: m.imageUrl ? [{ title: 'Ảnh đính kèm', url: m.imageUrl }] : undefined,
     };
-  };
+  }, [customerName, customerAvatar]);
 
   // Nạp cuộc trò chuyện THẬT từ MongoDB theo kênh RENT hoặc THRIFT
   useEffect(() => {
     let isSubscribed = true;
     const serviceType = activeTopic === 'thrift' ? 'THRIFT' : 'RENT';
 
-    setIsLoading(true);
     getMyConversationApi({ serviceType })
       .then(async (conv) => {
         if (!isSubscribed) return;
@@ -145,15 +142,12 @@ export const ChatPage: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Lỗi tải cuộc trò chuyện với Xưởng:', err);
-      })
-      .finally(() => {
-        if (isSubscribed) setIsLoading(false);
       });
 
     return () => {
       isSubscribed = false;
     };
-  }, [activeTopic, currentUserId]);
+  }, [activeTopic, currentUserId, mapApiMessageToUi]);
 
   // Lắng nghe tin nhắn mới REAL-TIME từ Socket.IO
   useEffect(() => {
@@ -211,7 +205,7 @@ export const ChatPage: React.FC = () => {
       socket.off('user_typing', handleUserTyping);
       socket.off('user_stop_typing', handleUserStopTyping);
     };
-  }, [conversation, currentUserId]);
+  }, [conversation, currentUserId, mapApiMessageToUi]);
 
   // Auto-scroll chat to bottom
   const messageEndRef = useRef<HTMLDivElement>(null);

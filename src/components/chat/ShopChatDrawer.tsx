@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useShopChat } from "../../context/ShopChatContext";
+import { useShopChat } from "../../context/shop-chat-context";
+import type { ConversationItem } from "../../services/chat.api";
 import { useAuth } from "../../hooks/useAuth";
 
 export const ShopChatDrawer: React.FC = () => {

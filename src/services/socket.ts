@@ -44,7 +44,7 @@ export const getSocket = (): Socket => {
     // Đảm bảo auth token luôn cập nhật
     if (currentToken && socket.auth) {
       if (typeof socket.auth === "object") {
-        (socket.auth as any).token = currentToken;
+        (socket.auth as Record<string, unknown>).token = currentToken;
       }
     }
     if (!socket.connected) {
