@@ -150,12 +150,74 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
     }
   }, [formData, storageKey]);
 
+  // Đồng bộ trạng thái duyệt / từ chối từ Admin
+  useEffect(() => {
+    let isMounted = true;
+    const syncAdminStatus = () => {
+      try {
+        const raw = localStorage.getItem('REUSE_HUB_THRIFT_LISTINGS_V1');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const matched = list.find(
+              (it: any) =>
+                it.originalUnitId === targetId ||
+                it.unitId === targetId ||
+                it.sku === formData.sku ||
+                it.id === targetId ||
+                it._id === targetId ||
+                (targetId && it.originalUnitId && it.originalUnitId.toLowerCase().includes(targetId.toLowerCase()))
+            );
+            if (matched && isMounted) {
+              const remoteStatus = String(matched.status || matched.approvalStatus || '').toUpperCase();
+              if (remoteStatus === 'REJECTED') {
+                setFormData((prev) => {
+                  if (prev.status === 'REJECTED' && prev.rejectionReason === matched.rejectionReason) return prev;
+                  const updated: ThriftConvertData = {
+                    ...prev,
+                    status: 'REJECTED',
+                    rejectionReason:
+                      matched.rejectionReason ||
+                      'Ban kiểm duyệt Admin đã từ chối hồ sơ này. Vui lòng cập nhật lại thông tin/hình ảnh.',
+                  };
+                  try {
+                    localStorage.setItem(storageKey, JSON.stringify(updated));
+                  } catch {}
+                  return updated;
+                });
+              } else if (remoteStatus === 'APPROVED') {
+                setFormData((prev) => {
+                  if (prev.status === 'CONVERTED_TO_THRIFT') return prev;
+                  const updated: ThriftConvertData = { ...prev, status: 'CONVERTED_TO_THRIFT' };
+                  try {
+                    localStorage.setItem(storageKey, JSON.stringify(updated));
+                  } catch {}
+                  return updated;
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi kiểm tra trạng thái Admin:', err);
+      }
+    };
+
+    syncAdminStatus();
+    window.addEventListener('storage', syncAdminStatus);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', syncAdminStatus);
+    };
+  }, [targetId, formData.sku, storageKey]);
+
   // Kiểm tra điều kiện AC 1: Không cho convert nếu đang thuê hoặc có lịch đặt trước
   const isCurrentlyRenting = formData.currentRentStatus === 'RENTING';
   const hasFutureBooking = formData.hasFutureBooking;
   const isEligible = !isCurrentlyRenting && !hasFutureBooking;
+  const isRejected = formData.status === 'REJECTED';
   const isAlreadyConverted =
-    formData.status === 'PENDING_APPROVAL' || formData.status === 'CONVERTED_TO_THRIFT';
+    (formData.status === 'PENDING_APPROVAL' || formData.status === 'CONVERTED_TO_THRIFT') && !isRejected;
 
   // Handler cập nhật input
   const handleInputChange = <K extends keyof ThriftConvertData>(
@@ -292,6 +354,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
     const updatedData: ThriftConvertData = {
       ...formData,
       status: 'PENDING_APPROVAL',
+      rejectionReason: undefined,
       convertedAt: now,
     };
 
@@ -460,18 +523,23 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   Trạng thái hiện vật
                 </span>
                 <span
-                  className={`font-headline-sm text-headline-sm font-bold font-serif ${isAlreadyConverted
+                  className={`font-headline-sm text-headline-sm font-bold font-serif ${
+                    isRejected
+                      ? 'text-red-600'
+                      : isAlreadyConverted
                       ? 'text-primary'
                       : !isEligible
-                        ? 'text-error'
-                        : 'text-secondary'
-                    }`}
+                      ? 'text-error'
+                      : 'text-secondary'
+                  }`}
                 >
-                  {isAlreadyConverted
+                  {isRejected
+                    ? 'BỊ TỪ CHỐI (CHO PHÉP CHUYỂN LẠI)'
+                    : isAlreadyConverted
                     ? 'PENDING APPROVAL'
                     : !isEligible
-                      ? 'KHÓA: KHÔNG ĐỦ ĐIỀU KIỆN'
-                      : 'READY TO THRIFT'}
+                    ? 'KHÓA: KHÔNG ĐỦ ĐIỀU KIỆN'
+                    : 'READY TO THRIFT'}
                 </span>
                 <span className="font-label-sm text-label-sm text-on-surface-variant">
                   Khấu hao: 86.5% • {formData.cycleCount} Chu kỳ luân chuyển
@@ -485,13 +553,15 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   <select
                     className="text-xs bg-surface px-2 py-1 rounded border border-outline-variant text-on-surface font-medium focus:outline-none cursor-pointer"
                     value={
-                      formData.status === 'PENDING_APPROVAL'
+                      isRejected
+                        ? 'REJECTED'
+                        : formData.status === 'PENDING_APPROVAL'
                         ? 'CONVERTED'
                         : isCurrentlyRenting
-                          ? 'RENTING'
-                          : hasFutureBooking
-                            ? 'FUTURE_BOOKING'
-                            : 'ELIGIBLE'
+                        ? 'RENTING'
+                        : hasFutureBooking
+                        ? 'FUTURE_BOOKING'
+                        : 'ELIGIBLE'
                     }
                     onChange={(e) => {
                       const val = e.target.value;
@@ -523,6 +593,14 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                           hasFutureBooking: false,
                           status: 'PENDING_APPROVAL',
                         }));
+                      } else if (val === 'REJECTED') {
+                        setFormData((prev) => ({
+                          ...prev,
+                          currentRentStatus: 'COMPLETED',
+                          hasFutureBooking: false,
+                          status: 'REJECTED',
+                          rejectionReason: 'Hình ảnh thực tế chưa rõ góc cạnh sản phẩm. Vui lòng bổ sung ảnh chi tiết.',
+                        }));
                       }
                     }}
                   >
@@ -530,12 +608,38 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                     <option value="RENTING">✕ 2. ĐANG CHO THUÊ (status = 'RENTING')</option>
                     <option value="FUTURE_BOOKING">✕ 3. CÓ LỊCH THUÊ (has_future_booking: true)</option>
                     <option value="CONVERTED">✓ 4. ĐÃ GỬI DUYỆT (PENDING_APPROVAL)</option>
+                    <option value="REJECTED">⚠ 5. BỊ TỪ CHỐI (REJECTED - Cho phép nộp lại)</option>
                   </select>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* REJECTED BY ADMIN BANNER */}
+        {isRejected && (
+          <div className="mb-space-lg p-space-md bg-red-500/10 border-2 border-red-500/40 rounded-xl flex items-start gap-3.5 text-on-surface animate-fade-in shadow-sm">
+            <div className="w-10 h-10 rounded-lg bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+              <span className="material-symbols-outlined text-[24px]">cancel</span>
+            </div>
+            <div className="flex-1 flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                  HỒ SƠ BỊ TỪ CHỐI DUYỆT BỞI ADMIN
+                </span>
+                <span className="text-[11px] text-on-surface-variant font-mono">
+                  Mã: #{formData.unitId}
+                </span>
+              </div>
+              <p className="text-xs text-on-surface mt-1.5 leading-relaxed font-medium">
+                <strong>Lý do từ chối:</strong> {formData.rejectionReason || 'Hồ sơ thẩm định chưa đạt tiêu chuẩn hình ảnh hoặc giá trị thẩm định chưa phù hợp.'}
+              </p>
+              <p className="text-[11px] text-on-surface-variant mt-1">
+                👉 Quý xưởng vui lòng kiểm tra lại hình ảnh thực tế, mô tả chi tiết và điều chỉnh giá bán bên dưới, sau đó bấm <strong>"CHUYỂN SANG THRIFT (GỬI DUYỆT LẠI)"</strong> để gửi hồ sơ xét duyệt lại.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* INELIGIBILITY WARNING BANNER (AC 1) */}
         {!isEligible && (
@@ -1414,12 +1518,15 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 type="button"
                 disabled={!isEligible || isAlreadyConverted || isSubmitting}
                 onClick={() => setIsConfirmModalOpen(true)}
-                className={`w-full font-label-md text-label-md uppercase tracking-wider py-space-md rounded shadow-md transition-all flex items-center justify-center gap-2 font-medium ${isAlreadyConverted
+                className={`w-full font-label-md text-label-md uppercase tracking-wider py-space-md rounded shadow-md transition-all flex items-center justify-center gap-2 font-medium ${
+                  isRejected
+                    ? 'bg-red-700 hover:bg-red-800 text-white cursor-pointer shadow-lg'
+                    : isAlreadyConverted
                     ? 'bg-secondary text-white cursor-default'
                     : !isEligible
                       ? 'bg-outline-variant/60 text-on-surface-variant cursor-not-allowed'
                       : 'bg-on-background text-background hover:bg-primary cursor-pointer'
-                  }`}
+                }`}
               >
                 {isSubmitting ? (
                   <>
@@ -1427,6 +1534,13 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                       progress_activity
                     </span>
                     <span>ĐANG KHỞI TẠO MỤC ĐĂNG THRIFT...</span>
+                  </>
+                ) : isRejected ? (
+                  <>
+                    <span>Chuyển Sang THRIFT (Gửi Duyệt Lại)</span>
+                    <span className="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-1">
+                      restart_alt
+                    </span>
                   </>
                 ) : isAlreadyConverted ? (
                   <>

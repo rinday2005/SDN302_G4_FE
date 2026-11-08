@@ -475,16 +475,31 @@ export const ThriftListingApproval: React.FC = () => {
         if (rawLocal) {
           const list = JSON.parse(rawLocal);
           if (Array.isArray(list)) {
-            const updated = list.map((it) =>
-              it.id === id || it._id === id || it.originalUnitId === id
-                ? {
-                    ...it,
-                    status: "REJECTED",
-                    approvalStatus: "REJECTED",
-                    rejectionReason: rejectionInput.trim(),
-                  }
-                : it
-            );
+            const updated = list.map((it) => {
+              if (it.id === id || it._id === id || it.originalUnitId === id) {
+                // Đồng bộ cập nhật thẳng vào key REUSE_HUB_THRIFT_CONVERT của từng hiện vật
+                const targetUnitId = it.originalUnitId || (id.startsWith("thrift-") ? id.split("-")[1] : id);
+                if (targetUnitId) {
+                  try {
+                    const uKey = `REUSE_HUB_THRIFT_CONVERT_${targetUnitId}`;
+                    const uData = localStorage.getItem(uKey);
+                    if (uData) {
+                      const parsed = JSON.parse(uData);
+                      parsed.status = "REJECTED";
+                      parsed.rejectionReason = rejectionInput.trim();
+                      localStorage.setItem(uKey, JSON.stringify(parsed));
+                    }
+                  } catch {}
+                }
+                return {
+                  ...it,
+                  status: "REJECTED",
+                  approvalStatus: "REJECTED",
+                  rejectionReason: rejectionInput.trim(),
+                };
+              }
+              return it;
+            });
             localStorage.setItem("REUSE_HUB_THRIFT_LISTINGS_V1", JSON.stringify(updated));
           }
         }

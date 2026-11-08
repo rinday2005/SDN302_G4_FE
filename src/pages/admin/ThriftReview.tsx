@@ -432,16 +432,34 @@ export const ThriftReview: React.FC = () => {
         if (raw) {
           const list = JSON.parse(raw);
           if (Array.isArray(list)) {
-            const updated = list.map((item: any) =>
-              item.id === dossier.id || item._id === dossier.id || item.originalUnitId === dossier.id
-                ? {
-                    ...item,
-                    status: "REJECTED",
-                    approvalStatus: "REJECTED",
-                    rejectionReason: reasonText,
-                  }
-                : item
-            );
+            const updated = list.map((item: any) => {
+              if (item.id === dossier.id || item._id === dossier.id || item.originalUnitId === dossier.id) {
+                // Đồng bộ cập nhật thẳng vào key REUSE_HUB_THRIFT_CONVERT của từng hiện vật
+                const targetUnitId =
+                  item.originalUnitId ||
+                  (dossier.inventoryCode ? dossier.inventoryCode.replace("#", "") : "") ||
+                  (dossier.id && dossier.id.startsWith("thrift-") ? dossier.id.split("-")[1] : dossier.id);
+                if (targetUnitId) {
+                  try {
+                    const uKey = `REUSE_HUB_THRIFT_CONVERT_${targetUnitId}`;
+                    const uData = localStorage.getItem(uKey);
+                    if (uData) {
+                      const parsed = JSON.parse(uData);
+                      parsed.status = "REJECTED";
+                      parsed.rejectionReason = reasonText;
+                      localStorage.setItem(uKey, JSON.stringify(parsed));
+                    }
+                  } catch {}
+                }
+                return {
+                  ...item,
+                  status: "REJECTED",
+                  approvalStatus: "REJECTED",
+                  rejectionReason: reasonText,
+                };
+              }
+              return item;
+            });
             localStorage.setItem("REUSE_HUB_THRIFT_LISTINGS_V1", JSON.stringify(updated));
           }
         }

@@ -21,6 +21,8 @@ export interface InventoryUnitItem {
   maintenanceNote?: string;
   status: 'AVAILABLE' | 'RENTING' | 'INSPECTION' | 'MAINTENANCE' | 'ELIGIBLE_FOR_THRIFT';
   statusText: string;
+  thriftStatus?: 'NONE' | 'PENDING' | 'REJECTED' | 'APPROVED';
+  thriftRejectionReason?: string;
   currentOrderCode?: string;
   currentCustomerName?: string;
   returnDueDate?: string;

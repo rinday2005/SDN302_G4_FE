@@ -18,7 +18,8 @@ export interface ThriftConvertData {
   description: string;
   heroImage: string;
   images: GalleryImage[];
-  status: 'ELIGIBLE' | 'PENDING_APPROVAL' | 'CONVERTED_TO_THRIFT';
+  status: 'ELIGIBLE' | 'PENDING_APPROVAL' | 'CONVERTED_TO_THRIFT' | 'REJECTED';
+  rejectionReason?: string;
   convertedAt?: string;
   currentRentStatus: 'COMPLETED' | 'RENTING';
   hasFutureBooking: boolean;
