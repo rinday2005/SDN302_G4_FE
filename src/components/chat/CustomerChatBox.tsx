@@ -78,9 +78,17 @@ export const CustomerChatBox: React.FC = () => {
 
   // Shop đang được chọn
   const activeShopParticipant =
-    activeConversation?.participants?.find(
-      (p) => String(p._id) !== String(currentUserId)
-    ) || activeConversation?.participants?.[0];
+    activeConversation?.participants?.find((p) => {
+      const pRole = typeof p === "object" ? p.role : undefined;
+      const pId = typeof p === "object" ? String(p._id) : String(p);
+      if (pRole === "SHOP_OWNER") return true;
+      if (Boolean(currentUserId) && pId !== String(currentUserId)) return true;
+      return false;
+    }) || activeConversation?.participants?.[0];
+
+  const activeShopIdStr = activeShopParticipant?._id
+    ? String(activeShopParticipant._id)
+    : (typeof activeShopParticipant === "string" ? String(activeShopParticipant) : "");
 
   const activeShopName =
     activeShopParticipant?.shopProfile?.shopName ||
@@ -92,6 +100,13 @@ export const CustomerChatBox: React.FC = () => {
     activeShopParticipant?.shopProfile?.avatarUrl ||
     "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150";
 
+  // Chỉ hiển thị banner sản phẩm nếu sản phẩm đó thuộc đúng Shop hiện tại
+  const shouldShowProductBanner = Boolean(
+    productContext &&
+    activeShopIdStr &&
+    (!productContext.shopId || String(productContext.shopId) === activeShopIdStr)
+  );
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden font-sans">
       {/* 1. BACKDROP */}
@@ -101,8 +116,8 @@ export const CustomerChatBox: React.FC = () => {
       />
 
       {/* 2. DRAWER CONTAINER (Slide in from right) */}
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-4 sm:pl-10">
-        <div className="w-screen max-w-3xl bg-[#fdf9f2] shadow-2xl flex flex-col border-l border-[#dddad3] animate-slide-left">
+      <div className="absolute inset-y-0 right-0 w-full sm:w-[540px] md:w-[700px] lg:w-[800px] max-w-full flex h-full">
+        <div className="w-full h-full bg-[#fdf9f2] shadow-2xl flex flex-col border-l border-[#dddad3] animate-slide-left overflow-hidden">
           
           {/* HEADER CHÍNH CỦA DRAWER */}
           <div className="bg-[#f5efe6] px-5 py-3.5 border-b border-[#dddad3] flex items-center justify-between shrink-0">
@@ -138,7 +153,7 @@ export const CustomerChatBox: React.FC = () => {
           </div>
 
           {/* KHUNG GIAO DIỆN 2 CỘT */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex overflow-hidden min-h-0">
             
             {/* CỘT TRÁI: DANH SÁCH CÁC SHOP (Ẩn trên mobile khi đang xem tin nhắn) */}
             <div
@@ -203,10 +218,18 @@ export const CustomerChatBox: React.FC = () => {
                         key={conv._id}
                         role="button"
                         tabIndex={0}
-                        onClick={() => selectConversation(conv)}
+                        onClick={() => {
+                          if (activeConversation?._id !== conv._id) {
+                            clearProductContext();
+                          }
+                          selectConversation(conv);
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
+                            if (activeConversation?._id !== conv._id) {
+                              clearProductContext();
+                            }
                             selectConversation(conv);
                           }
                         }}
@@ -260,7 +283,7 @@ export const CustomerChatBox: React.FC = () => {
 
             {/* CỘT PHẢI: KHUNG CHAT VỚI SHOP ĐANG CHỌN */}
             <div
-              className={`flex-1 flex flex-col bg-[#fdf9f2] ${
+              className={`flex-1 flex flex-col bg-[#fdf9f2] min-w-0 min-h-0 overflow-hidden ${
                 !activeConversation ? "hidden md:flex items-center justify-center" : "flex"
               }`}
             >
@@ -312,8 +335,8 @@ export const CustomerChatBox: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Pinned Product Banner (Nếu có) */}
-                  {productContext && (
+                  {/* Pinned Product Banner (Nếu có và đúng là Shop của sản phẩm) */}
+                  {shouldShowProductBanner && productContext && (
                     <div className="bg-[#f0ebe1] px-4 py-2.5 border-b border-[#dddad3] flex items-center justify-between gap-2 shrink-0 animate-fade-in">
                       <div className="flex items-center gap-2.5 min-w-0">
                         {productContext.image && (
@@ -354,7 +377,7 @@ export const CustomerChatBox: React.FC = () => {
                   )}
 
                   {/* Danh sách tin nhắn */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#fdf9f2]">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#fdf9f2] min-h-0">
                     {isLoadingMessages ? (
                       <div className="flex items-center justify-center py-8 text-xs text-[#78716c] gap-2">
                         <span className="material-symbols-outlined animate-spin text-[18px]">
@@ -386,15 +409,14 @@ export const CustomerChatBox: React.FC = () => {
                         const senderRole =
                           typeof m.senderId === "object" ? m.senderId.role : undefined;
 
-                        // Rõ ràng: Nếu người gửi có role SHOP_OWNER hoặc trùng với ID của Shop đang chat -> chắc chắn là tin của Shop
+                        // Chắc chắn tin nhắn là của SHOP nếu role SHOP_OWNER, hoặc senderId trùng với Shop, hoặc senderIdStr === 'shop_owner'
                         const isShopSender =
                           senderRole === "SHOP_OWNER" ||
-                          (activeShopParticipant?._id &&
-                            String(senderIdStr) === String(activeShopParticipant._id));
+                          senderIdStr === "shop_owner" ||
+                          (Boolean(activeShopIdStr) && senderIdStr === activeShopIdStr);
 
-                        const isMe =
-                          !isShopSender &&
-                          (senderRole === "USER" || String(senderIdStr) === String(currentUserId));
+                        // Ở phía màn hình Customer: Tin của Customer (Me) là tin KHÔNG PHẢI của Shop
+                        const isMe = !isShopSender;
 
                         return (
                           <div

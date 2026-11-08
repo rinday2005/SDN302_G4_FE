@@ -7,7 +7,6 @@ import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { getCategoriesApi } from '../../../services/category.api';
 import { UserSidebar } from '../../../components/layout/UserSidebar';
 import {
-  RENT_PRODUCTS,
   RENT_SORT_OPTIONS,
   RENT_CATEGORY_OPTIONS,
   RENT_PRICE_OPTIONS,
@@ -215,6 +214,7 @@ const RentMarketplace: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [dbProducts, setDbProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>(RENT_CATEGORY_OPTIONS);
 
   // Fetch dynamic categories from DB with fallback
@@ -315,6 +315,9 @@ const RentMarketplace: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Could not load products from API:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
     return () => {
       isMounted = false;
@@ -365,7 +368,7 @@ const RentMarketplace: React.FC = () => {
     });
   };
   const visibleProducts = useMemo(() => {
-    const sourceList = dbProducts.length > 0 ? dbProducts : RENT_PRODUCTS;
+    const sourceList = dbProducts;
     let list = sourceList.filter((p) => {
       // 1. Keyword search
       if (query.trim()) {
@@ -795,7 +798,23 @@ const RentMarketplace: React.FC = () => {
       </section>
       {/* ── PRODUCT GRID ── */}
       <section className="w-full px-6 lg:px-12 pb-16 max-w-7xl mx-auto">
-        {visibleProducts.length > 0 ? (
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-white rounded-2xl overflow-hidden border border-[#EFECE6] p-3 space-y-3 animate-pulse"
+              >
+                <div className="aspect-[4/3] w-full bg-[#EAE6DE] rounded-xl" />
+                <div className="space-y-2 p-1">
+                  <div className="h-4 bg-[#EAE6DE] rounded w-3/4" />
+                  <div className="h-3 bg-[#EAE6DE] rounded w-1/2" />
+                  <div className="h-4 bg-[#EAE6DE] rounded w-1/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : visibleProducts.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {paginatedProducts.map((p) => (
               <ProductCard key={p.id} product={p} onRequireAuth={handleRequireAuth} />

@@ -87,7 +87,7 @@ export const ShopChatDrawer: React.FC = () => {
   if (!isOpen) return null;
 
   const currentCustomer = activeConversation?.participants?.find(
-    (p) => p._id !== currentUserId
+    (p) => String(p._id) !== String(currentUserId)
   ) || activeConversation?.participants?.[0];
 
   return (
@@ -99,8 +99,8 @@ export const ShopChatDrawer: React.FC = () => {
       />
 
       {/* Drawer Container (Slide in from right) */}
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
-        <div className="w-screen max-w-3xl bg-[#fdf9f2] shadow-2xl flex flex-col border-l border-[#dddad3] animate-slide-left">
+      <div className="absolute inset-y-0 right-0 w-full sm:w-[540px] md:w-[700px] lg:w-[800px] max-w-full flex h-full">
+        <div className="w-full h-full bg-[#fdf9f2] shadow-2xl flex flex-col border-l border-[#dddad3] animate-slide-left overflow-hidden">
           
           {/* HEADER CHÍNH CỦA DRAWER */}
           <div className="bg-[#f5efe6] px-5 py-3.5 border-b border-[#dddad3] flex items-center justify-between shrink-0">
@@ -183,7 +183,7 @@ export const ShopChatDrawer: React.FC = () => {
           </div>
 
           {/* KHUNG NỘI DUNG CHÍNH (GIAO DIỆN 2 CỘT HOẶC CỘT CHI TIẾT) */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex overflow-hidden min-h-0">
             
             {/* CỘT TRÁI: DANH SÁCH KHÁCH HÀNG (Ẩn trên mobile khi đang mở chat) */}
             <div
@@ -207,7 +207,7 @@ export const ShopChatDrawer: React.FC = () => {
                   </div>
                 ) : (
                   filteredConversations.map((conv, idx) => {
-                    const cust = conv.participants?.find((p) => p._id !== currentUserId) || conv.participants?.[0];
+                    const cust = conv.participants?.find((p) => String(p._id) !== String(currentUserId)) || conv.participants?.[0];
                     const isSelected = activeConversation?._id === conv._id;
                     const unread = conv.unreadCount || 0;
 
@@ -296,7 +296,7 @@ export const ShopChatDrawer: React.FC = () => {
 
             {/* CỘT PHẢI: CHI TIẾT PHÒNG CHAT */}
             <div
-              className={`flex-1 flex flex-col bg-[#fdfbf7] ${
+              className={`flex-1 flex flex-col bg-[#fdfbf7] min-w-0 min-h-0 overflow-hidden ${
                 !activeConversation ? "hidden md:flex items-center justify-center text-center p-8" : "flex"
               }`}
             >
@@ -379,7 +379,7 @@ export const ShopChatDrawer: React.FC = () => {
                   </div>
 
                   {/* Vùng hiển thị tin nhắn (Scrollable) */}
-                  <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#fdfbf7]">
+                  <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-[#fdfbf7] min-h-0">
                     {isLoadingMessages ? (
                       <div className="p-8 text-center text-xs text-[#78716c]">
                         Đang nạp lịch sử tin nhắn...
@@ -387,11 +387,16 @@ export const ShopChatDrawer: React.FC = () => {
                     ) : (
                       messages.map((m, idx) => {
                         const senderIdStr =
-                          typeof m.senderId === "object" ? m.senderId._id : m.senderId;
+                          typeof m.senderId === "object"
+                            ? String(m.senderId._id)
+                            : String(m.senderId);
+                        const senderRole =
+                          typeof m.senderId === "object" ? m.senderId.role : undefined;
+
                         const isMe =
-                          senderIdStr === currentUserId ||
+                          senderRole === "SHOP_OWNER" ||
                           senderIdStr === "shop_owner" ||
-                          (typeof m.senderId === "object" && m.senderId.role === "SHOP_OWNER");
+                          (Boolean(currentUserId) && String(senderIdStr) === String(currentUserId));
 
                         return (
                           <div

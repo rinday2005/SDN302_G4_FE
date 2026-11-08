@@ -32,6 +32,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const activeConvRef = useRef<ConversationItem | null>(null);
   const isOpenRef = useRef<boolean>(false);
+  const productContextRef = useRef<CustomerProductContext | null>(null);
 
   useEffect(() => {
     activeConvRef.current = activeConversation;
@@ -40,6 +41,10 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
+
+  useEffect(() => {
+    productContextRef.current = productContext;
+  }, [productContext]);
 
   // Tính số lượng tin nhắn chưa đọc tổng cộng của User across all shops
   const unreadTotal = useMemo(() => {
@@ -90,6 +95,17 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
     async (conv: ConversationItem) => {
       setActiveConversation(conv);
       setIsLoadingMessages(true);
+
+      // Nếu đang có banner sản phẩm, kiểm tra xem shop được chọn có đúng là shop của sản phẩm không
+      if (productContextRef.current) {
+        const prodShopId = productContextRef.current.shopId ? String(productContextRef.current.shopId) : "";
+        const isSameShop = conv?.participants?.some(
+          (p) => String(p._id) === prodShopId
+        );
+        if (!isSameShop) {
+          setProductContext(null);
+        }
+      }
 
       // Đánh dấu đã đọc
       localStorage.setItem(`customer_chat_read_${conv._id}`, Date.now().toString());
@@ -320,7 +336,20 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
         const idx = prev.findIndex((c) => c._id === updatedConv._id);
         if (idx !== -1) {
           const clone = [...prev];
-          clone[idx] = { ...clone[idx], ...updatedConv };
+          const existing = clone[idx];
+          const hasValidNewParticipants =
+            Array.isArray(updatedConv.participants) &&
+            updatedConv.participants.some(
+              (p) => typeof p === "object" && Boolean((p as { fullName?: string }).fullName)
+            );
+
+          clone[idx] = {
+            ...existing,
+            ...updatedConv,
+            participants: hasValidNewParticipants
+              ? updatedConv.participants
+              : existing.participants,
+          };
           return clone;
         }
         return [updatedConv, ...prev];
