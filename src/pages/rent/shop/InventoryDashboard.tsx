@@ -23,14 +23,40 @@ export const InventoryDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 15;
 
-  // Sinh danh sách hiện vật từng máy (Serialized Inventory Units) theo dữ liệu thực từ MongoDB
+  // Sinh danh sách hiện vật từng món (Serialized Inventory Units) theo dữ liệu thực từ MongoDB (loại bỏ hoàn toàn mock camera)
   const inventoryUnits = useMemo(() => {
     const units: InventoryUnitItem[] = [];
     if (!products || products.length === 0) {
       return units;
     }
 
-    products.forEach((p) => {
+    // Lọc sạch mọi sản phẩm camera/mock tĩnh
+    const realProducts = products.filter((p) => {
+      const skuLower = (p.sku || '').toLowerCase();
+      const nameLower = (p.name || '').toLowerCase();
+      const catLower =
+        typeof p.category === 'object' && p.category !== null
+          ? ((p.category as { name?: string }).name || '').toLowerCase()
+          : String(p.category || '').toLowerCase();
+
+      const isMockOrCamera =
+        skuLower.startsWith('mock-') ||
+        skuLower === 'hbl-907x-50c' ||
+        skuLower === 'sny-fx3-cine' ||
+        skuLower === 'lca-m10r-chr' ||
+        skuLower === 'fji-gfx100-ii' ||
+        skuLower === 'can-r5c-cine' ||
+        nameLower.includes('hasselblad') ||
+        nameLower.includes('leica') ||
+        nameLower.includes('sony alpha') ||
+        nameLower.includes('canon eos') ||
+        catLower.includes('camera') ||
+        catLower.includes('máy ảnh');
+
+      return !isMockOrCamera;
+    });
+
+    realProducts.forEach((p) => {
       const total = Number(p.totalUnits) || 1;
       const renting = Number(p.rentingUnits) || 0;
       const maintenance = Number(p.maintenanceUnits) || 0;
@@ -60,7 +86,10 @@ export const InventoryDashboard: React.FC = () => {
           id: `INV-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(2, '0')}`,
           sku: p.sku,
           productName: p.name,
-          category: typeof p.category === 'object' && p.category !== null ? (p.category as { name?: string }).name || 'RENT Equipment' : String(p.category || 'RENT Equipment'),
+          category:
+            typeof p.category === 'object' && p.category !== null
+              ? (p.category as { name?: string }).name || 'Sản phẩm RENT'
+              : String(p.category || 'Sản phẩm RENT'),
           serialNumber,
           conditionGrade: p.condition || 'LIKE_NEW (98%)',
           cycleCount: 4 + i * 3,
@@ -154,13 +183,13 @@ export const InventoryDashboard: React.FC = () => {
           <div className="space-y-2 max-w-3xl">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-[#f1ede6] rounded text-[#4a463f] text-[11px] uppercase tracking-widest font-semibold">
               <span className="w-2 h-2 rounded-full bg-[#576151]"></span>
-              <span>Atelier Chronos &amp; Optics • MongoDB Live Archive</span>
+              <span>Kho Hiện Vật Xưởng • Quản Lý Luân Chuyển</span>
             </div>
             <h1 className="font-serif text-3xl lg:text-4xl text-[#141310] tracking-tight font-normal">
               Kho Hiện vật Cho thuê <span className="italic font-normal text-[#576151]">RENT</span>
             </h1>
             <p className="text-sm sm:text-base text-[#4a463f] leading-relaxed">
-              Quản lý chi tiết từng cá thể hiện vật ({totalAllUnits} máy được đồng bộ từ MongoDB), vòng đời luân chuyển, tình trạng thẩm định buồng máy và đối soát điều kiện chuyển giao sang sàn bán đứt THRIFT.
+              Quản lý chi tiết từng cá thể hiện vật ({totalAllUnits} hiện vật được đồng bộ từ MongoDB), vòng đời luân chuyển, tình trạng kiểm định và đối soát điều kiện chuyển giao sang sàn bán đứt THRIFT.
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
@@ -186,7 +215,7 @@ export const InventoryDashboard: React.FC = () => {
             </div>
             <div className="my-3 flex items-baseline gap-2">
               <span className="font-serif text-3xl font-semibold text-[#141310]">{readyCount}</span>
-              <span className="text-xs text-[#7b766f]">/ {totalAllUnits} máy ({readyPct}%)</span>
+              <span className="text-xs text-[#7b766f]">/ {totalAllUnits} hiện vật ({readyPct}%)</span>
             </div>
             <div className="w-full bg-[#e6e2db] rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#576151] h-full rounded-full" style={{ width: `${readyPct}%` }}></div>
@@ -202,12 +231,12 @@ export const InventoryDashboard: React.FC = () => {
             </div>
             <div className="my-3 flex items-baseline gap-2">
               <span className="font-serif text-3xl font-semibold text-[#141310]">{rentingCount}</span>
-              <span className="text-xs text-[#7b766f]">/ {totalAllUnits} máy ({rentingPct}%)</span>
+              <span className="text-xs text-[#7b766f]">/ {totalAllUnits} hiện vật ({rentingPct}%)</span>
             </div>
             <div className="w-full bg-[#e6e2db] rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#141310] h-full rounded-full" style={{ width: `${rentingPct}%` }}></div>
             </div>
-            <span className="mt-2 text-xs text-[#7b766f]">Hợp đồng custody hoạt động</span>
+            <span className="mt-2 text-xs text-[#7b766f]">Hợp đồng đang lưu hành</span>
           </div>
 
           {/* Card 3: Return Inspection */}
@@ -223,13 +252,13 @@ export const InventoryDashboard: React.FC = () => {
             <div className="w-full bg-[#e6e2db] rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#7b766f] h-full rounded-full" style={{ width: `${totalAllUnits > 0 ? (inspectionCount / totalAllUnits) * 100 : 0}%` }}></div>
             </div>
-            <span className="mt-2 text-xs text-[#7b766f]">Đang tại trạm Nanuk 4h SLA</span>
+            <span className="mt-2 text-xs text-[#7b766f]">Đang đối kiểm sau đơn thuê</span>
           </div>
 
           {/* Card 4: Maintenance */}
           <div className="bg-[#f7f3ec] p-5 rounded shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between border border-[#ebe8e1]">
             <div className="flex items-start justify-between">
-              <span className="text-xs uppercase tracking-wider text-[#7b766f] font-semibold">Bảo dưỡng buồng máy</span>
+              <span className="text-xs uppercase tracking-wider text-[#7b766f] font-semibold">Bảo dưỡng kỹ thuật</span>
               <span className="material-symbols-outlined text-[#7b766f] text-[20px]">build_circle</span>
             </div>
             <div className="my-3 flex items-baseline gap-2">
@@ -239,7 +268,7 @@ export const InventoryDashboard: React.FC = () => {
             <div className="w-full bg-[#e6e2db] rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#ccc5bc] h-full rounded-full" style={{ width: `${totalAllUnits > 0 ? (maintenanceCount / totalAllUnits) * 100 : 0}%` }}></div>
             </div>
-            <span className="mt-2 text-xs text-[#7b766f]">Hiệu chuẩn Collimator quang học</span>
+            <span className="mt-2 text-xs text-[#7b766f]">Vệ sinh &amp; bảo trì định kỳ</span>
           </div>
 
           {/* Card 5: Eligible for THRIFT */}
@@ -356,7 +385,7 @@ export const InventoryDashboard: React.FC = () => {
                   setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                placeholder="Tìm theo Mã hiện vật (Serial ID), Tên máy, Hợp đồng thuê..."
+                placeholder="Tìm theo Mã hiện vật (Serial ID), Tên sản phẩm, Đơn thuê..."
                 className="w-full pl-10 pr-4 py-2.5 bg-white text-[#141310] text-xs rounded border border-[#ebe8e1] shadow-sm focus:outline-none focus:border-[#576151]"
               />
             </div>
@@ -667,7 +696,7 @@ export const InventoryDashboard: React.FC = () => {
               <p className="text-xs sm:text-sm text-[#4a463f] leading-relaxed">
                 Việc giải phóng hiện vật từ kho <strong className="text-[#141310]">CHO THUÊ (RENT)</strong> sang sàn{' '}
                 <strong className="text-[#141310]">BÁN ĐỨT (THRIFT)</strong> tuân thủ tiêu chuẩn giám định B-Corp Circular. Khi bấm nút{' '}
-                <span className="font-semibold text-[#141310]">"Chuyển sang THRIFT"</span>, hiện vật sẽ lập tức được đóng gói hồ sơ lịch sử thuê, đính kèm chứng nhận số bảo hành còn lại của Atelier Chronos &amp; Optics và chuyển tiếp sang bước định giá bán thứ cấp cuối cùng mà không làm gián đoạn quyền lợi của bất kỳ khách hàng thuê nào.
+                <span className="font-semibold text-[#141310]">"Chuyển sang THRIFT"</span>, hiện vật sẽ lập tức được đóng gói hồ sơ lịch sử thuê, đính kèm chứng nhận kiểm định chất lượng của xưởng và chuyển tiếp sang bước định giá bán thứ cấp cuối cùng mà không làm gián đoạn quyền lợi của bất kỳ khách hàng thuê nào.
               </p>
             </div>
             <div className="md:col-span-4 flex md:justify-end">

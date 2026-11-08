@@ -166,33 +166,33 @@ export const RentInventoryDetail: React.FC = () => {
                 <img
                   className="w-full h-full object-cover"
                   src={unit.thumbnailMount || unit.imageUrl}
-                  alt="Bayonet mount inspection"
+                  alt="Inspection angle 1"
                 />
-                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Mount</div>
+                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Mặt trước</div>
               </div>
               <div className="aspect-square bg-[#e6e2db] rounded overflow-hidden shadow-sm">
                 <img
                   className="w-full h-full object-cover"
                   src={unit.thumbnailSensor || unit.imageUrl}
-                  alt="Sensor inspection"
+                  alt="Inspection angle 2"
                 />
-                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Sensor</div>
+                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Mặt sau</div>
               </div>
               <div className="aspect-square bg-[#e6e2db] rounded overflow-hidden shadow-sm">
                 <img
                   className="w-full h-full object-cover"
                   src={unit.thumbnailOptics || unit.imageUrl}
-                  alt="Lens optics inspection"
+                  alt="Inspection details"
                 />
-                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Optics</div>
+                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Chi tiết</div>
               </div>
               <div className="aspect-square bg-[#e6e2db] rounded overflow-hidden shadow-sm">
                 <img
                   className="w-full h-full object-cover"
                   src={unit.thumbnailCase || unit.imageUrl}
-                  alt="Nanuk hard case inspection"
+                  alt="Inspection package"
                 />
-                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Case</div>
+                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Đóng gói</div>
               </div>
             </div>
           </div>
@@ -254,8 +254,8 @@ export const RentInventoryDetail: React.FC = () => {
                   <span className="font-mono text-sm font-bold text-[#141310]">{matchedProduct.brand || unit.category}</span>
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-[#ebe8e1]">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Màn Trập / Tuổi Thọ</span>
-                  <span className="font-mono text-sm font-bold text-[#141310]">{unit.shutterActuations}</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Khấu Hao Vận Hành</span>
+                  <span className="font-mono text-sm font-bold text-[#141310]">{unit.depreciationRate} ({unit.cycleCount} lượt)</span>
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-[#ebe8e1]">
                   <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Chuyên Viên Quản Lý</span>
