@@ -371,7 +371,12 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const newMsg: ChatMessageItem = {
       _id: tempId,
       conversationId: activeConversation._id,
-      senderId: currentUserId || "shop_owner",
+      senderId: {
+        _id: currentUserId || "shop_owner",
+        fullName: user?.shopProfile?.shopName || user?.fullName || "Shop Owner",
+        role: "SHOP_OWNER",
+        avatarUrl: user?.avatarUrl,
+      },
       text: trimmed,
       imageUrl: imageUrl || null,
       clientMsgId: tempId,
@@ -391,11 +396,12 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           imageUrl,
           clientMsgId: tempId,
         },
-        (ack: { success?: boolean; data?: ChatMessageItem }) => {
-          if (ack?.success && ack?.data) {
+        (ack: { success?: boolean; data?: ChatMessageItem; message?: ChatMessageItem }) => {
+          const returned = ack?.data || ack?.message;
+          if (ack?.success && returned) {
             setMessages((prev) =>
               prev.map((m) =>
-                m._id === tempId ? { ...ack.data!, clientMsgId: tempId } : m
+                m._id === tempId ? { ...returned, clientMsgId: tempId } : m
               )
             );
           }

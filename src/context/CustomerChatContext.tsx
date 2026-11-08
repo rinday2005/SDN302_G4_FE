@@ -378,7 +378,12 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const optimisticMsg: ChatMessageItem = {
         _id: clientMsgId,
         conversationId: activeConversation._id,
-        senderId: currentUserId,
+        senderId: {
+          _id: currentUserId,
+          fullName: user?.fullName || "Khách hàng",
+          role: "USER",
+          avatarUrl: user?.avatarUrl,
+        },
         text: text.trim(),
         imageUrl: imageUrl || null,
         clientMsgId,
@@ -420,7 +425,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
         console.error("⚠️ [CustomerChat] Send message failed:", err);
       }
     },
-    [activeConversation, currentUserId]
+    [activeConversation, currentUserId, user?.fullName, user?.avatarUrl]
   );
 
   const sendTyping = useCallback(

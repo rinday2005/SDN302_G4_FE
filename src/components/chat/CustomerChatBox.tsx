@@ -77,12 +77,6 @@ export const CustomerChatBox: React.FC = () => {
   // 1. Xác định Shop participant và Customer participant trong cuộc trò chuyện
   const activeShopParticipant = useMemo(() => {
     const parts = activeConversation?.participants || [];
-    const byRole = parts.find((p) => typeof p === "object" && p.role === "SHOP_OWNER");
-    if (byRole) return byRole;
-
-    const byProfile = parts.find((p) => typeof p === "object" && Boolean(p.shopProfile?.shopName));
-    if (byProfile) return byProfile;
-
     if (currentUserId) {
       const byNotMe = parts.find((p) => {
         const idStr = typeof p === "object" ? String(p._id) : String(p);
@@ -91,31 +85,17 @@ export const CustomerChatBox: React.FC = () => {
       if (byNotMe) return byNotMe;
     }
 
-    return parts[1] || parts[0];
-  }, [activeConversation, currentUserId]);
-
-  const activeCustomerParticipant = useMemo(() => {
-    const parts = activeConversation?.participants || [];
-    const byRole = parts.find((p) => typeof p === "object" && p.role === "USER");
+    const byRole = parts.find((p) => typeof p === "object" && p.role === "SHOP_OWNER");
     if (byRole) return byRole;
 
-    if (currentUserId) {
-      const byMe = parts.find((p) => {
-        const idStr = typeof p === "object" ? String(p._id) : String(p);
-        return idStr === String(currentUserId);
-      });
-      if (byMe) return byMe;
-    }
+    const byProfile = parts.find((p) => typeof p === "object" && Boolean(p.shopProfile?.shopName));
+    if (byProfile) return byProfile;
 
-    return parts[0];
+    return parts[1] || parts[0];
   }, [activeConversation, currentUserId]);
 
   const activeShopIdStr = activeShopParticipant
     ? String(typeof activeShopParticipant === "object" ? activeShopParticipant._id : activeShopParticipant)
-    : "";
-
-  const activeCustomerIdStr = activeCustomerParticipant
-    ? String(typeof activeCustomerParticipant === "object" ? activeCustomerParticipant._id : activeCustomerParticipant)
     : "";
 
   const activeShopName =
@@ -439,12 +419,12 @@ export const CustomerChatBox: React.FC = () => {
                         const senderRole =
                           typeof m.senderId === "object" ? m.senderId.role : undefined;
 
-                        // Chắc chắn tin nhắn là của SHOP nếu role SHOP_OWNER, hoặc senderId trùng với Shop, hoặc senderIdStr === 'shop_owner'
+                        // Phía Customer: Tin là của SHOP nếu senderRole là SHOP_OWNER, senderId là 'shop_owner', trùng với activeShopIdStr, HOẶC khác với currentUserId
                         const isShopSender =
                           senderRole === "SHOP_OWNER" ||
                           senderIdStr === "shop_owner" ||
                           (Boolean(activeShopIdStr) && senderIdStr === activeShopIdStr) ||
-                          (Boolean(activeCustomerIdStr) && senderIdStr !== activeCustomerIdStr);
+                          (Boolean(currentUserId) && senderIdStr !== String(currentUserId));
 
                         // Ở phía màn hình Customer: Tin của Customer (Me) là tin KHÔNG PHẢI của Shop
                         const isMe = !isShopSender;

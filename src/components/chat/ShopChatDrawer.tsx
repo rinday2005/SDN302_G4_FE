@@ -86,9 +86,6 @@ export const ShopChatDrawer: React.FC = () => {
 
   const currentCustomer = useMemo(() => {
     const parts = activeConversation?.participants || [];
-    const byRole = parts.find((p) => typeof p === "object" && p.role === "USER");
-    if (byRole) return byRole;
-
     if (currentUserId) {
       const byNotMe = parts.find((p) => {
         const idStr = typeof p === "object" ? String(p._id) : String(p);
@@ -97,34 +94,14 @@ export const ShopChatDrawer: React.FC = () => {
       if (byNotMe) return byNotMe;
     }
 
-    return parts[0];
-  }, [activeConversation, currentUserId]);
-
-  const currentShop = useMemo(() => {
-    const parts = activeConversation?.participants || [];
-    const byRole = parts.find((p) => typeof p === "object" && p.role === "SHOP_OWNER");
+    const byRole = parts.find((p) => typeof p === "object" && p.role === "USER");
     if (byRole) return byRole;
 
-    const byProfile = parts.find((p) => typeof p === "object" && Boolean(p.shopProfile?.shopName));
-    if (byProfile) return byProfile;
-
-    if (currentUserId) {
-      const byMe = parts.find((p) => {
-        const idStr = typeof p === "object" ? String(p._id) : String(p);
-        return idStr === String(currentUserId);
-      });
-      if (byMe) return byMe;
-    }
-
-    return parts[1] || parts[0];
+    return parts[0];
   }, [activeConversation, currentUserId]);
 
   const custIdStr = currentCustomer
     ? String(typeof currentCustomer === "object" ? currentCustomer._id : currentCustomer)
-    : "";
-
-  const shopIdStr = currentShop
-    ? String(typeof currentShop === "object" ? currentShop._id : currentShop)
     : "";
 
   if (!isOpen) return null;
@@ -432,14 +409,12 @@ export const ShopChatDrawer: React.FC = () => {
                         const senderRole =
                           typeof m.senderId === "object" ? m.senderId.role : undefined;
 
-                        // Xác định rõ: Có phải Khách hàng gửi tin này không?
-                        const isCustomerSender =
-                          senderRole === "USER" ||
-                          (Boolean(custIdStr) && senderIdStr === custIdStr) ||
-                          (Boolean(shopIdStr) && senderIdStr !== shopIdStr && senderIdStr !== "shop_owner");
-
                         // Tại ShopChatDrawer: Shop Owner là "Me" (bên phải), Khách hàng là bên trái
-                        const isMe = !isCustomerSender;
+                        const isMe =
+                          (Boolean(currentUserId) && senderIdStr === String(currentUserId)) ||
+                          senderIdStr === "shop_owner" ||
+                          senderRole === "SHOP_OWNER" ||
+                          (Boolean(custIdStr) && senderIdStr !== custIdStr);
 
                         return (
                           <div
