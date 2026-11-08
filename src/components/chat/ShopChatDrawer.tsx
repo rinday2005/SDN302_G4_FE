@@ -31,7 +31,7 @@ export const ShopChatDrawer: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Xác nhận xóa hội thoại
   const handleConfirmDelete = async () => {
