@@ -30,49 +30,48 @@ export interface ShopNotification {
   actionLink: string;
 }
 
+const formatTimeAgo = (dateStr?: string) => {
+  if (!dateStr) return 'Vừa xong';
+  try {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Vừa xong';
+    if (diffMins < 60) return `${diffMins} phút trước`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} giờ trước`;
+    return new Date(dateStr).toLocaleDateString('vi-VN');
+  } catch {
+    return 'Gần đây';
+  }
+};
+
+const mapApiToShopNotification = (n: NotificationItem): ShopNotification => {
+  let cat: 'orders' | 'listings' | 'messages' | 'escrow' = 'orders';
+  let typeBadge = 'RENT';
+  let typeColor: 'rent' | 'thrift' | 'chat' | 'escrow' | 'rejected' = 'rent';
+  if (n.type === 'LISTING') { cat = 'listings'; typeBadge = 'LISTING'; typeColor = 'rent'; }
+  else if (n.type === 'THRIFT_ORDER') { cat = 'orders'; typeBadge = 'THRIFT'; typeColor = 'thrift'; }
+  else if (n.type === 'REFUND' || n.type === 'PAYMENT') { cat = 'escrow'; typeBadge = 'ESCROW'; typeColor = 'escrow'; }
+  else if (n.type === 'KYC' || n.type === 'SYSTEM') { cat = 'messages'; typeBadge = 'HỆ THỐNG'; typeColor = 'chat'; }
+
+  return {
+    id: n._id || n.id || String(Math.random()),
+    category: cat,
+    typeBadge,
+    typeColor,
+    badgeTag: n.title,
+    isUnread: !n.isRead,
+    timeAgo: formatTimeAgo(n.createdAt),
+    datetime: n.createdAt,
+    title: n.title,
+    description: n.message,
+    actionText: 'Xem Chi Tiết →',
+    actionLink: n.link || '/shop/rent/orders',
+  };
+};
+
 export const ShopNotifications: React.FC = () => {
   const [notifications, setNotifications] = useState<ShopNotification[]>([]);
-  
-
-  const formatTimeAgo = (dateStr?: string) => {
-    if (!dateStr) return 'Vừa xong';
-    try {
-      const diffMs = Date.now() - new Date(dateStr).getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      if (diffMins < 1) return 'Vừa xong';
-      if (diffMins < 60) return `${diffMins} phút trước`;
-      const diffHours = Math.floor(diffMins / 60);
-      if (diffHours < 24) return `${diffHours} giờ trước`;
-      return new Date(dateStr).toLocaleDateString('vi-VN');
-    } catch {
-      return 'Gần đây';
-    }
-  };
-
-  const mapApiToShopNotification = (n: NotificationItem): ShopNotification => {
-    let cat: 'orders' | 'listings' | 'messages' | 'escrow' = 'orders';
-    let typeBadge = 'RENT';
-    let typeColor: 'rent' | 'thrift' | 'chat' | 'escrow' | 'rejected' = 'rent';
-    if (n.type === 'LISTING') { cat = 'listings'; typeBadge = 'LISTING'; typeColor = 'rent'; }
-    else if (n.type === 'THRIFT_ORDER') { cat = 'orders'; typeBadge = 'THRIFT'; typeColor = 'thrift'; }
-    else if (n.type === 'REFUND' || n.type === 'PAYMENT') { cat = 'escrow'; typeBadge = 'ESCROW'; typeColor = 'escrow'; }
-    else if (n.type === 'KYC' || n.type === 'SYSTEM') { cat = 'messages'; typeBadge = 'HỆ THỐNG'; typeColor = 'chat'; }
-
-    return {
-      id: n._id || n.id || String(Math.random()),
-      category: cat,
-      typeBadge,
-      typeColor,
-      badgeTag: n.title,
-      isUnread: !n.isRead,
-      timeAgo: formatTimeAgo(n.createdAt),
-      datetime: n.createdAt,
-      title: n.title,
-      description: n.message,
-      actionText: 'Xem Chi Tiết →',
-      actionLink: n.link || '/shop/rent/orders',
-    };
-  };
 
   // Load real notifications from backend MongoDB
   useEffect(() => {

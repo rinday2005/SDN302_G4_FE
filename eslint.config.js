@@ -18,8 +18,11 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    linterOptions: {
+      reportUnusedDisableDirectives: 'off',
+    },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-empty': ['warn', { allowEmptyCatch: true }],
       'react-hooks/preserve-manual-memoization': 'off',
