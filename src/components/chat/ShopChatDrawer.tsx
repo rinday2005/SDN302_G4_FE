@@ -29,6 +29,16 @@ export const ShopChatDrawer: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<ConversationItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<{
+    _id?: string;
+    senderName: string;
+    text: string;
+  } | null>(null);
+
+  const handleSelectConversation = (conv: ConversationItem | null) => {
+    setReplyingTo(null);
+    selectConversation(conv);
+  };
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,11 +76,37 @@ export const ShopChatDrawer: React.FC = () => {
     const text = inputVal.trim();
     if (!text) return;
 
+    let messageToSend = text;
+    if (replyingTo) {
+      messageToSend = `> [${replyingTo.senderName}]: ${replyingTo.text}\n\n${text}`;
+    }
+
     setInputVal("");
+    setReplyingTo(null);
     sendTyping(false);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
-    await sendMessage(text);
+    await sendMessage(messageToSend);
+  };
+
+  // Helper hiển thị tin nhắn kèm khối trích dẫn trả lời nếu có
+  const renderMessageContent = (text: string) => {
+    if (text.startsWith("> ")) {
+      const parts = text.split("\n\n");
+      if (parts.length >= 2) {
+        const quote = parts[0].replace(/^>\s*/, "");
+        const actualMessage = parts.slice(1).join("\n\n");
+        return (
+          <div>
+            <div className="mb-1.5 pl-2 py-0.5 border-l-2 border-current/40 bg-black/5 rounded-r text-[11px] opacity-80 italic line-clamp-2">
+              {quote}
+            </div>
+            <div className="whitespace-pre-wrap">{actualMessage}</div>
+          </div>
+        );
+      }
+    }
+    return <div className="whitespace-pre-wrap">{text}</div>;
   };
 
   // Xử lý typing indicator
@@ -232,11 +268,11 @@ export const ShopChatDrawer: React.FC = () => {
                         key={conv._id ? `${conv._id}-${idx}` : idx}
                         role="button"
                         tabIndex={0}
-                        onClick={() => selectConversation(conv)}
+                        onClick={() => handleSelectConversation(conv)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            selectConversation(conv);
+                            handleSelectConversation(conv);
                           }
                         }}
                         className={`group w-full p-3.5 text-left flex items-start gap-3 transition-colors cursor-pointer relative select-none ${
@@ -318,9 +354,6 @@ export const ShopChatDrawer: React.FC = () => {
                   <h3 className="font-serif text-lg font-bold text-[#141310]">
                     Chọn một khách hàng để trò chuyện
                   </h3>
-                  <p className="text-xs mt-1 text-[#78716c]">
-                    Hệ thống sẽ đồng bộ tin nhắn 2 chiều qua Socket.IO theo thời gian thực.
-                  </p>
                 </div>
               ) : (
                 <>
@@ -330,7 +363,7 @@ export const ShopChatDrawer: React.FC = () => {
                       {/* Nút quay lại trên mobile */}
                       <button
                         type="button"
-                        onClick={() => selectConversation(null)}
+                        onClick={() => handleSelectConversation(null)}
                         className="md:hidden p-1.5 rounded-lg text-[#78716c] hover:bg-[#f1ede6]"
                       >
                         <span className="material-symbols-outlined text-[20px]">arrow_back</span>
@@ -409,12 +442,16 @@ export const ShopChatDrawer: React.FC = () => {
                           (senderRole === "USER" && senderIdStr !== String(currentUserId));
                         const isMe = !isCustomer;
 
+                        const senderDisplayName = isMe
+                          ? "Bạn"
+                          : currentCustomer?.fullName || "Khách Hàng";
+
                         return (
                           <div
                             key={m._id ? `${m._id}-${idx}` : idx}
-                            className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                            className={`group flex flex-col ${isMe ? "items-end" : "items-start"}`}
                           >
-                            <div className="flex items-end gap-2 max-w-[80%]">
+                            <div className={`flex items-end gap-1.5 max-w-[85%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
                               {!isMe && (
                                 <img
                                   src={
@@ -433,7 +470,7 @@ export const ShopChatDrawer: React.FC = () => {
                                     : "bg-white text-[#1c1c18] border border-[#dddad3] rounded-bl-none"
                                 }`}
                               >
-                                {m.text}
+                                {renderMessageContent(m.text)}
                                 {m.imageUrl && (
                                   <img
                                     src={m.imageUrl}
@@ -442,6 +479,22 @@ export const ShopChatDrawer: React.FC = () => {
                                   />
                                 )}
                               </div>
+
+                              {/* Nút icon Trả Lời (Reply) cạnh tin nhắn */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setReplyingTo({
+                                    _id: m._id,
+                                    senderName: senderDisplayName,
+                                    text: m.text || (m.imageUrl ? "[Hình ảnh]" : ""),
+                                  })
+                                }
+                                className="opacity-70 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[#78716c] hover:text-[#141310] hover:bg-[#ede8de] rounded-full shrink-0 self-center cursor-pointer"
+                                title="Trả lời tin nhắn này"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">reply</span>
+                              </button>
                             </div>
 
                             <span className="text-[10px] text-[#a8a29e] mt-1 px-1 font-mono">
@@ -458,6 +511,33 @@ export const ShopChatDrawer: React.FC = () => {
                     )}
                     <div ref={messagesEndRef} />
                   </div>
+
+                  {/* Thanh hiển thị tin nhắn đang được trả lời */}
+                  {replyingTo && (
+                    <div className="px-4 py-2 bg-[#f4ede4] border-t border-[#dddad3] flex items-center justify-between text-xs animate-fade-in shrink-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="material-symbols-outlined text-[16px] text-[#141310] shrink-0">
+                          reply
+                        </span>
+                        <div className="truncate">
+                          <span className="font-semibold text-[#141310]">
+                            Đang trả lời {replyingTo.senderName}:{" "}
+                          </span>
+                          <span className="text-[#78716c] italic">
+                            {replyingTo.text.length > 50 ? `${replyingTo.text.slice(0, 50)}...` : replyingTo.text}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReplyingTo(null)}
+                        className="p-1 text-[#78716c] hover:text-[#141310] rounded-full hover:bg-[#e5dfd5] shrink-0 cursor-pointer"
+                        title="Hủy trả lời"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  )}
 
                   {/* Ô Nhập Tin Nhắn & Nút Gửi */}
                   <form

@@ -29,6 +29,19 @@ export const CustomerChatBox: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<ConversationItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<{
+    _id?: string;
+    senderName: string;
+    text: string;
+  } | null>(null);
+
+  const handleSelectConversation = (conv: ConversationItem) => {
+    setReplyingTo(null);
+    if (activeConversation?._id !== conv._id) {
+      clearProductContext();
+    }
+    selectConversation(conv);
+  };
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,11 +73,37 @@ export const CustomerChatBox: React.FC = () => {
     const text = inputVal.trim();
     if (!text) return;
 
+    let messageToSend = text;
+    if (replyingTo) {
+      messageToSend = `> [${replyingTo.senderName}]: ${replyingTo.text}\n\n${text}`;
+    }
+
     setInputVal("");
+    setReplyingTo(null);
     sendTyping(false);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
-    await sendMessage(text);
+    await sendMessage(messageToSend);
+  };
+
+  // Helper hiển thị tin nhắn kèm khối trích dẫn trả lời nếu có
+  const renderMessageContent = (text: string) => {
+    if (text.startsWith("> ")) {
+      const parts = text.split("\n\n");
+      if (parts.length >= 2) {
+        const quote = parts[0].replace(/^>\s*/, "");
+        const actualMessage = parts.slice(1).join("\n\n");
+        return (
+          <div>
+            <div className="mb-1.5 pl-2 py-0.5 border-l-2 border-current/40 bg-black/5 rounded-r text-[11px] opacity-80 italic line-clamp-2">
+              {quote}
+            </div>
+            <div className="whitespace-pre-wrap">{actualMessage}</div>
+          </div>
+        );
+      }
+    }
+    return <p className="whitespace-pre-wrap break-words">{text}</p>;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -250,18 +289,12 @@ export const CustomerChatBox: React.FC = () => {
                         role="button"
                         tabIndex={0}
                         onClick={() => {
-                          if (activeConversation?._id !== conv._id) {
-                            clearProductContext();
-                          }
-                          selectConversation(conv);
+                          handleSelectConversation(conv);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            if (activeConversation?._id !== conv._id) {
-                              clearProductContext();
-                            }
-                            selectConversation(conv);
+                            handleSelectConversation(conv);
                           }
                         }}
                         className={`group w-full p-3.5 text-left flex items-start gap-3 transition-colors cursor-pointer relative select-none ${
@@ -477,12 +510,16 @@ export const CustomerChatBox: React.FC = () => {
                         // Ở phía màn hình Customer: Tin của Customer (Me) là tin KHÔNG PHẢI của Shop
                         const isMe = !isShopSender;
 
+                        const senderDisplayName = isMe
+                          ? "Bạn"
+                          : activeShopName || "Shop";
+
                         return (
                           <div
                             key={m._id}
-                            className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                            className={`group flex flex-col ${isMe ? "items-end" : "items-start"}`}
                           >
-                            <div className="flex items-end gap-2 max-w-[85%]">
+                            <div className={`flex items-end gap-1.5 max-w-[85%] ${isMe ? "flex-row-reverse" : "flex-row"}`}>
                               {!isMe && (
                                 <img
                                   src={activeShopAvatar}
@@ -491,7 +528,7 @@ export const CustomerChatBox: React.FC = () => {
                                 />
                               )}
                               <div
-                                className={`rounded-2xl p-3 text-xs leading-relaxed shadow-xs ${
+                                className={`rounded-2xl p-3 text-xs leading-relaxed shadow-xs break-words ${
                                   isMe
                                     ? "bg-[#141310] text-white rounded-br-xs"
                                     : "bg-white text-[#141310] border border-[#e5e0d8] rounded-bl-xs"
@@ -504,8 +541,24 @@ export const CustomerChatBox: React.FC = () => {
                                     className="rounded-xl max-h-48 w-auto object-cover mb-2 border border-black/10"
                                   />
                                 )}
-                                <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                                {renderMessageContent(m.text)}
                               </div>
+
+                              {/* Nút icon Trả Lời (Reply) cạnh tin nhắn */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setReplyingTo({
+                                    _id: m._id,
+                                    senderName: senderDisplayName,
+                                    text: m.text || (m.imageUrl ? "[Hình ảnh]" : ""),
+                                  })
+                                }
+                                className="opacity-70 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[#78716c] hover:text-[#141310] hover:bg-[#ede8de] rounded-full shrink-0 self-center cursor-pointer"
+                                title="Trả lời tin nhắn này"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">reply</span>
+                              </button>
                             </div>
 
                             <span
@@ -537,6 +590,33 @@ export const CustomerChatBox: React.FC = () => {
 
                     <div ref={messagesEndRef} />
                   </div>
+
+                  {/* Thanh hiển thị tin nhắn đang được trả lời */}
+                  {replyingTo && (
+                    <div className="px-4 py-2 bg-[#f4ede4] border-t border-[#dddad3] flex items-center justify-between text-xs animate-fade-in shrink-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="material-symbols-outlined text-[16px] text-[#141310] shrink-0">
+                          reply
+                        </span>
+                        <div className="truncate">
+                          <span className="font-semibold text-[#141310]">
+                            Đang trả lời {replyingTo.senderName}:{" "}
+                          </span>
+                          <span className="text-[#78716c] italic">
+                            {replyingTo.text.length > 50 ? `${replyingTo.text.slice(0, 50)}...` : replyingTo.text}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReplyingTo(null)}
+                        className="p-1 text-[#78716c] hover:text-[#141310] rounded-full hover:bg-[#e5dfd5] shrink-0 cursor-pointer"
+                        title="Hủy trả lời"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  )}
 
                   {/* Thanh soạn tin nhắn */}
                   <form

@@ -195,37 +195,33 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const handleConversationUpdated = (updatedConv: ConversationItem) => {
-      setConversations((prev) => {
-        const convIdStr = String(updatedConv._id);
-        const isCurrent = activeConvRef.current && String(activeConvRef.current._id) === convIdStr;
-        const senderIdStr =
-          typeof updatedConv.lastMessage?.senderId === "object"
-            ? updatedConv.lastMessage?.senderId?._id?.toString()
-            : updatedConv.lastMessage?.senderId?.toString();
-        const isFromOther = senderIdStr && String(senderIdStr) !== String(currentUserId);
-        const unread = (isCurrent || !isFromOther) ? 0 : 1;
+      const rawConvId = (updatedConv.rawConversationId || String(updatedConv._id)).replace(/_(RENT|THRIFT)$/, "");
 
-        const index = prev.findIndex((c) => String(c._id) === convIdStr);
-        if (index > -1) {
-          const clone = [...prev];
-          clone[index] = {
-            ...clone[index],
-            ...updatedConv,
-            unreadCount: unread,
-            serviceType: updatedConv.serviceType || clone[index].serviceType || "RENT",
-          };
-          return clone.sort(
+      setConversations((prev) => {
+        let matched = false;
+        const updated = prev.map((c) => {
+          const rawCId = (c.rawConversationId || String(c._id)).replace(/_(RENT|THRIFT)$/, "");
+          if (rawCId === rawConvId) {
+            matched = true;
+            return {
+              ...c,
+              participants: updatedConv.participants || c.participants,
+              updatedAt: updatedConv.updatedAt || c.updatedAt,
+            };
+          }
+          return c;
+        });
+
+        // Nếu cuộc trò chuyện đã có (theo tab _RENT hoặc _THRIFT), cập nhật thông tin và KHÔNG ĐƯỢC thêm item mới trùng lặp
+        if (matched) {
+          return updated.sort(
             (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
           );
         }
-        return [
-          {
-            ...updatedConv,
-            unreadCount: unread,
-            serviceType: updatedConv.serviceType || "RENT",
-          },
-          ...prev,
-        ];
+
+        // Nếu chưa có, gọi API tải lại để tách đúng tab RENT / THRIFT
+        refreshConversations();
+        return prev;
       });
     };
 
