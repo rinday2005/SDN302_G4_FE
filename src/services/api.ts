@@ -29,7 +29,21 @@ api.interceptors.request.use(
 
 // Xử lý response/error chung
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = (response.config?.method || "get").toLowerCase();
+    const url = response.config?.url || "";
+    if (
+      ["post", "put", "patch", "delete"].includes(method) &&
+      !url.includes("/notifications") &&
+      typeof window !== "undefined"
+    ) {
+      window.dispatchEvent(new CustomEvent("notification_refresh"));
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("notification_refresh"));
+      }, 600);
+    }
+    return response;
+  },
   (error) => {
     const requestUrl = error.config?.url || "";
     const isLoginRequest =
