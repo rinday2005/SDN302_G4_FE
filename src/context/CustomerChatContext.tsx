@@ -397,6 +397,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       try {
         if (socket.connected) {
+          const currentToken = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
           socket.emit(
             "send_message",
             {
@@ -404,6 +405,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
               text: text.trim(),
               imageUrl,
               clientMsgId,
+              token: currentToken,
             },
             (ack: { success?: boolean; data?: ChatMessageItem; message?: ChatMessageItem }) => {
               const returnedMsg = ack?.data || ack?.message;

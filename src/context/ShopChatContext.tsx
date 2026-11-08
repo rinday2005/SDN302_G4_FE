@@ -387,6 +387,7 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setMessages((prev) => [...prev, newMsg]);
 
     if (socket.connected) {
+      const currentToken = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
       // Gửi qua Socket.IO kèm clientMsgId để đối soát không bị nhân đôi
       socket.emit(
         "send_message",
@@ -395,6 +396,7 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           text: trimmed,
           imageUrl,
           clientMsgId: tempId,
+          token: currentToken,
         },
         (ack: { success?: boolean; data?: ChatMessageItem; message?: ChatMessageItem }) => {
           const returned = ack?.data || ack?.message;

@@ -409,12 +409,11 @@ export const ShopChatDrawer: React.FC = () => {
                         const senderRole =
                           typeof m.senderId === "object" ? m.senderId.role : undefined;
 
-                        // Tại ShopChatDrawer: Shop Owner là "Me" (bên phải), Khách hàng là bên trái
-                        const isMe =
-                          (Boolean(currentUserId) && senderIdStr === String(currentUserId)) ||
-                          senderIdStr === "shop_owner" ||
-                          senderRole === "SHOP_OWNER" ||
-                          (Boolean(custIdStr) && senderIdStr !== custIdStr);
+                        // Tại ShopChatDrawer: Xác định tin nhắn có phải từ Khách hàng không
+                        const isCustomer =
+                          (Boolean(custIdStr) && senderIdStr === custIdStr) ||
+                          (senderRole === "USER" && senderIdStr !== String(currentUserId));
+                        const isMe = !isCustomer;
 
                         return (
                           <div

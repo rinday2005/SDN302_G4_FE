@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { loginApi } from "../services/auth.api";
 import { getProfileApi } from "../services/user.api";
 import { AuthContext } from "./auth-context";
+import { disconnectSocket, reconnectSocket } from "../services/socket";
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -67,6 +68,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setToken(result.accessToken);
     setUser(result.user);
 
+    reconnectSocket();
+
     window.dispatchEvent(new CustomEvent("profile_updated", { detail: result.user }));
     window.dispatchEvent(new Event("user_profile_updated"));
 
@@ -74,6 +77,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const logout = () => {
+    disconnectSocket();
+
     localStorage.removeItem("token");
     localStorage.removeItem("accessToken");
     localStorage.removeItem("user");

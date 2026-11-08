@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
+let lastConnectedToken: string | null = null;
 
 const getSocketBaseUrl = (): string => {
   const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
@@ -18,7 +19,15 @@ const getStoredToken = (): string => {
 export const getSocket = (): Socket => {
   const currentToken = getStoredToken();
 
+  // Nếu token đã thay đổi so với khi socket kết nối trước đó -> ngắt kết nối và tạo socket mới
+  if (socket && lastConnectedToken !== null && lastConnectedToken !== currentToken) {
+    console.log("🔄 [Socket.IO] Auth token changed. Reconnecting socket with new credentials...");
+    socket.disconnect();
+    socket = null;
+  }
+
   if (!socket) {
+    lastConnectedToken = currentToken;
     socket = io(getSocketBaseUrl(), {
       auth: (cb) => {
         cb({ token: getStoredToken() });
@@ -60,6 +69,7 @@ export const disconnectSocket = () => {
     socket.disconnect();
     socket = null;
   }
+  lastConnectedToken = null;
 };
 
 export const reconnectSocket = () => {
