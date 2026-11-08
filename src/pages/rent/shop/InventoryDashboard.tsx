@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
 import type { InventoryUnitItem } from '../../data/shop/inventoryData';
-import { calculateThriftDiscount } from '../../../utils/thriftPricing';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
 
 export const InventoryDashboard: React.FC = () => {
   const { products, refreshProducts } = useShop();
@@ -60,8 +60,21 @@ export const InventoryDashboard: React.FC = () => {
       const total = Number(p.totalUnits) || 1;
       const renting = Number(p.rentingUnits) || 0;
       const maintenance = Number(p.maintenanceUnits) || 0;
+      const categoryName =
+        typeof p.category === 'object' && p.category !== null
+          ? (p.category as { name?: string }).name || 'Thời trang Rent'
+          : String(p.category || 'Thời trang Rent');
 
       for (let i = 1; i <= total; i++) {
+        const variantInfo = getUnitVariantAndCondition(
+          p.name,
+          categoryName,
+          i,
+          total,
+          renting,
+          maintenance
+        );
+
         let status: 'AVAILABLE' | 'RENTING' | 'MAINTENANCE' | 'INSPECTION' | 'ELIGIBLE_FOR_THRIFT';
         let statusText: string;
         let currentOrderCode: string | undefined = undefined;
@@ -82,18 +95,19 @@ export const InventoryDashboard: React.FC = () => {
         }
 
         const serialNumber = `#SN-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(3, '0')}`;
+        const displayName = total > 1 ? `${p.name} - ${variantInfo.variantShort}` : p.name;
+
         units.push({
           id: `INV-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(2, '0')}`,
           sku: p.sku,
-          productName: p.name,
-          category:
-            typeof p.category === 'object' && p.category !== null
-              ? (p.category as { name?: string }).name || 'Sản phẩm RENT'
-              : String(p.category || 'Sản phẩm RENT'),
+          productName: displayName,
+          category: categoryName,
+          variantTag: variantInfo.variantTag,
           serialNumber,
-          conditionGrade: p.condition || 'LIKE_NEW (98%)',
-          cycleCount: 4 + i * 3,
-          depreciationRate: `${Math.min(95, 10 + i * 8)}%`,
+          conditionGrade: variantInfo.conditionGrade,
+          cycleCount: variantInfo.cycleCount,
+          depreciationRate: variantInfo.depreciationRate,
+          maintenanceNote: variantInfo.maintenanceNote,
           status,
           statusText,
           currentOrderCode,
@@ -488,7 +502,14 @@ export const InventoryDashboard: React.FC = () => {
                         />
                         <div>
                           <div className="font-semibold text-sm text-[#141310]">{item.productName}</div>
-                          <div className="text-[11px] text-[#7b766f] uppercase tracking-wider">{item.category}</div>
+                          <div className="text-[11px] text-[#7b766f] flex items-center gap-1.5 mt-0.5">
+                            <span className="uppercase tracking-wider font-medium">{item.category}</span>
+                            {item.variantTag && (
+                              <span className="px-1.5 py-0.5 rounded bg-[#f1ede6] text-[#4a463f] font-normal text-[10px]">
+                                {item.variantTag}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -503,28 +524,26 @@ export const InventoryDashboard: React.FC = () => {
                     <td className="py-4 px-4 align-top">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className={`w-2 h-2 rounded-full ${item.status === 'ELIGIBLE_FOR_THRIFT'
-                              ? 'bg-[#576151]'
+                          className={`w-2 h-2 rounded-full ${
+                            item.status === 'ELIGIBLE_FOR_THRIFT'
+                              ? 'bg-purple-600'
                               : item.status === 'MAINTENANCE'
-                                ? 'bg-amber-600'
-                                : 'bg-[#576151]'
-                            }`}
+                              ? 'bg-amber-600'
+                              : item.status === 'RENTING'
+                              ? 'bg-blue-600'
+                              : 'bg-[#576151]'
+                          }`}
                         ></span>
                         <span className="font-semibold text-[#141310]">{item.conditionGrade}</span>
                       </div>
-                      {(() => {
-                        const dep = calculateThriftDiscount(item.cycleCount, 10000000);
-                        return (
-                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs text-[#4a463f] font-medium">
-                              {item.cycleCount} lần thuê
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                              -{dep.discountPercent}% khấu hao
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-[#4a463f] font-medium">
+                          {item.cycleCount === 0 ? 'Hàng nguyên kho' : `${item.cycleCount} lần thuê`}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          -{item.depreciationRate} khấu hao
+                        </span>
+                      </div>
                       {item.maintenanceNote && (
                         <div className="text-[#576151] font-medium text-[11px] mt-0.5">{item.maintenanceNote}</div>
                       )}

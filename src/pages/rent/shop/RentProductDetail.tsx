@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
 export const RentProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { products } = useShop();
@@ -237,7 +238,7 @@ export const RentProductDetail: React.FC = () => {
               <div className="text-sm text-[#4a463f] leading-relaxed space-y-4">
                 <p>{product.description}</p>
                 <p>
-                  Đi kèm trong bộ kit cho thuê là ống kính chuyên dụng <strong>XCD 45mm f/4 P</strong> – lens medium format lấy nét tự động nhỏ gọn và siêu tĩnh với màn trập tích hợp trung tâm hỗ trợ đồng bộ đèn flash tốc độ cao lên tới 1/2000s, đem đến chiều sâu ảnh quang học vô tiền khoáng hậu.
+                  Sản phẩm được lưu kho và bảo dưỡng định kỳ theo tiêu chuẩn xưởng ReUse Care Hub, đảm bảo tình trạng thẩm định và niêm phong kiểm định chất lượng trước khi bàn giao cho khách thuê.
                 </p>
               </div>
 
@@ -251,15 +252,15 @@ export const RentProductDetail: React.FC = () => {
                   <ul className="space-y-2 text-xs text-[#4a463f]">
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span>Bắt buộc giao nhận kèm vali cứng Nanuk chống sốc có khóa kẹp chì số độc quyền.</span>
+                      <span>Kiểm tra tem niêm phong số hoá và chụp ảnh 4 góc đối kiểm trước khi xuất kho.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span>Kiểm tra độ sạch cảm biến tại chỗ 3 khẩu độ (f/4, f/11, f/22) với White Sheet test.</span>
+                      <span>Kiểm định bề mặt chất liệu, form dáng và phụ kiện đi kèm theo biên bản bàn giao.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span>Hai thỏi pin nguyên bản sạc tối thiểu 50% trước khi niêm phong xuất kho.</span>
+                      <span>Khử trùng ozone và đóng gói túi bảo quản chuyên dụng trước khi niêm phong.</span>
                     </li>
                   </ul>
                 </div>
@@ -272,7 +273,7 @@ export const RentProductDetail: React.FC = () => {
                   <ul className="space-y-2 text-xs text-[#4a463f]">
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span><strong>Zero Deductible Fair Wear &amp; Tear:</strong> Trầy viền vi tính học chấp nhận theo khấu hao tự nhiên.</span>
+                      <span><strong>Fair Wear &amp; Tear:</strong> Chấp nhận hao mòn vi mô tự nhiên theo số chu kỳ thuê thực tế.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
@@ -280,7 +281,7 @@ export const RentProductDetail: React.FC = () => {
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span>Được phép tản bộ ngoại cảnh, nghiêm cấm sử dụng dưới mưa lớn hoặc môi trường axit/cát mặn không che chắn.</span>
+                      <span>Tuân thủ hướng dẫn bảo quản, không tự ý can thiệp hóa chất tẩy rửa mạnh ngoài quy chuẩn.</span>
                     </li>
                   </ul>
                 </div>
@@ -295,7 +296,7 @@ export const RentProductDetail: React.FC = () => {
                     <span className="material-symbols-outlined text-[#576151] text-[22px]">format_list_bulleted</span>
                     <h2 className="font-serif text-xl text-[#141310]">Kho Hiện Vật Cụ Thể (Serialized Units)</h2>
                   </div>
-                  <p className="text-xs text-[#7b766f]">Quản lý định danh từng thân máy thuộc SKU {product.sku}</p>
+                  <p className="text-xs text-[#7b766f]">Quản lý định danh từng hiện vật cá thể thuộc SKU {product.sku}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
@@ -334,6 +335,14 @@ export const RentProductDetail: React.FC = () => {
                     !isRenting && unitNum <= (product.rentingUnits || 0) + (product.maintenanceUnits || 0);
                   const serialNum = `#SN-${product.sku.slice(-4).toUpperCase()}-${String(unitNum).padStart(3, '0')}`;
                   const unitId = `INV-${product.sku.slice(-4).toUpperCase()}-${String(unitNum).padStart(2, '0')}`;
+                  const variantInfo = getUnitVariantAndCondition(
+                    product.name,
+                    String(product.category || ''),
+                    unitNum,
+                    product.totalUnits || 1,
+                    product.rentingUnits || 0,
+                    product.maintenanceUnits || 0
+                  );
 
                   return (
                     <div
@@ -357,7 +366,7 @@ export const RentProductDetail: React.FC = () => {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2.5">
                             <span className="font-semibold text-sm text-[#141310]">
-                              Thân máy #{String(unitNum).padStart(2, '0')}
+                              Hiện vật #{String(unitNum).padStart(2, '0')}: {variantInfo.variantShort}
                             </span>
                             <span className="font-mono text-xs font-semibold bg-[#e6e2db] px-2 py-0.5 rounded text-[#141310]">
                               SN: {serialNum}
@@ -382,14 +391,21 @@ export const RentProductDetail: React.FC = () => {
                             <span>
                               Tình trạng thẩm định:{' '}
                               <strong className="text-[#141310] font-semibold">
-                                {product.condition || 'LIKE_NEW (98%)'}
+                                {variantInfo.conditionGrade}
                               </strong>
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Chu kỳ:{' '}
+                              <span className="text-[#141310] font-medium">
+                                {variantInfo.cycleCount === 0 ? 'Hàng nguyên kho' : `${variantInfo.cycleCount} lần thuê`}
+                              </span>
                             </span>
                             <span>•</span>
                             <span>
                               Vị trí:{' '}
                               <span className="text-[#576151] font-medium">
-                                {product.location || 'Tủ chống ẩm trung tâm xưởng'}
+                                {product.location || 'Kho lưu trữ xưởng • ReUse Care Hub'}
                               </span>
                             </span>
                           </div>

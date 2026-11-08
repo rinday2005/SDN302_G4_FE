@@ -13,6 +13,7 @@ export interface InventoryUnitItem {
   sku: string;
   productName: string;
   category: string;
+  variantTag?: string;
   serialNumber: string;
   conditionGrade: string;
   cycleCount: number;

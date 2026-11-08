@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
 
 export const RentInventoryDetail: React.FC = () => {
   const { itemId } = useParams<{ itemId: string }>();
@@ -60,25 +61,44 @@ export const RentInventoryDetail: React.FC = () => {
     );
   }
 
+  const categoryName =
+    typeof matchedProduct.category === 'object' && matchedProduct.category !== null
+      ? (matchedProduct.category as { name?: string }).name || 'Thời trang RENT'
+      : String(matchedProduct.category || 'Thời trang RENT');
+
+  const total = matchedProduct.totalUnits || 1;
+  const renting = matchedProduct.rentingUnits || 0;
+  const maintenance = matchedProduct.maintenanceUnits || 0;
+
+  const variantInfo = getUnitVariantAndCondition(
+    matchedProduct.name,
+    categoryName,
+    unitNumber,
+    total,
+    renting,
+    maintenance
+  );
+
   const unit = {
     id: unitId,
     sku: matchedProduct.sku,
-    productName: matchedProduct.name,
-    category:
-      typeof matchedProduct.category === 'object' && matchedProduct.category !== null
-        ? (matchedProduct.category as { name?: string }).name || 'Thiết bị RENT'
-        : String(matchedProduct.category || 'Thiết bị RENT'),
+    productName: total > 1 ? `${matchedProduct.name} - ${variantInfo.variantShort}` : matchedProduct.name,
+    category: categoryName,
+    variantTag: variantInfo.variantTag,
     imageUrl: matchedProduct.coverImage || 'https://placehold.co/600x400',
-    conditionGrade: matchedProduct.condition || 'LIKE_NEW (98%)',
+    conditionGrade: variantInfo.conditionGrade,
     serialNumber,
-    location: matchedProduct.location || 'Tủ chống ẩm trung tâm xưởng • TP. HCM',
-    cycleCount: Math.max(1, (matchedProduct.totalUnits || 1) * 3 + unitNumber),
-    depreciationRate: `${Math.min(95, 20 + unitNumber * 15)}%`,
+    location: matchedProduct.location || 'Kho lưu trữ tiêu chuẩn • ReUse Care Hub',
+    cycleCount: variantInfo.cycleCount,
+    depreciationRate: variantInfo.depreciationRate,
     listedRentPrice: `${new Intl.NumberFormat('vi-VN').format(matchedProduct.pricePerDay || 0)} ₫ / ngày`,
     proposedThriftPrice: `${new Intl.NumberFormat('vi-VN').format(
-      (matchedProduct.replacementValue || matchedProduct.pricePerDay * 30) * 0.75
+      Math.round(
+        ((matchedProduct.replacementValue || matchedProduct.pricePerDay * 30) *
+          (1 - variantInfo.discountPercent / 100)) /
+          1000
+      ) * 1000
     )} ₫`,
-    shutterActuations: `${(unitNumber * 1250).toLocaleString()} shots`,
     curatorName: 'Chuyên viên kiểm định xưởng',
     thumbnailMount: matchedProduct.coverImage,
     thumbnailSensor: matchedProduct.coverImage,
