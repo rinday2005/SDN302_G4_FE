@@ -9,6 +9,7 @@ import {
 } from '../../data/thrift/thriftDetailData';
 import type { ThriftProductDetail, ThriftDetailThumbnail } from '../../data/thrift/thriftDetailData';
 import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
+import { useCustomerChat } from '../../../context/customer-chat-context';
 
 type InfoTab = 'desc' | 'audit' | 'origin' | 'shipping';
 
@@ -17,6 +18,7 @@ export const ThriftDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isWishlisted, toggleWishlist, addToCart } = useCartWishlist();
+  const { openChat } = useCustomerChat();
 
   const baseProduct: ThriftProductDetail = useMemo(() => getThriftProductDetail(id), [id]);
   const [dbProduct, setDbProduct] = useState<Partial<ThriftProductDetail> | null>(null);
@@ -209,8 +211,16 @@ export const ThriftDetail: React.FC = () => {
   };
 
   const handleChat = () =>
-    handleProtected(`chat với Shop Owner về "${product.title}"`, `/thrift/${product.slug}`,
-      () => { /* chat action */ });
+    handleProtected(`chat với Shop Owner về "${product.title}"`, `/thrift/${product.slug}`, () => {
+      openChat({
+        serviceType: 'THRIFT',
+        product: {
+          title: product.title,
+          image: product.mainImage,
+          price: product.price,
+        },
+      });
+    });
 
   const closeAuthModal = () => setAuthModal({ open: false, actionName: '', targetUrl: '' });
 

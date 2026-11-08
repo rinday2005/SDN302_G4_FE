@@ -12,9 +12,11 @@ import {
     Package,
     SlidersHorizontal,
     LayoutDashboard,
-    Store
+    Store,
+    MessageCircle
 } from 'lucide-react';
 import { useCartWishlist } from '../../context/CartWishlistContext';
+import { useCustomerChat } from '../../context/customer-chat-context';
 
 export type UserRole = 'GUEST' | 'USER' | 'SHOP' | 'ADMIN';
 
@@ -34,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
     onLogout
 }) => {
     const { wishlistCount: ctxWishlistCount, cartCount: ctxCartCount } = useCartWishlist();
+    const { unreadCount: chatUnreadCount, openChat } = useCustomerChat();
     const effectiveWishlistCount = wishlistCount !== undefined ? wishlistCount : ctxWishlistCount;
     const effectiveCartCount = cartCount !== undefined ? cartCount : ctxCartCount;
 
@@ -270,6 +273,24 @@ export const Header: React.FC<HeaderProps> = ({
                                 )}
                             </Link>
 
+                            {/* Chat với Shop Owner Icon (hiện khi đã login) */}
+                            {effectiveRole !== 'GUEST' && (
+                                <button
+                                    type="button"
+                                    aria-label="Tin nhắn với Shop"
+                                    onClick={() => openChat()}
+                                    className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors cursor-pointer"
+                                    title="Trò chuyện với Atelier Shop Owner"
+                                >
+                                    <MessageCircle className="w-5 h-5" />
+                                    {chatUnreadCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-bold leading-tight flex items-center justify-center shadow-xs animate-pulse">
+                                            {chatUnreadCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
+
                             {/* Notifications Icon (hiện khi đã login) */}
                             {effectiveRole !== 'GUEST' && (
                                 <Link
@@ -461,6 +482,19 @@ export const Header: React.FC<HeaderProps> = ({
                                 <Heart className="w-4 h-4" />
                                 <span>Yêu thích ({effectiveWishlistCount})</span>
                             </Link>
+                            {effectiveRole !== 'GUEST' && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsMobileMenuOpen(false);
+                                        openChat();
+                                    }}
+                                    className="flex items-center gap-1.5 hover:text-black font-medium cursor-pointer"
+                                >
+                                    <MessageCircle className="w-4 h-4" />
+                                    <span>Chat {chatUnreadCount > 0 && `(${chatUnreadCount})`}</span>
+                                </button>
+                            )}
                             <Link to="/cart" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 hover:text-black font-medium">
                                 <ShoppingBag className="w-4 h-4" />
                                 <span>Giỏ hàng ({effectiveCartCount})</span>

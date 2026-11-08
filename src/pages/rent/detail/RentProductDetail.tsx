@@ -18,6 +18,7 @@ import { getPublicRentProductDetailApi } from '../../../services/rentProduct.api
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { getUserProfileAddress, calculateDynamicShippingFee, normalizeShopBranch } from '../../../utils/address';
 import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
+import { useCustomerChat } from '../../../context/customer-chat-context';
 
 type TabKey = 'desc' | 'terms' | 'audit' | 'deposit' | 'shipping';
 
@@ -25,6 +26,7 @@ export const RentProductDetail: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { openChat } = useCustomerChat();
 
   const [apiProduct, setApiProduct] = useState<RentProductDetailData | null>(null);
 
@@ -297,7 +299,14 @@ export const RentProductDetail: React.FC = () => {
 
   const handleChat = () => {
     handleProtectedAction('trò chuyện trực tiếp với Shop Owner', () => {
-      navigate('/chat');
+      openChat({
+        serviceType: 'RENT',
+        product: {
+          title: product.title,
+          image: product.images[0]?.src || '',
+          price: product.pricePerDay,
+        },
+      });
     });
   };
 
