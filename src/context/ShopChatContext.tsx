@@ -1,0 +1,477 @@
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { getSocket } from "../services/socket";
+import {
+  getConversationsApi,
+  getMessagesApi,
+  sendMessageApi,
+  deleteConversationApi,
+} from "../services/chat.api";
+import type {
+  ConversationItem,
+  ChatMessageItem,
+} from "../services/chat.api";
+import { useAuth } from "../hooks/useAuth";
+
+interface ShopChatContextType {
+  isOpen: boolean;
+  activeTab: "RENT" | "THRIFT";
+  conversations: ConversationItem[];
+  activeConversation: ConversationItem | null;
+  messages: ChatMessageItem[];
+  unreadTotal: number;
+  unreadRent: number;
+  unreadThrift: number;
+  isCustomerTyping: boolean;
+  isLoadingConversations: boolean;
+  isLoadingMessages: boolean;
+  openChatDrawer: (tab?: "RENT" | "THRIFT", conversationId?: string) => void;
+  closeChatDrawer: () => void;
+  setActiveTab: (tab: "RENT" | "THRIFT") => void;
+  selectConversation: (conversation: ConversationItem | null) => void;
+  sendMessage: (text: string, imageUrl?: string) => Promise<void>;
+  sendTyping: (isTyping: boolean) => void;
+  deleteConversation: (conversationId: string) => Promise<boolean>;
+  refreshConversations: () => Promise<void>;
+}
+
+const ShopChatContext = createContext<ShopChatContextType | undefined>(undefined);
+
+export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const currentUserId = user?._id || user?.id || "";
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"RENT" | "THRIFT">("RENT");
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [activeConversation, setActiveConversation] = useState<ConversationItem | null>(null);
+  const [messages, setMessages] = useState<ChatMessageItem[]>([]);
+  const [isCustomerTyping, setIsCustomerTyping] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
+  const activeConvRef = useRef<ConversationItem | null>(null);
+  activeConvRef.current = activeConversation;
+
+  // Tải danh sách cuộc trò chuyện THẬT từ MongoDB
+  const refreshConversations = useCallback(async () => {
+    try {
+      setIsLoadingConversations(true);
+      const data = await getConversationsApi();
+      if (Array.isArray(data)) {
+        const uniqueMap = new Map<string, ConversationItem>();
+        data.forEach((c) => {
+          if (c?._id) {
+            const senderIdStr =
+              typeof c.lastMessage?.senderId === "object"
+                ? c.lastMessage?.senderId?._id?.toString()
+                : c.lastMessage?.senderId?.toString();
+            // Khách gửi tin nhắn và Shop chưa mở xem -> tính là 1 người có tin chưa đọc
+            const isFromOther = senderIdStr && senderIdStr !== currentUserId;
+            const initialUnread = c.unreadCount !== undefined ? c.unreadCount : (isFromOther ? 1 : 0);
+            uniqueMap.set(String(c._id), {
+              ...c,
+              unreadCount: initialUnread,
+            });
+          }
+        });
+        setConversations(Array.from(uniqueMap.values()));
+      }
+    } catch (err) {
+      console.warn("⚠️ [ShopChat] Could not load conversations from server:", err);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }, [currentUserId]);
+
+  // Kết nối Socket.IO toàn cục lắng nghe tin nhắn real-time
+  useEffect(() => {
+    refreshConversations();
+
+    const socket = getSocket();
+
+    const handleNewMessage = (msg: ChatMessageItem & { serviceType?: "RENT" | "THRIFT" }) => {
+      console.log("📨 [ShopChat] Real-time message received:", msg);
+
+      const currentActive = activeConvRef.current;
+      const isCurrentRoom = currentActive && currentActive._id === msg.conversationId;
+
+      if (isCurrentRoom) {
+        setMessages((prev) => {
+          const msgIdStr = String(msg._id);
+          const clientMsgIdStr = msg.clientMsgId ? String(msg.clientMsgId) : "";
+
+          // 1. Đã có trong danh sách -> Bỏ qua
+          if (prev.some((m) => String(m._id) === msgIdStr)) return prev;
+
+          // 2. Trùng clientMsgId với tin optimistic -> Thay thế
+          if (clientMsgIdStr && prev.some((m) => String(m._id) === clientMsgIdStr)) {
+            return prev.map((m) => (String(m._id) === clientMsgIdStr ? msg : m));
+          }
+
+          // 3. Nếu là tin nhắn của chính mình và có tin tạm cùng text -> Thay thế
+          const senderIdStr = typeof msg.senderId === "object" ? String(msg.senderId._id) : String(msg.senderId);
+          if (senderIdStr === String(currentUserId)) {
+            const tempIndex = prev.findIndex((m) => String(m._id).startsWith("temp-") && m.text === msg.text);
+            if (tempIndex !== -1) {
+              const clone = [...prev];
+              clone[tempIndex] = msg;
+              return clone;
+            }
+          }
+
+          // 4. Tin nhắn từ người khác -> Thêm mới
+          return [...prev, msg];
+        });
+      }
+
+      // Cập nhật conversation list và unread badge chính xác theo từng tab RENT / THRIFT
+      setConversations((prev) => {
+        let found = false;
+        const convIdStr = String(msg.conversationId);
+        const senderIdStr = typeof msg.senderId === "object" ? String(msg.senderId._id) : String(msg.senderId);
+        const isFromOther = senderIdStr !== String(currentUserId);
+
+        const updated = prev.map((c) => {
+          if (String(c._id) === convIdStr) {
+            found = true;
+            const targetService = msg.serviceType || c.serviceType || "RENT";
+            return {
+              ...c,
+              serviceType: targetService,
+              lastMessage: {
+                text: msg.text || (msg.imageUrl ? "[Hình ảnh]" : ""),
+                senderId: msg.senderId,
+                imageUrl: msg.imageUrl,
+                createdAt: msg.createdAt,
+              },
+              // Nếu đang mở đúng phòng chat này thì unreadCount = 0, ngược lại tăng số tin chưa đọc của người này
+              unreadCount: isCurrentRoom ? 0 : (c.unreadCount || 0) + (isFromOther ? 1 : 0),
+              updatedAt: msg.createdAt || new Date().toISOString(),
+            };
+          }
+          return c;
+        });
+
+        if (!found) {
+          // Thêm hội thoại mới vào danh sách
+          const targetService = msg.serviceType || "RENT";
+          const newConv: ConversationItem = {
+            _id: convIdStr,
+            participants: [
+              typeof msg.senderId === "object"
+                ? msg.senderId
+                : { _id: msg.senderId, fullName: "Khách hàng mới", role: "USER" },
+            ],
+            serviceType: targetService,
+            lastMessage: {
+              text: msg.text || (msg.imageUrl ? "[Hình ảnh]" : ""),
+              senderId: msg.senderId,
+              imageUrl: msg.imageUrl,
+              createdAt: msg.createdAt,
+            },
+            unreadCount: isCurrentRoom ? 0 : 1,
+            createdAt: msg.createdAt || new Date().toISOString(),
+            updatedAt: msg.createdAt || new Date().toISOString(),
+          };
+          updated.unshift(newConv);
+        }
+
+        // Sắp xếp hội thoại có tin nhắn mới nhất lên đầu
+        return updated.sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+      });
+    };
+
+    const handleConversationUpdated = (updatedConv: ConversationItem) => {
+      setConversations((prev) => {
+        const convIdStr = String(updatedConv._id);
+        const index = prev.findIndex((c) => String(c._id) === convIdStr);
+        if (index > -1) {
+          const clone = [...prev];
+          clone[index] = {
+            ...clone[index],
+            ...updatedConv,
+            unreadCount: clone[index].unreadCount,
+            serviceType: updatedConv.serviceType || clone[index].serviceType || "RENT",
+          };
+          return clone.sort(
+            (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+        }
+        return [
+          {
+            ...updatedConv,
+            unreadCount: 1,
+            serviceType: updatedConv.serviceType || "RENT",
+          },
+          ...prev,
+        ];
+      });
+    };
+
+    const handleUserTyping = (data: { conversationId: string; userId: string; fullName?: string }) => {
+      if (activeConvRef.current && activeConvRef.current._id === data.conversationId) {
+        if (data.userId !== currentUserId) {
+          setIsCustomerTyping(true);
+        }
+      }
+    };
+
+    const handleUserStopTyping = (data: { conversationId: string }) => {
+      if (activeConvRef.current && activeConvRef.current._id === data.conversationId) {
+        setIsCustomerTyping(false);
+      }
+    };
+
+    const handleConversationDeleted = (data: { conversationId: string }) => {
+      setConversations((prev) => prev.filter((c) => c._id !== data.conversationId));
+      if (activeConvRef.current && activeConvRef.current._id === data.conversationId) {
+        setActiveConversation(null);
+        setMessages([]);
+      }
+    };
+
+    socket.on("new_message", handleNewMessage);
+    socket.on("conversation_updated", handleConversationUpdated);
+    socket.on("user_typing", handleUserTyping);
+    socket.on("user_stop_typing", handleUserStopTyping);
+    socket.on("conversation_deleted", handleConversationDeleted);
+
+    // Polling dự phòng mỗi 5s để đảm bảo badge luôn đồng bộ tuyệt đối
+    const pollInterval = setInterval(() => {
+      refreshConversations();
+    }, 5000);
+
+    return () => {
+      clearInterval(pollInterval);
+      socket.off("new_message", handleNewMessage);
+      socket.off("conversation_updated", handleConversationUpdated);
+      socket.off("user_typing", handleUserTyping);
+      socket.off("user_stop_typing", handleUserStopTyping);
+      socket.off("conversation_deleted", handleConversationDeleted);
+    };
+  }, [currentUserId, refreshConversations]);
+
+  // Tính số lượng NGƯỜI CHAT (số khách hàng gửi tin nhắn chưa đọc) theo từng Tab và Tổng cộng
+  const { unreadRent, unreadThrift, unreadTotal } = useMemo(() => {
+    let rentPeople = 0;
+    let thriftPeople = 0;
+
+    conversations.forEach((c) => {
+      // Đếm theo số người chat (mỗi cuộc hội thoại có tin chưa đọc tính là 1 người)
+      if ((c.unreadCount || 0) > 0) {
+        if (c.serviceType === "THRIFT") {
+          thriftPeople += 1;
+        } else {
+          rentPeople += 1;
+        }
+      }
+    });
+
+    return {
+      unreadRent: rentPeople,
+      unreadThrift: thriftPeople,
+      unreadTotal: rentPeople + thriftPeople,
+    };
+  }, [conversations]);
+
+  // Mở Drawer/Popover chat
+  const openChatDrawer = (tab?: "RENT" | "THRIFT", conversationId?: string) => {
+    if (tab) setActiveTab(tab);
+    setIsOpen(true);
+
+    if (conversationId) {
+      const found = conversations.find((c) => c._id === conversationId);
+      if (found) selectConversation(found);
+    }
+  };
+
+  const closeChatDrawer = () => {
+    const socket = getSocket();
+    if (activeConversation) {
+      socket.emit("leave_room", { conversationId: activeConversation._id });
+    }
+    setIsOpen(false);
+    setActiveConversation(null);
+  };
+
+  // Chọn một hội thoại để chat chi tiết (hoặc null để đóng đoạn chat đang xem)
+  const selectConversation = async (conversation: ConversationItem | null) => {
+    const socket = getSocket();
+
+    if (!conversation) {
+      if (activeConversation) {
+        socket.emit("leave_room", { conversationId: activeConversation._id });
+      }
+      setActiveConversation(null);
+      setMessages([]);
+      setIsCustomerTyping(false);
+      return;
+    }
+
+    // Rời room cũ nếu có
+    if (activeConversation && activeConversation._id !== conversation._id) {
+      socket.emit("leave_room", { conversationId: activeConversation._id });
+    }
+
+    setActiveConversation(conversation);
+    setIsCustomerTyping(false);
+
+    // Xóa unread count của cuộc trò chuyện này (giảm số người chưa đọc đi 1)
+    setConversations((prev) =>
+      prev.map((c) => (String(c._id) === String(conversation._id) ? { ...c, unreadCount: 0 } : c))
+    );
+
+    // Tham gia room qua Socket
+    socket.emit("join_room", { conversationId: conversation._id });
+
+    // Tải tin nhắn chi tiết THẬT từ MongoDB
+    try {
+      setIsLoadingMessages(true);
+      const res = await getMessagesApi(conversation._id);
+      setMessages(res.messages || []);
+    } catch (err) {
+      console.warn("⚠️ [ShopChat] Lỗi tải tin nhắn cuộc trò chuyện:", err);
+      setMessages([]);
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  };
+
+  // Xóa một cuộc trò chuyện vĩnh viễn
+  const deleteConversation = async (conversationId: string): Promise<boolean> => {
+    try {
+      await deleteConversationApi(conversationId);
+      setConversations((prev) => prev.filter((c) => c._id !== conversationId));
+      if (activeConversation && activeConversation._id === conversationId) {
+        const socket = getSocket();
+        socket.emit("leave_room", { conversationId });
+        setActiveConversation(null);
+        setMessages([]);
+      }
+      return true;
+    } catch (err) {
+      console.error("⚠️ [ShopChat] Lỗi xóa cuộc trò chuyện:", err);
+      return false;
+    }
+  };
+
+  // Gửi tin nhắn real-time
+  const sendMessage = async (text: string, imageUrl?: string) => {
+    if (!activeConversation) return;
+
+    const trimmed = text.trim();
+    if (!trimmed && !imageUrl) return;
+
+    const socket = getSocket();
+    const tempId = `temp-${Date.now()}`;
+    const newMsg: ChatMessageItem = {
+      _id: tempId,
+      conversationId: activeConversation._id,
+      senderId: currentUserId || "shop_owner",
+      text: trimmed,
+      imageUrl: imageUrl || null,
+      clientMsgId: tempId,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Optimistic UI update
+    setMessages((prev) => [...prev, newMsg]);
+
+    // Gửi qua Socket.IO kèm clientMsgId để đối soát không bị nhân đôi
+    socket.emit(
+      "send_message",
+      {
+        conversationId: activeConversation._id,
+        text: trimmed,
+        imageUrl,
+        clientMsgId: tempId,
+      },
+      (ack: { success?: boolean; data?: ChatMessageItem }) => {
+        if (ack?.success && ack?.data) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m._id === tempId ? { ...ack.data!, clientMsgId: tempId } : m
+            )
+          );
+        }
+      }
+    );
+
+    // Cập nhật conversation list
+    setConversations((prev) =>
+      prev
+        .map((c) => {
+          if (c._id === activeConversation._id) {
+            return {
+              ...c,
+              lastMessage: {
+                text: trimmed,
+                senderId: currentUserId,
+                imageUrl,
+                createdAt: newMsg.createdAt,
+              },
+              updatedAt: newMsg.createdAt,
+            };
+          }
+          return c;
+        })
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    );
+
+    // Call API song song đảm bảo tính bền vững
+    try {
+      await sendMessageApi(activeConversation._id, { text: trimmed, imageUrl });
+    } catch (err) {
+      console.warn("⚠️ [ShopChat] HTTP API fallback send notice:", err);
+    }
+  };
+
+  // Gửi trạng thái đang gõ
+  const sendTyping = (typing: boolean) => {
+    if (!activeConversation) return;
+    const socket = getSocket();
+    socket.emit(typing ? "typing" : "stop_typing", {
+      conversationId: activeConversation._id,
+    });
+  };
+
+  return (
+    <ShopChatContext.Provider
+      value={{
+        isOpen,
+        activeTab,
+        conversations,
+        activeConversation,
+        messages,
+        unreadTotal,
+        unreadRent,
+        unreadThrift,
+        isCustomerTyping,
+        isLoadingConversations,
+        isLoadingMessages,
+        openChatDrawer,
+        closeChatDrawer,
+        setActiveTab,
+        selectConversation,
+        sendMessage,
+        sendTyping,
+        deleteConversation,
+        refreshConversations,
+      }}
+    >
+      {children}
+    </ShopChatContext.Provider>
+  );
+};
+
+export const useShopChat = (): ShopChatContextType => {
+  const context = useContext(ShopChatContext);
+  if (!context) {
+    throw new Error("useShopChat must be used within a ShopChatProvider");
+  }
+  return context;
+};
+
+export default ShopChatContext;

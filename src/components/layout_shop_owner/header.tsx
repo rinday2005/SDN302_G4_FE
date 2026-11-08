@@ -2,6 +2,7 @@ import React, { useContext, useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "../../context/auth-context";
 import { defaultShopProfile } from "../../pages/data/shop/dashboardData";
+import { useShopChat } from "../../context/ShopChatContext";
 
 interface ShopHeaderProps {
   onToggleSidebar?: () => void;
@@ -15,6 +16,7 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const navigate = useNavigate();
+  const { openChatDrawer, unreadTotal } = useShopChat();
 
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -101,6 +103,24 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
             <span className="material-symbols-outlined text-[16px]">storefront</span>
             <span className="hidden sm:inline">Xem sàn</span>
           </Link>
+
+          {/* NÚT CHAT KHÁCH HÀNG REAL-TIME (CẠNH NOTIFICATIONS) */}
+          <button
+            type="button"
+            onClick={() => openChatDrawer()}
+            className="p-1.5 text-[#57534e] hover:text-[#141310] hover:bg-[#ebe8e1] transition-colors rounded-lg relative cursor-pointer group flex items-center justify-center"
+            title={unreadTotal > 0 ? `Có ${unreadTotal} người đang gửi tin nhắn` : "Tin nhắn khách hàng (Live Chat Socket.IO)"}
+            aria-label="Tin nhắn khách hàng"
+          >
+            <span className="material-symbols-outlined text-[21px] block transition-transform group-hover:scale-110">
+              chat
+            </span>
+            {unreadTotal > 0 && (
+              <span className="min-w-[19px] h-[19px] px-1 rounded-full bg-rose-600 text-white font-mono text-[10px] font-bold flex items-center justify-center absolute -top-1 -right-1 shadow-sm border-2 border-[#fdf9f2] animate-bounce z-10 pointer-events-none">
+                {unreadTotal > 99 ? "99+" : unreadTotal}
+              </span>
+            )}
+          </button>
 
           {/* Nút thông báo */}
           <Link
