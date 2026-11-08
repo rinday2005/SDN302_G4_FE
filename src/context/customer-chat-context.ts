@@ -27,6 +27,7 @@ export interface CustomerChatContextType {
   selectConversation: (conversation: ConversationItem) => void;
   sendMessage: (text: string, imageUrl?: string) => Promise<void>;
   sendTyping: (isTyping: boolean) => void;
+  deleteConversation: (conversationId: string) => Promise<boolean>;
   clearProductContext: () => void;
   refreshConversations: () => Promise<void>;
 }
@@ -51,6 +52,7 @@ export const useCustomerChat = (): CustomerChatContextType => {
       selectConversation: () => {},
       sendMessage: async () => {},
       sendTyping: () => {},
+      deleteConversation: async () => false,
       clearProductContext: () => {},
       refreshConversations: async () => {},
     };

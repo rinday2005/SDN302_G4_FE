@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useCustomerChat } from "../../context/customer-chat-context";
 import { useAuth } from "../../hooks/useAuth";
+import type { ConversationItem } from "../../services/chat.api";
 
 export const CustomerChatBox: React.FC = () => {
   const {
@@ -16,6 +17,7 @@ export const CustomerChatBox: React.FC = () => {
     selectConversation,
     sendMessage,
     sendTyping,
+    deleteConversation,
     clearProductContext,
   } = useCustomerChat();
 
@@ -24,8 +26,27 @@ export const CustomerChatBox: React.FC = () => {
 
   const [inputVal, setInputVal] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<ConversationItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Xác nhận xóa hội thoại
+  const handleConfirmDelete = async () => {
+    if (!conversationToDelete) return;
+    setIsDeleting(true);
+    try {
+      const ok = await deleteConversation(conversationToDelete._id);
+      if (ok) {
+        setShowDeleteModal(false);
+        setConversationToDelete(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -274,14 +295,28 @@ export const CustomerChatBox: React.FC = () => {
                           </div>
 
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-[#78716c] truncate line-clamp-1">
+                            <p className="text-xs text-[#78716c] truncate line-clamp-1 flex-1">
                               {conv.lastMessage?.text || "Chưa có tin nhắn"}
                             </p>
-                            {unread > 0 && (
-                              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-rose-600 text-white animate-pulse shrink-0">
-                                {unread}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {unread > 0 && (
+                                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-rose-600 text-white animate-pulse">
+                                  {unread}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConversationToDelete(conv);
+                                  setShowDeleteModal(true);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto p-1.5 rounded-md text-[#a8a29e] hover:text-rose-600 hover:bg-rose-100/70 transition-all cursor-pointer"
+                                title="Xóa cuộc trò chuyện này"
+                              >
+                                <span className="material-symbols-outlined text-[16px] block">delete</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -343,6 +378,19 @@ export const CustomerChatBox: React.FC = () => {
                         </p>
                       </div>
                     </div>
+
+                    {/* Nút xóa chat trên Header */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConversationToDelete(activeConversation);
+                        setShowDeleteModal(true);
+                      }}
+                      className="p-1.5 rounded-lg text-[#78716c] hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all cursor-pointer flex items-center justify-center"
+                      title="Xóa cuộc trò chuyện này"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">delete</span>
+                    </button>
                   </div>
 
                   {/* Pinned Product Banner (Nếu có và đúng là Shop của sản phẩm) */}
@@ -518,6 +566,63 @@ export const CustomerChatBox: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* MODAL XÁC NHẬN XÓA CUỘC TRÒ CHUYỆN */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-[#fdf9f2] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#dddad3] space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                <span className="material-symbols-outlined text-[26px]">delete_forever</span>
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[#141310]">
+                  Xác nhận xóa cuộc trò chuyện?
+                </h3>
+                <p className="text-xs text-[#78716c] mt-1.5 leading-relaxed">
+                  Bạn có chắc chắn muốn xóa toàn bộ lịch sử tin nhắn với Shop này không? Thao tác này sẽ xóa vĩnh viễn và{" "}
+                  <span className="font-semibold text-rose-600">không thể khôi phục</span>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#dddad3]">
+              {/* Nút Hủy */}
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setConversationToDelete(null);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-[#57534e] hover:text-[#141310] bg-[#ebe6dc] hover:bg-[#dddad3] transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+
+              {/* Nút Xóa */}
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                    <span>Xóa</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

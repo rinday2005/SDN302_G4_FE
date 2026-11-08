@@ -11,6 +11,7 @@ import {
   getMessagesApi,
   sendMessageApi,
   getConversationsApi,
+  deleteConversationApi,
   type ConversationItem,
   type ChatMessageItem,
 } from "../services/chat.api";
@@ -360,10 +361,19 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
       });
     };
 
+    const handleConversationDeleted = (data: { conversationId: string }) => {
+      setConversations((prev) => prev.filter((c) => String(c._id) !== String(data.conversationId)));
+      if (activeConvRef.current && String(activeConvRef.current._id) === String(data.conversationId)) {
+        setActiveConversation(null);
+        setMessages([]);
+      }
+    };
+
     socket.on("new_message", handleNewMessage);
     socket.on("conversation_updated", handleConversationUpdated);
     socket.on("user_typing", handleUserTyping);
     socket.on("user_stop_typing", handleUserStopTyping);
+    socket.on("conversation_deleted", handleConversationDeleted);
 
     return () => {
       isSubscribed = false;
@@ -371,6 +381,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
       socket.off("conversation_updated", handleConversationUpdated);
       socket.off("user_typing", handleUserTyping);
       socket.off("user_stop_typing", handleUserStopTyping);
+      socket.off("conversation_deleted", handleConversationDeleted);
     };
   }, [currentUserId, refreshConversations]);
 
@@ -467,6 +478,26 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [activeConversation]
   );
 
+  const deleteConversation = useCallback(
+    async (conversationId: string): Promise<boolean> => {
+      try {
+        await deleteConversationApi(conversationId);
+        setConversations((prev) => prev.filter((c) => String(c._id) !== String(conversationId)));
+        if (activeConvRef.current && String(activeConvRef.current._id) === String(conversationId)) {
+          const socket = getSocket();
+          socket.emit("leave_room", { conversationId });
+          setActiveConversation(null);
+          setMessages([]);
+        }
+        return true;
+      } catch (err) {
+        console.error("⚠️ [CustomerChat] Failed to delete conversation:", err);
+        return false;
+      }
+    },
+    []
+  );
+
   const contextValue: CustomerChatContextType = {
     isOpen,
     conversations,
@@ -482,6 +513,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
     selectConversation,
     sendMessage,
     sendTyping,
+    deleteConversation,
     clearProductContext,
     refreshConversations,
   };
