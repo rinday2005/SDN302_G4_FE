@@ -400,10 +400,11 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
               imageUrl,
               clientMsgId,
             },
-            (ack: { success?: boolean; message?: ChatMessageItem }) => {
-              if (ack?.success && ack.message) {
+            (ack: { success?: boolean; data?: ChatMessageItem; message?: ChatMessageItem }) => {
+              const returnedMsg = ack?.data || ack?.message;
+              if (ack?.success && returnedMsg) {
                 setMessages((prev) =>
-                  prev.map((m) => (m._id === clientMsgId ? (ack.message as ChatMessageItem) : m))
+                  prev.map((m) => (m._id === clientMsgId ? returnedMsg : m))
                 );
               }
             }

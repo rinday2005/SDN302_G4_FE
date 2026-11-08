@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useShopChat } from "../../context/shop-chat-context";
 import type { ConversationItem } from "../../services/chat.api";
 import { useAuth } from "../../hooks/useAuth";
@@ -84,11 +84,50 @@ export const ShopChatDrawer: React.FC = () => {
     }, 1500);
   };
 
-  if (!isOpen) return null;
+  const currentCustomer = useMemo(() => {
+    const parts = activeConversation?.participants || [];
+    const byRole = parts.find((p) => typeof p === "object" && p.role === "USER");
+    if (byRole) return byRole;
 
-  const currentCustomer = activeConversation?.participants?.find(
-    (p) => String(p._id) !== String(currentUserId)
-  ) || activeConversation?.participants?.[0];
+    if (currentUserId) {
+      const byNotMe = parts.find((p) => {
+        const idStr = typeof p === "object" ? String(p._id) : String(p);
+        return idStr !== String(currentUserId);
+      });
+      if (byNotMe) return byNotMe;
+    }
+
+    return parts[0];
+  }, [activeConversation, currentUserId]);
+
+  const currentShop = useMemo(() => {
+    const parts = activeConversation?.participants || [];
+    const byRole = parts.find((p) => typeof p === "object" && p.role === "SHOP_OWNER");
+    if (byRole) return byRole;
+
+    const byProfile = parts.find((p) => typeof p === "object" && Boolean(p.shopProfile?.shopName));
+    if (byProfile) return byProfile;
+
+    if (currentUserId) {
+      const byMe = parts.find((p) => {
+        const idStr = typeof p === "object" ? String(p._id) : String(p);
+        return idStr === String(currentUserId);
+      });
+      if (byMe) return byMe;
+    }
+
+    return parts[1] || parts[0];
+  }, [activeConversation, currentUserId]);
+
+  const custIdStr = currentCustomer
+    ? String(typeof currentCustomer === "object" ? currentCustomer._id : currentCustomer)
+    : "";
+
+  const shopIdStr = currentShop
+    ? String(typeof currentShop === "object" ? currentShop._id : currentShop)
+    : "";
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden font-sans">
@@ -393,10 +432,14 @@ export const ShopChatDrawer: React.FC = () => {
                         const senderRole =
                           typeof m.senderId === "object" ? m.senderId.role : undefined;
 
-                        const isMe =
-                          senderRole === "SHOP_OWNER" ||
-                          senderIdStr === "shop_owner" ||
-                          (Boolean(currentUserId) && String(senderIdStr) === String(currentUserId));
+                        // Xác định rõ: Có phải Khách hàng gửi tin này không?
+                        const isCustomerSender =
+                          senderRole === "USER" ||
+                          (Boolean(custIdStr) && senderIdStr === custIdStr) ||
+                          (Boolean(shopIdStr) && senderIdStr !== shopIdStr && senderIdStr !== "shop_owner");
+
+                        // Tại ShopChatDrawer: Shop Owner là "Me" (bên phải), Khách hàng là bên trái
+                        const isMe = !isCustomerSender;
 
                         return (
                           <div

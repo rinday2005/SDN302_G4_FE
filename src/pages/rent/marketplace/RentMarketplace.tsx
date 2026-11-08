@@ -797,7 +797,7 @@ const RentMarketplace: React.FC = () => {
         </div>
       </section>
       {/* ── PRODUCT GRID ── */}
-      <section className="w-full px-6 lg:px-12 pb-16 max-w-7xl mx-auto">
+      <section className="w-full pb-16">
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (

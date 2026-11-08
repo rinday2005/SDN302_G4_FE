@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useCustomerChat } from "../../context/customer-chat-context";
 import { useAuth } from "../../hooks/useAuth";
 
@@ -63,8 +63,6 @@ export const CustomerChatBox: React.FC = () => {
     clearProductContext();
   };
 
-  if (!isOpen) return null;
-
   // Lọc danh sách Shop theo ô tìm kiếm
   const filteredConversations = conversations.filter((c) => {
     if (!searchTerm.trim()) return true;
@@ -76,19 +74,49 @@ export const CustomerChatBox: React.FC = () => {
     return shopName.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  // Shop đang được chọn
-  const activeShopParticipant =
-    activeConversation?.participants?.find((p) => {
-      const pRole = typeof p === "object" ? p.role : undefined;
-      const pId = typeof p === "object" ? String(p._id) : String(p);
-      if (pRole === "SHOP_OWNER") return true;
-      if (Boolean(currentUserId) && pId !== String(currentUserId)) return true;
-      return false;
-    }) || activeConversation?.participants?.[0];
+  // 1. Xác định Shop participant và Customer participant trong cuộc trò chuyện
+  const activeShopParticipant = useMemo(() => {
+    const parts = activeConversation?.participants || [];
+    const byRole = parts.find((p) => typeof p === "object" && p.role === "SHOP_OWNER");
+    if (byRole) return byRole;
 
-  const activeShopIdStr = activeShopParticipant?._id
-    ? String(activeShopParticipant._id)
-    : (typeof activeShopParticipant === "string" ? String(activeShopParticipant) : "");
+    const byProfile = parts.find((p) => typeof p === "object" && Boolean(p.shopProfile?.shopName));
+    if (byProfile) return byProfile;
+
+    if (currentUserId) {
+      const byNotMe = parts.find((p) => {
+        const idStr = typeof p === "object" ? String(p._id) : String(p);
+        return idStr !== String(currentUserId);
+      });
+      if (byNotMe) return byNotMe;
+    }
+
+    return parts[1] || parts[0];
+  }, [activeConversation, currentUserId]);
+
+  const activeCustomerParticipant = useMemo(() => {
+    const parts = activeConversation?.participants || [];
+    const byRole = parts.find((p) => typeof p === "object" && p.role === "USER");
+    if (byRole) return byRole;
+
+    if (currentUserId) {
+      const byMe = parts.find((p) => {
+        const idStr = typeof p === "object" ? String(p._id) : String(p);
+        return idStr === String(currentUserId);
+      });
+      if (byMe) return byMe;
+    }
+
+    return parts[0];
+  }, [activeConversation, currentUserId]);
+
+  const activeShopIdStr = activeShopParticipant
+    ? String(typeof activeShopParticipant === "object" ? activeShopParticipant._id : activeShopParticipant)
+    : "";
+
+  const activeCustomerIdStr = activeCustomerParticipant
+    ? String(typeof activeCustomerParticipant === "object" ? activeCustomerParticipant._id : activeCustomerParticipant)
+    : "";
 
   const activeShopName =
     activeShopParticipant?.shopProfile?.shopName ||
@@ -106,6 +134,8 @@ export const CustomerChatBox: React.FC = () => {
     activeShopIdStr &&
     (!productContext.shopId || String(productContext.shopId) === activeShopIdStr)
   );
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden font-sans">
@@ -413,7 +443,8 @@ export const CustomerChatBox: React.FC = () => {
                         const isShopSender =
                           senderRole === "SHOP_OWNER" ||
                           senderIdStr === "shop_owner" ||
-                          (Boolean(activeShopIdStr) && senderIdStr === activeShopIdStr);
+                          (Boolean(activeShopIdStr) && senderIdStr === activeShopIdStr) ||
+                          (Boolean(activeCustomerIdStr) && senderIdStr !== activeCustomerIdStr);
 
                         // Ở phía màn hình Customer: Tin của Customer (Me) là tin KHÔNG PHẢI của Shop
                         const isMe = !isShopSender;
