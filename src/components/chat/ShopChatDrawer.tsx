@@ -272,12 +272,6 @@ export const ShopChatDrawer: React.FC = () => {
                             </span>
                           </div>
 
-                          {conv.orderTitle && (
-                            <div className="text-[10px] text-amber-900 font-semibold truncate bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 mb-1">
-                              {conv.orderTitle}
-                            </div>
-                          )}
-
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-[11px] text-[#57534e] truncate flex-1">
                               {conv.lastMessage?.text || "Bắt đầu cuộc trò chuyện..."}
@@ -376,7 +370,7 @@ export const ShopChatDrawer: React.FC = () => {
                               Khách đang soạn tin nhắn...
                             </span>
                           ) : (
-                            <span>{currentCustomer?.email || "Khách hàng đăng kiểm ReUse Hub"}</span>
+                            <span>{currentCustomer?.email || "Trực tuyến"}</span>
                           )}
                         </div>
                       </div>
