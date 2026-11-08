@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useShop } from '../../../context/ShopContext';
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
 import type {
   GalleryImage,
   ThriftConvertData,
@@ -16,17 +18,41 @@ import {
 
 const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   const navigate = useNavigate();
+  const { products } = useShop();
+
+  // Tìm sản phẩm tương ứng từ MongoDB ShopContext
+  const matchedProduct = useMemo(() => {
+    if (!products || products.length === 0) return undefined;
+    return (
+      products.find((p) => {
+        const cleanTarget = targetId.toLowerCase();
+        const cleanSku = (p.sku || '').toLowerCase();
+        return (
+          cleanSku === cleanTarget ||
+          cleanTarget.includes(cleanSku) ||
+          (cleanSku.length >= 4 && cleanTarget.includes(cleanSku.slice(-4)))
+        );
+      }) || products[0]
+    );
+  }, [products, targetId]);
 
   const storageKey = `REUSE_HUB_THRIFT_CONVERT_${targetId}`;
 
-  // State chính của form: Đọc từ localStorage theo targetId để F5 không bị reset
+  // State chính của form: Đọc từ localStorage theo targetId để F5 không bị reset (tự động loại bỏ dữ liệu camera cũ)
   const [formData, setFormData] = useState<ThriftConvertData>(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Đảm bảo dữ liệu đọc lên đúng ID hiện vật hiện tại
-        if (parsed.unitId === targetId || parsed.sku === targetId) {
+        const titleLower = (parsed.title || '').toLowerCase();
+        const catLower = (parsed.category || '').toLowerCase();
+        const isOldCamera =
+          titleLower.includes('hasselblad') ||
+          titleLower.includes('leica') ||
+          catLower.includes('camera') ||
+          catLower.includes('máy ảnh');
+
+        if (!isOldCamera && (parsed.unitId === targetId || parsed.sku === targetId)) {
           return parsed;
         }
       }
@@ -34,8 +60,72 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
       console.error('Lỗi khi đọc localStorage:', e);
     }
     // Nếu chưa có trong localStorage thì lấy data cấu hình chuẩn từ file data
-    return getInitialThriftDataForUnit(targetId);
+    return getInitialThriftDataForUnit(targetId, matchedProduct);
   });
+
+  // Tự động đồng bộ sản phẩm thực tế từ MongoDB khi matchedProduct tải xong hoặc khi formData còn lưu data camera cũ
+  useEffect(() => {
+    if (matchedProduct) {
+      const titleLower = (formData.title || '').toLowerCase();
+      const catLower = (formData.category || '').toLowerCase();
+      const isOldCamera =
+        titleLower.includes('hasselblad') ||
+        titleLower.includes('leica') ||
+        catLower.includes('camera') ||
+        catLower.includes('máy ảnh');
+
+      if (isOldCamera || !formData.title || formData.unitId !== targetId) {
+        const fresh = getInitialThriftDataForUnit(targetId, matchedProduct);
+        setFormData(fresh);
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(fresh));
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [matchedProduct, targetId, formData.title, formData.category, formData.unitId, storageKey]);
+
+  // Danh sách hiện vật chuyển đổi đồng bộ từ dữ liệu thật
+  const availableSpecimens = useMemo(() => {
+    if (!products || products.length === 0) {
+      return AVAILABLE_CONVERT_SPECIMENS;
+    }
+    const list: { id: string; name: string; price: string }[] = [];
+    products.forEach((p) => {
+      const skuLower = (p.sku || '').toLowerCase();
+      const nameLower = (p.name || '').toLowerCase();
+      if (
+        skuLower.startsWith('mock-') ||
+        nameLower.includes('hasselblad') ||
+        nameLower.includes('leica') ||
+        nameLower.includes('sony alpha') ||
+        nameLower.includes('canon eos')
+      ) {
+        return;
+      }
+      const total = Number(p.totalUnits) || 1;
+      for (let i = 1; i <= total; i++) {
+        const id = `INV-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(2, '0')}`;
+        const vInfo = getUnitVariantAndCondition(
+          p.name,
+          String(p.category || ''),
+          i,
+          total,
+          p.rentingUnits || 0,
+          p.maintenanceUnits || 0
+        );
+        const origPrice = p.replacementValue || (p.pricePerDay || 100000) * 30;
+        const estPrice = Math.round((origPrice * (1 - vInfo.discountPercent / 100)) / 1000) * 1000;
+        list.push({
+          id,
+          name: `${p.name} - ${vInfo.variantShort}`,
+          price: `${new Intl.NumberFormat('vi-VN').format(estPrice)} ₫`,
+        });
+      }
+    });
+    return list.length > 0 ? list : AVAILABLE_CONVERT_SPECIMENS;
+  }, [products]);
 
   // UI state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -200,7 +290,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   const handleResetDemo = () => {
     if (window.confirm(`Bạn có chắc muốn đặt lại dữ liệu form của hiện vật ${formData.unitId} về mặc định ban đầu?`)) {
       localStorage.removeItem(storageKey);
-      setFormData(getInitialThriftDataForUnit(targetId));
+      setFormData(getInitialThriftDataForUnit(targetId, matchedProduct));
       showToast('Đã đặt lại dữ liệu form về trạng thái ban đầu.');
     }
   };
@@ -248,7 +338,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
             {/* Bộ chọn hiện vật thực tế: Bấm hiện vật nào chuyển ngay sang hiện vật đó */}
             <div className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant/60 shadow-xs">
               <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-                <span className="material-symbols-outlined text-[15px] text-primary">camera</span>
+                <span className="material-symbols-outlined text-[15px] text-primary">inventory_2</span>
                 Đổi hiện vật:
               </span>
               <select
@@ -256,7 +346,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 onChange={(e) => handleSelectSpecimen(e.target.value)}
                 className="bg-surface text-xs font-semibold text-on-surface px-2.5 py-1 rounded border border-outline-variant focus:outline-none cursor-pointer"
               >
-                {AVAILABLE_CONVERT_SPECIMENS.map((spec) => (
+                {availableSpecimens.map((spec) => (
                   <option key={spec.id} value={spec.id}>
                     #{spec.id} — {spec.name.slice(0, 30)}... ({spec.price})
                   </option>
@@ -552,7 +642,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 INSPECT
               </span>
               <span className={`font-label-sm text-label-sm ${activeTimelineStep === 4 ? 'opacity-90' : 'text-on-surface-variant'}`}>
-                Đối kiểm quang &amp; buồng máy
+                Kiểm định chất lượng &amp; form dáng
               </span>
             </div>
 
@@ -696,7 +786,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                       Return Received (Đã nhập kho xưởng)
                     </span>
                     <p className="font-label-sm text-label-sm text-on-surface-variant leading-snug">
-                      Hiện vật đã được bưu tá Nanuk giao về kho an toàn (Trạm tủ ẩm A2, Q.1, TP. HCM).
+                      Hiện vật đã được bàn giao về kho xưởng ReUse Hub an toàn.
                     </p>
                   </div>
                 </div>
@@ -708,10 +798,10 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   </span>
                   <div className="flex flex-col">
                     <span className="font-title-md text-title-md text-xs font-semibold text-on-surface">
-                      Inspection Completed (Giám định buồng máy)
+                      Inspection Completed (Kiểm định chất lượng)
                     </span>
                     <p className="font-label-sm text-label-sm text-on-surface-variant leading-snug">
-                      Biên bản quang học đạt Grade {formData.condition.split(' ')[0]} 98.0%, cảm biến và thấu kính đạt chuẩn thẩm định.
+                      Biên bản kiểm định đạt {formData.condition}, chất liệu và phụ kiện đạt quy chuẩn mở bán THRIFT.
                     </p>
                   </div>
                 </div>
@@ -921,20 +1011,20 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   onChange={(e) => handleInputChange('condition', e.target.value)}
                   className="w-full bg-surface px-space-md py-space-sm rounded text-on-surface font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-primary shadow-sm border border-outline-variant/40 disabled:opacity-75 cursor-pointer"
                 >
-                  <option value="Mint- (98.0% - Đã qua thẩm định buồng máy)">
-                    Mint- (98.0% - Đã qua thẩm định buồng máy)
+                  <option value="Chuẩn Thrift (79.0% - Đã kiểm định & khử khuẩn xưởng)">
+                    Chuẩn Thrift (79.0% - Đã kiểm định & khử khuẩn xưởng)
                   </option>
-                  <option value="Near Mint (99.0% - Hoàn hảo như mới)">
-                    Near Mint (99.0% - Hoàn hảo như mới)
+                  <option value="Tốt (86.0% - Vải & form dáng nguyên bản)">
+                    Tốt (86.0% - Vải & form dáng nguyên bản)
                   </option>
-                  <option value="Excellent (95.0% - Dấu vết sử dụng rất ít)">
-                    Excellent (95.0% - Dấu vết sử dụng rất ít)
+                  <option value="Rất tốt (92.0% - Dấu vết sử dụng rất ít)">
+                    Rất tốt (92.0% - Dấu vết sử dụng rất ít)
                   </option>
-                  <option value="Good Vintage (86.0% - Đã bảo dưỡng CLA)">
-                    Good Vintage (86.0% - Đã bảo dưỡng CLA)
+                  <option value="Like New (96.0% - Hoàn hảo như mới)">
+                    Like New (96.0% - Hoàn hảo như mới)
                   </option>
-                  <option value="Very Good (90.0% - Trầy xước nhẹ viền vỏ)">
-                    Very Good (90.0% - Trầy xước nhẹ viền vỏ)
+                  <option value="Nguyên bản (99.0% - Tiêu chuẩn cao cấp)">
+                    Nguyên bản (99.0% - Tiêu chuẩn cao cấp)
                   </option>
                 </select>
               </div>
@@ -1063,7 +1153,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-1 font-label-sm text-label-sm text-secondary bg-secondary/10 px-2 py-0.5 rounded font-medium">
-                    <span className="material-symbols-outlined text-[14px]">photo_camera</span>
+                    <span className="material-symbols-outlined text-[14px]">verified</span>
                     Ảnh thực tế đối kiểm
                   </span>
                   {!isAlreadyConverted && (
@@ -1127,10 +1217,10 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   </span>
                   <div className="flex flex-col">
                     <span className="font-label-md text-label-md text-on-surface font-semibold">
-                      Insured White-Glove Nanuk Crate Courier
+                      Insured Standard Eco Courier
                     </span>
                     <span className="font-label-sm text-label-sm text-on-surface-variant">
-                      Vận chuyển chống sốc chuyên dụng kèm tem niêm phong chì ReUse Hub
+                      Vận chuyển bảo đảm tiêu chuẩn kèm tem niêm phong ReUse Hub
                     </span>
                   </div>
                 </div>
@@ -1472,7 +1562,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
 
 export const ConvertToThrift: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const targetId = id || 'INV-HB907-01';
+  const targetId = id || 'INV-DRES-04';
 
   return <ConvertToThriftForm key={targetId} targetId={targetId} />;
 };
