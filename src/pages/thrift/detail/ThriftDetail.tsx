@@ -218,6 +218,7 @@ export const ThriftDetail: React.FC = () => {
     handleProtected(`chat với Shop Owner về "${product.title}"`, `/thrift/${product.slug}`, () => {
       openChat({
         shopId: shopOwnerInfo.id,
+        serviceType: 'THRIFT',
         product: {
           title: product.title,
           image: product.mainImage,

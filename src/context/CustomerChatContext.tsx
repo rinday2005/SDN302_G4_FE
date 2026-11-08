@@ -135,6 +135,7 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const openChat = useCallback(
     async (options?: {
       shopId?: string;
+      serviceType?: "RENT" | "THRIFT";
       product?: CustomerProductContext;
     }) => {
       setIsOpen(true);
@@ -143,32 +144,34 @@ export const CustomerChatProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       const targetShopId = options?.shopId || options?.product?.shopId;
+      const targetServiceType: "RENT" | "THRIFT" = options?.serviceType || "RENT";
 
       try {
         setIsLoadingConversations(true);
         const data = await getConversationsApi();
         const convList = Array.isArray(data) ? data : [];
 
-        // Tìm cuộc trò chuyện với shop cụ thể
+        // Tìm cuộc trò chuyện với shop cụ thể theo đúng loại dịch vụ (RENT hoặc THRIFT)
         let targetConv: ConversationItem | undefined = undefined;
 
         if (targetShopId) {
-          targetConv = convList.find((c) =>
-            c.participants?.some(
-              (p) => String(p._id) === String(targetShopId) && String(p._id) !== String(currentUserId)
-            )
+          targetConv = convList.find(
+            (c) =>
+              c.participants?.some(
+                (p) => String(p._id) === String(targetShopId) && String(p._id) !== String(currentUserId)
+              ) && (c.serviceType || "RENT") === targetServiceType
           );
         }
 
-        // Nếu chưa có conversation với shop này, gọi API tạo mới
+        // Nếu chưa có conversation với shop này theo đúng serviceType, gọi API tạo mới
         if (!targetConv && targetShopId) {
-          targetConv = await getMyConversationApi({ shopId: targetShopId });
+          targetConv = await getMyConversationApi({ shopId: targetShopId, serviceType: targetServiceType });
           convList.unshift(targetConv);
         } else if (!targetConv && convList.length > 0) {
           // Nếu không truyền shopId, chọn conversation đầu tiên
           targetConv = activeConvRef.current || convList[0];
         } else if (!targetConv) {
-          targetConv = await getMyConversationApi();
+          targetConv = await getMyConversationApi({ serviceType: targetServiceType });
           convList.unshift(targetConv);
         }
 

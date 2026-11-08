@@ -305,6 +305,7 @@ export const RentProductDetail: React.FC = () => {
     handleProtectedAction('trò chuyện trực tiếp với Shop Owner', () => {
       openChat({
         shopId: product.ownerId,
+        serviceType: 'RENT',
         product: {
           title: product.title,
           image: product.images[0]?.src || '',

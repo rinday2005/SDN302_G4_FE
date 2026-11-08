@@ -330,7 +330,7 @@ export const ShopChatDrawer: React.FC = () => {
                       {/* Nút quay lại trên mobile */}
                       <button
                         type="button"
-                        onClick={() => selectConversation(activeConversation)}
+                        onClick={() => selectConversation(null)}
                         className="md:hidden p-1.5 rounded-lg text-[#78716c] hover:bg-[#f1ede6]"
                       >
                         <span className="material-symbols-outlined text-[20px]">arrow_back</span>

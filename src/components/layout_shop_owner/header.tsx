@@ -1,5 +1,5 @@
 import React, { useContext, useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../../context/auth-context";
 import { defaultShopProfile } from "../../pages/data/shop/dashboardData";
 import { useShopChat } from "../../context/shop-chat-context";
@@ -16,6 +16,7 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const navigate = useNavigate();
+  const location = useLocation();
   const { openChatDrawer, unreadTotal } = useShopChat();
 
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
@@ -107,9 +108,16 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
           {/* NÚT CHAT KHÁCH HÀNG REAL-TIME (CẠNH NOTIFICATIONS) */}
           <button
             type="button"
-            onClick={() => openChatDrawer()}
+            onClick={() => {
+              const isThriftPage = location.pathname.includes("/thrift");
+              openChatDrawer(isThriftPage ? "THRIFT" : "RENT");
+            }}
             className="p-1.5 text-[#57534e] hover:text-[#141310] hover:bg-[#ebe8e1] transition-colors rounded-lg relative cursor-pointer group flex items-center justify-center"
-            title={unreadTotal > 0 ? `Có ${unreadTotal} người đang gửi tin nhắn` : "Tin nhắn khách hàng (Live Chat Socket.IO)"}
+            title={
+              unreadTotal > 0
+                ? `Có ${unreadTotal} người đang gửi tin nhắn`
+                : `Tin nhắn khách hàng (${location.pathname.includes("/thrift") ? "Bán đứt THRIFT" : "Cho thuê RENT"})`
+            }
             aria-label="Tin nhắn khách hàng"
           >
             <span className="material-symbols-outlined text-[21px] block transition-transform group-hover:scale-110">

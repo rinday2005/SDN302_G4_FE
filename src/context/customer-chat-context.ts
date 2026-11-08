@@ -20,6 +20,7 @@ export interface CustomerChatContextType {
   productContext: CustomerProductContext | null;
   openChat: (options?: {
     shopId?: string;
+    serviceType?: "RENT" | "THRIFT";
     product?: CustomerProductContext;
   }) => void;
   closeChat: () => void;

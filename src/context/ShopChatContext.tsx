@@ -289,9 +289,23 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [conversations]);
 
+  // Chuyển Tab RENT / THRIFT và đồng bộ phòng chat
+  const handleSetActiveTab = (tab: "RENT" | "THRIFT") => {
+    setActiveTab(tab);
+    if (activeConvRef.current && (activeConvRef.current.serviceType || "RENT") !== tab) {
+      const socket = getSocket();
+      socket.emit("leave_room", { conversationId: activeConvRef.current._id });
+      setActiveConversation(null);
+      setMessages([]);
+      setIsCustomerTyping(false);
+    }
+  };
+
   // Mở Drawer/Popover chat
   const openChatDrawer = (tab?: "RENT" | "THRIFT", conversationId?: string) => {
-    if (tab) setActiveTab(tab);
+    if (tab) {
+      handleSetActiveTab(tab);
+    }
     setIsOpen(true);
 
     if (conversationId) {
@@ -321,6 +335,12 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setMessages([]);
       setIsCustomerTyping(false);
       return;
+    }
+
+    // Đảm bảo Tab dịch vụ đồng bộ với cuộc trò chuyện được chọn
+    const convTab = conversation.serviceType === "THRIFT" ? "THRIFT" : "RENT";
+    if (convTab !== activeTab) {
+      setActiveTab(convTab);
     }
 
     // Rời room cũ nếu có
@@ -491,7 +511,7 @@ export const ShopChatProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         isLoadingMessages,
         openChatDrawer,
         closeChatDrawer,
-        setActiveTab,
+        setActiveTab: handleSetActiveTab,
         selectConversation,
         sendMessage,
         sendTyping,
