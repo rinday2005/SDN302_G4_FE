@@ -4,8 +4,18 @@ let socket: Socket | null = null;
 let lastConnectedToken: string | null = null;
 
 const getSocketBaseUrl = (): string => {
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-  return apiUrl.replace(/\/api\/?$/, "");
+  const envUrl = (import.meta.env.VITE_API_URL || "").trim();
+  if (envUrl) {
+    return envUrl.replace(/\/api\/?$/, "").replace(/\/+$/, "");
+  }
+  if (
+    typeof window !== "undefined" &&
+    window.location.hostname !== "localhost" &&
+    window.location.hostname !== "127.0.0.1"
+  ) {
+    return "https://sdn302-g4-be.onrender.com";
+  }
+  return "http://localhost:5000";
 };
 
 const getStoredToken = (): string => {
