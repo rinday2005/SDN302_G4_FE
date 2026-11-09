@@ -57,20 +57,128 @@ export const Header: React.FC<HeaderProps> = ({
         } catch {
             // ignore
         }
-      } catch {
-        // ignore
-      }
+        return userRole || 'GUEST';
+    }, [userRole]);
+
+    const [, setNotifSync] = useState(0);
+    const {
+        notifications,
+        unreadCount: liveUnreadCount,
+        total,
+        popupNotification,
+        dismissPopup,
+        markAsRead,
+        markAllAsRead,
+    } = useNotification();
+
+    // Dynamically calculate notifications scoped to currently logged-in user
+    const effectiveNotificationCount = useMemo(() => {
+        if (notificationCount !== undefined) return notificationCount;
+        if (effectiveRole === 'GUEST') return 0;
+        return liveUnreadCount;
+    }, [notificationCount, effectiveRole, liveUnreadCount]);
+
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+    const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
+    const [headerAvatar, setHeaderAvatar] = useState<string>(() => {
+        try {
+            const u = localStorage.getItem('user');
+            const parsedUser = u ? JSON.parse(u) : null;
+            const uId = parsedUser?._id || parsedUser?.id;
+            const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
+            if (p) {
+                const parsed = JSON.parse(p);
+                if (parsed.avatarUrl) return parsed.avatarUrl;
+            }
+            if (parsedUser) {
+                if (parsedUser.avatarUrl || parsedUser.avatar) return parsedUser.avatarUrl || parsedUser.avatar;
+            }
+        } catch {
+            // ignore
+        }
+        return '';
+    });
+    const [headerName, setHeaderName] = useState<string>(() => {
+        try {
+            const u = localStorage.getItem('user');
+            const parsedUser = u ? JSON.parse(u) : null;
+            const uId = parsedUser?._id || parsedUser?.id;
+            const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
+            if (p) {
+                const parsed = JSON.parse(p);
+                if (parsed.fullName) return parsed.fullName;
+            }
+            if (parsedUser) {
+                if (parsedUser.fullName) return parsedUser.fullName;
+            }
+        } catch {
+            // ignore
+        }
+        return 'Tài khoản của tôi';
+    });
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const notifDropdownRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
+
+    const formatTimeAgo = (dateStr?: string) => {
+        if (!dateStr) return 'Vừa xong';
+        try {
+            const diffMs = Date.now() - new Date(dateStr).getTime();
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 1) return 'Vừa xong';
+            if (diffMins < 60) return `${diffMins} phút trước`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours} giờ trước`;
+            return new Date(dateStr).toLocaleDateString('vi-VN');
+        } catch {
+            return 'Gần đây';
+        }
     };
 
-    window.addEventListener("profile_updated", handleAvatarSync);
-    window.addEventListener("user_profile_updated", handleAvatarSync);
-    window.addEventListener("storage", handleAvatarSync);
-    return () => {
-      window.removeEventListener("profile_updated", handleAvatarSync);
-      window.removeEventListener("user_profile_updated", handleAvatarSync);
-      window.removeEventListener("storage", handleAvatarSync);
-    };
-  }, []);
+    // Đồng bộ avatar & tên từ hồ sơ cá nhân
+    useEffect(() => {
+        const handleAvatarSync = (e: Event) => {
+            const customEvent = e as CustomEvent<{
+                avatarUrl?: string;
+                fullName?: string;
+            } | null>;
+            if (customEvent.detail === null) {
+                setHeaderAvatar('');
+                setHeaderName('Tài khoản của tôi');
+                return;
+            }
+            if (customEvent.detail?.avatarUrl !== undefined) {
+                setHeaderAvatar(customEvent.detail.avatarUrl);
+            }
+            if (customEvent.detail?.fullName) {
+                setHeaderName(customEvent.detail.fullName);
+            }
+            setNotifSync((prev) => prev + 1);
+            try {
+                const u = localStorage.getItem('user');
+                const parsedUser = u ? JSON.parse(u) : null;
+                const uId = parsedUser?._id || parsedUser?.id;
+                const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
+                if (p) {
+                    const parsed = JSON.parse(p);
+                    if (parsed.avatarUrl) setHeaderAvatar(parsed.avatarUrl);
+                    if (parsed.fullName) setHeaderName(parsed.fullName);
+                }
+            } catch {
+                // ignore
+            }
+        };
+
+        window.addEventListener('profile_updated', handleAvatarSync);
+        window.addEventListener('user_profile_updated', handleAvatarSync);
+        window.addEventListener('storage', handleAvatarSync);
+        return () => {
+            window.removeEventListener('profile_updated', handleAvatarSync);
+            window.removeEventListener('user_profile_updated', handleAvatarSync);
+            window.removeEventListener('storage', handleAvatarSync);
+        };
+    }, []);
 
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
@@ -196,6 +304,24 @@ export const Header: React.FC<HeaderProps> = ({
                   )}
                 </Link>
 
+                {/* Chat với Shop Owner Icon (hiện khi đã login) */}
+                {effectiveRole !== "GUEST" && (
+                  <button
+                    type="button"
+                    aria-label="Tin nhắn với Shop"
+                    onClick={() => openChat()}
+                    className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors cursor-pointer"
+                    title="Trò chuyện với Atelier Shop Owner"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    {chatUnreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold leading-tight flex items-center justify-center shadow-xs animate-pulse">
+                        {chatUnreadCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
                 {/* Notifications Icon + Dropdown (hiện khi đã login) */}
                 {effectiveRole !== "GUEST" && (
                   <div className="relative" ref={notifDropdownRef}>
@@ -238,54 +364,37 @@ export const Header: React.FC<HeaderProps> = ({
                           </button>
                         </div>
 
-                        {/* Action Icons: Wishlist, Notification (if logged in), Cart */}
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                            {/* Wishlist Icon */}
-                            <Link
-                                aria-label="Wishlist"
-                                className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors"
-                                to="/wishlist"
-                                title="Danh sách yêu thích"
-                            >
-                                <Heart className="w-5 h-5" />
-                                {effectiveWishlistCount > 0 && (
-                                    <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#1C1A18] text-white text-[9px] font-bold leading-tight flex items-center justify-center shadow-xs">
-                                        {effectiveWishlistCount}
-                                    </span>
-                                )}
-                            </Link>
-
-                            {/* Chat với Shop Owner Icon (hiện khi đã login) */}
-                            {effectiveRole !== 'GUEST' && (
-                                <button
-                                    type="button"
-                                    aria-label="Tin nhắn với Shop"
-                                    onClick={() => openChat()}
-                                    className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors cursor-pointer"
-                                    title="Trò chuyện với Atelier Shop Owner"
-                                >
-                                    <MessageCircle className="w-5 h-5" />
-                                    {chatUnreadCount > 0 && (
-                                        <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-bold leading-tight flex items-center justify-center shadow-xs animate-pulse">
-                                            {chatUnreadCount}
-                                        </span>
-                                    )}
-                                </button>
-                            )}
-
-                            {/* Notifications Icon (hiện khi đã login) */}
-                            {effectiveRole !== 'GUEST' && (
-                                <Link
-                                    aria-label="Notifications"
-                                    className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors"
-                                    to="/notifications"
-                                    title="Thông báo"
-                                >
-                                    <Bell className="w-5 h-5" />
-                                    {effectiveNotificationCount > 0 && (
-                                        <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-black text-white text-[9px] font-bold leading-tight flex items-center justify-center shadow-xs">
-                                            {effectiveNotificationCount}
-                                        </span>
+                        <div className="divide-y divide-[#EFECE6] max-h-80 overflow-y-auto">
+                          {notifications.length === 0 ? (
+                            <div className="py-8 text-center text-xs text-stone-500">
+                              Hiện tại chưa có thông báo nào
+                            </div>
+                          ) : (
+                            notifications.slice(0, 7).map((n) => (
+                              <div
+                                key={n._id || n.id}
+                                onClick={() => {
+                                  markAsRead(n._id || n.id || "");
+                                  setIsNotifDropdownOpen(false);
+                                  if (n.link) navigate(n.link);
+                                  else navigate("/notifications");
+                                }}
+                                className={`p-3.5 transition-colors cursor-pointer ${
+                                  !n.isRead
+                                    ? "bg-[#FBF9F5] hover:bg-[#F5EFE3]"
+                                    : "hover:bg-stone-50"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <h5
+                                    className={`text-xs ${
+                                      !n.isRead
+                                        ? "font-bold text-[#1C1A18]"
+                                        : "font-medium text-stone-600"
+                                    }`}
+                                  >
+                                    {!n.isRead && (
+                                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-600 mr-1.5 mb-0.5" />
                                     )}
                                     {n.title}
                                   </h5>
@@ -435,42 +544,17 @@ export const Header: React.FC<HeaderProps> = ({
                           </span>
                         </Link>
 
-            {/* Mobile Drawer */}
-            {isMobileMenuOpen && (
-                <div className="md:hidden bg-white border-b border-gray-200 px-4 py-4 space-y-3">
-                    <input
-                        type="text"
-                        placeholder="Search curated archive..."
-                        className="w-full px-3 py-2 text-xs bg-gray-100 border border-gray-300 rounded-sm"
-                    />
-                    <div className="flex flex-col space-y-2 pt-2">
-                        <Link to="/rent" onClick={() => setIsMobileMenuOpen(false)} className="text-xs uppercase font-bold text-gray-700 hover:text-black py-1">RENT</Link>
-                        <Link to="/thrift" onClick={() => setIsMobileMenuOpen(false)} className="text-xs uppercase font-bold text-black py-1">THRIFT</Link>
-                        <Link to="/categories" onClick={() => setIsMobileMenuOpen(false)} className="text-xs uppercase font-bold text-gray-700 hover:text-black py-1">CATEGORIES</Link>
-
-                        <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-700 py-1">
-                            <Link to="/wishlist" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 hover:text-black font-medium">
-                                <Heart className="w-4 h-4" />
-                                <span>Yêu thích ({effectiveWishlistCount})</span>
-                            </Link>
-                            {effectiveRole !== 'GUEST' && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsMobileMenuOpen(false);
-                                        openChat();
-                                    }}
-                                    className="flex items-center gap-1.5 hover:text-black font-medium cursor-pointer"
-                                >
-                                    <MessageCircle className="w-4 h-4" />
-                                    <span>Chat {chatUnreadCount > 0 && `(${chatUnreadCount})`}</span>
-                                </button>
-                            )}
-                            <Link to="/cart" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-1.5 hover:text-black font-medium">
-                                <ShoppingBag className="w-4 h-4" />
-                                <span>Giỏ hàng ({effectiveCartCount})</span>
-                            </Link>
-                        </div>
+                        {/* Quick Link dành riêng cho Shop Owner / Admin trong Dropdown */}
+                        {effectiveRole === "SHOP" && (
+                          <Link
+                            to="/shop/inventory"
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-emerald-800 hover:bg-emerald-50 transition-all"
+                          >
+                            <Store className="w-4 h-4 text-emerald-600" />
+                            <span>Trang quản lý Shop</span>
+                          </Link>
+                        )}
 
                         {effectiveRole === "ADMIN" && (
                           <Link
@@ -553,6 +637,19 @@ export const Header: React.FC<HeaderProps> = ({
                   <Heart className="w-4 h-4" />
                   <span>Yêu thích ({effectiveWishlistCount})</span>
                 </Link>
+                {effectiveRole !== "GUEST" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      openChat();
+                    }}
+                    className="flex items-center gap-1.5 hover:text-black font-medium cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Chat {chatUnreadCount > 0 && `(${chatUnreadCount})`}</span>
+                  </button>
+                )}
                 <Link
                   to="/cart"
                   onClick={() => setIsMobileMenuOpen(false)}
