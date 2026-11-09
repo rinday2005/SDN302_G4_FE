@@ -172,7 +172,7 @@ const Login = () => {
               <div className="relative h-56 w-full overflow-hidden rounded-lg bg-[#ebe8e1] shadow-md">
                 <img
                   className="h-full w-full object-cover"
-                  src="./src/assets/images/login.jpg"
+                  src="/images/login.jpg"
                   alt="Curated restored vintage items"
                 />
 
