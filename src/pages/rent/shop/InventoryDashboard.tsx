@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
 import type { InventoryUnitItem } from '../../data/shop/inventoryData';
-import { calculateThriftDiscount } from '../../../utils/thriftPricing';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
 
 export const InventoryDashboard: React.FC = () => {
   const { products, refreshProducts } = useShop();
@@ -12,6 +12,14 @@ export const InventoryDashboard: React.FC = () => {
   useEffect(() => {
     refreshProducts();
   }, [refreshProducts]);
+
+  // Lắng nghe thay đổi storage để cập nhật trạng thái duyệt/từ chối tức thì
+  const [syncTick, setSyncTick] = useState<number>(0);
+  useEffect(() => {
+    const handleStorageChange = () => setSyncTick((t) => t + 1);
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Tabs lọc trạng thái
   const [activeTab, setActiveTab] = useState<string>('ALL');
@@ -23,19 +31,130 @@ export const InventoryDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 15;
 
-  // Sinh danh sách hiện vật từng máy (Serialized Inventory Units) theo dữ liệu thực từ MongoDB
+  // Sinh danh sách hiện vật từng món (Serialized Inventory Units) theo dữ liệu thực từ MongoDB (loại bỏ hoàn toàn mock camera)
   const inventoryUnits = useMemo(() => {
+    void syncTick;
     const units: InventoryUnitItem[] = [];
     if (!products || products.length === 0) {
       return units;
     }
 
-    products.forEach((p) => {
+    // Lọc sạch mọi sản phẩm camera/mock tĩnh
+    const realProducts = products.filter((p) => {
+      const skuLower = (p.sku || '').toLowerCase();
+      const nameLower = (p.name || '').toLowerCase();
+      const catLower =
+        typeof p.category === 'object' && p.category !== null
+          ? ((p.category as { name?: string }).name || '').toLowerCase()
+          : String(p.category || '').toLowerCase();
+
+      const isMockOrCamera =
+        skuLower.startsWith('mock-') ||
+        skuLower === 'hbl-907x-50c' ||
+        skuLower === 'sny-fx3-cine' ||
+        skuLower === 'lca-m10r-chr' ||
+        skuLower === 'fji-gfx100-ii' ||
+        skuLower === 'can-r5c-cine' ||
+        nameLower.includes('hasselblad') ||
+        nameLower.includes('leica') ||
+        nameLower.includes('sony alpha') ||
+        nameLower.includes('canon eos') ||
+        catLower.includes('camera') ||
+        catLower.includes('máy ảnh');
+
+      return !isMockOrCamera;
+    });
+
+    let cachedThriftList: any[] = [];
+    const rawThrift = localStorage.getItem('REUSE_HUB_THRIFT_LISTINGS_V1');
+    if (rawThrift) {
+      try {
+        const parsed = JSON.parse(rawThrift);
+        if (Array.isArray(parsed)) cachedThriftList = parsed;
+      } catch {}
+    }
+
+    realProducts.forEach((p) => {
       const total = Number(p.totalUnits) || 1;
       const renting = Number(p.rentingUnits) || 0;
       const maintenance = Number(p.maintenanceUnits) || 0;
+      const categoryName =
+        typeof p.category === 'object' && p.category !== null
+          ? (p.category as { name?: string }).name || 'Thời trang Rent'
+          : String(p.category || 'Thời trang Rent');
 
-      for (let i = 1; i <= total; i++) {
+      // Phương án A: Tinh gọn kho hiện vật xuống 2 chiếc đại diện cho mỗi mẫu sản phẩm
+      // (1 chiếc đại diện đang vận hành/sẵn sàng và 1 chiếc thâm niên đủ chuẩn THRIFT)
+      // Đồng thời tự động bảo lưu bất kỳ chiếc nào đã được bấm chuyển sang THRIFT
+      const candidateIndices = total <= 2 ? Array.from({ length: total }, (_, idx) => idx + 1) : [1, total];
+
+      if (total > 2) {
+        for (let checkI = 2; checkI < total; checkI++) {
+          const testId = `INV-${p.sku.slice(-4).toUpperCase()}-${String(checkI).padStart(2, '0')}`;
+          const hasLocalConvert = !!localStorage.getItem(`REUSE_HUB_THRIFT_CONVERT_${testId}`);
+          const hasThriftRecord = cachedThriftList.some(
+            (it) => it.originalUnitId === testId || it.unitId === testId || it.id === testId
+          );
+          if (hasLocalConvert || hasThriftRecord) {
+            candidateIndices.push(checkI);
+          }
+        }
+      }
+
+      const uniqueIndices = Array.from(new Set(candidateIndices)).sort((a, b) => a - b);
+
+      for (const i of uniqueIndices) {
+        const variantInfo = getUnitVariantAndCondition(
+          p.name,
+          categoryName,
+          i,
+          total,
+          renting,
+          maintenance
+        );
+
+        const unitId = `INV-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(2, '0')}`;
+
+        // Kiểm tra xem hiện vật này có đang ở luồng THRIFT (PENDING / REJECTED / APPROVED) hay không
+        let thriftStatus: 'NONE' | 'PENDING' | 'REJECTED' | 'APPROVED' = 'NONE';
+        let thriftRejectionReason: string | undefined = undefined;
+
+        try {
+          const rawConv = localStorage.getItem(`REUSE_HUB_THRIFT_CONVERT_${unitId}`);
+          if (rawConv) {
+            const parsed = JSON.parse(rawConv);
+            if (parsed.status === 'REJECTED') {
+              thriftStatus = 'REJECTED';
+              thriftRejectionReason = parsed.rejectionReason;
+            } else if (parsed.status === 'PENDING_APPROVAL') {
+              thriftStatus = 'PENDING';
+            } else if (parsed.status === 'CONVERTED_TO_THRIFT') {
+              thriftStatus = 'APPROVED';
+            }
+          }
+        } catch {}
+
+        if (thriftStatus === 'NONE' && cachedThriftList.length > 0) {
+          const matched = cachedThriftList.find(
+            (it: any) =>
+              it.originalUnitId === unitId ||
+              it.unitId === unitId ||
+              it.id === unitId ||
+              it._id === unitId
+          );
+          if (matched) {
+            const s = String(matched.status || matched.approvalStatus || '').toUpperCase();
+            if (s === 'REJECTED') {
+              thriftStatus = 'REJECTED';
+              thriftRejectionReason = matched.rejectionReason;
+            } else if (s === 'PENDING' || s === 'PENDING_APPROVAL') {
+              thriftStatus = 'PENDING';
+            } else if (s === 'APPROVED') {
+              thriftStatus = 'APPROVED';
+            }
+          }
+        }
+
         let status: 'AVAILABLE' | 'RENTING' | 'MAINTENANCE' | 'INSPECTION' | 'ELIGIBLE_FOR_THRIFT';
         let statusText: string;
         let currentOrderCode: string | undefined = undefined;
@@ -47,6 +166,12 @@ export const InventoryDashboard: React.FC = () => {
         } else if (i <= renting + maintenance) {
           status = 'MAINTENANCE';
           statusText = 'Đang bảo dưỡng';
+        } else if (thriftStatus === 'REJECTED') {
+          status = 'ELIGIBLE_FOR_THRIFT';
+          statusText = 'Bị từ chối THRIFT (Bấm chuyển lại)';
+        } else if (thriftStatus === 'PENDING') {
+          status = 'ELIGIBLE_FOR_THRIFT';
+          statusText = 'Đang chờ Admin duyệt THRIFT';
         } else if (i === total && total >= 3) {
           status = 'ELIGIBLE_FOR_THRIFT';
           statusText = 'Đủ chuẩn THRIFT';
@@ -56,17 +181,23 @@ export const InventoryDashboard: React.FC = () => {
         }
 
         const serialNumber = `#SN-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(3, '0')}`;
+        const displayName = total > 1 ? `${p.name} - ${variantInfo.variantShort}` : p.name;
+
         units.push({
-          id: `INV-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(2, '0')}`,
+          id: unitId,
           sku: p.sku,
-          productName: p.name,
-          category: typeof p.category === 'object' && p.category !== null ? (p.category as { name?: string }).name || 'RENT Equipment' : String(p.category || 'RENT Equipment'),
+          productName: displayName,
+          category: categoryName,
+          variantTag: variantInfo.variantTag,
           serialNumber,
-          conditionGrade: p.condition || 'LIKE_NEW (98%)',
-          cycleCount: 4 + i * 3,
-          depreciationRate: `${Math.min(95, 10 + i * 8)}%`,
+          conditionGrade: variantInfo.conditionGrade,
+          cycleCount: variantInfo.cycleCount,
+          depreciationRate: variantInfo.depreciationRate,
+          maintenanceNote: variantInfo.maintenanceNote,
           status,
           statusText,
+          thriftStatus,
+          thriftRejectionReason,
           currentOrderCode,
           readyDate: 'Sẵn sàng giao ngay',
           imageUrl: normalizeImageUrl(p.coverImage) || 'https://placehold.co/600x400',
@@ -75,7 +206,7 @@ export const InventoryDashboard: React.FC = () => {
     });
 
     return units;
-  }, [products]);
+  }, [products, syncTick]);
 
   // Lọc dữ liệu theo tab & search (đảm bảo tab ALL hiển thị toàn bộ hiện vật không sót món nào)
   const filteredUnits = useMemo(() => {
@@ -154,13 +285,13 @@ export const InventoryDashboard: React.FC = () => {
           <div className="space-y-2 max-w-3xl">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-[#f1ede6] rounded text-[#4a463f] text-[11px] uppercase tracking-widest font-semibold">
               <span className="w-2 h-2 rounded-full bg-[#576151]"></span>
-              <span>Atelier Chronos &amp; Optics • MongoDB Live Archive</span>
+              <span>Kho Hiện Vật Xưởng • Quản Lý Luân Chuyển</span>
             </div>
             <h1 className="font-serif text-3xl lg:text-4xl text-[#141310] tracking-tight font-normal">
               Kho Hiện vật Cho thuê <span className="italic font-normal text-[#576151]">RENT</span>
             </h1>
             <p className="text-sm sm:text-base text-[#4a463f] leading-relaxed">
-              Quản lý chi tiết từng cá thể hiện vật ({totalAllUnits} máy được đồng bộ từ MongoDB), vòng đời luân chuyển, tình trạng thẩm định buồng máy và đối soát điều kiện chuyển giao sang sàn bán đứt THRIFT.
+              Quản lý chi tiết từng cá thể hiện vật ({totalAllUnits} hiện vật được đồng bộ từ MongoDB), vòng đời luân chuyển, tình trạng kiểm định và đối soát điều kiện chuyển giao sang sàn bán đứt THRIFT.
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
@@ -186,7 +317,7 @@ export const InventoryDashboard: React.FC = () => {
             </div>
             <div className="my-3 flex items-baseline gap-2">
               <span className="font-serif text-3xl font-semibold text-[#141310]">{readyCount}</span>
-              <span className="text-xs text-[#7b766f]">/ {totalAllUnits} máy ({readyPct}%)</span>
+              <span className="text-xs text-[#7b766f]">/ {totalAllUnits} hiện vật ({readyPct}%)</span>
             </div>
             <div className="w-full bg-[#e6e2db] rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#576151] h-full rounded-full" style={{ width: `${readyPct}%` }}></div>
@@ -202,12 +333,12 @@ export const InventoryDashboard: React.FC = () => {
             </div>
             <div className="my-3 flex items-baseline gap-2">
               <span className="font-serif text-3xl font-semibold text-[#141310]">{rentingCount}</span>
-              <span className="text-xs text-[#7b766f]">/ {totalAllUnits} máy ({rentingPct}%)</span>
+              <span className="text-xs text-[#7b766f]">/ {totalAllUnits} hiện vật ({rentingPct}%)</span>
             </div>
             <div className="w-full bg-[#e6e2db] rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#141310] h-full rounded-full" style={{ width: `${rentingPct}%` }}></div>
             </div>
-            <span className="mt-2 text-xs text-[#7b766f]">Hợp đồng custody hoạt động</span>
+            <span className="mt-2 text-xs text-[#7b766f]">Hợp đồng đang lưu hành</span>
           </div>
 
           {/* Card 3: Return Inspection */}
@@ -223,13 +354,13 @@ export const InventoryDashboard: React.FC = () => {
             <div className="w-full bg-[#e6e2db] rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#7b766f] h-full rounded-full" style={{ width: `${totalAllUnits > 0 ? (inspectionCount / totalAllUnits) * 100 : 0}%` }}></div>
             </div>
-            <span className="mt-2 text-xs text-[#7b766f]">Đang tại trạm Nanuk 4h SLA</span>
+            <span className="mt-2 text-xs text-[#7b766f]">Đang đối kiểm sau đơn thuê</span>
           </div>
 
           {/* Card 4: Maintenance */}
           <div className="bg-[#f7f3ec] p-5 rounded shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col justify-between border border-[#ebe8e1]">
             <div className="flex items-start justify-between">
-              <span className="text-xs uppercase tracking-wider text-[#7b766f] font-semibold">Bảo dưỡng buồng máy</span>
+              <span className="text-xs uppercase tracking-wider text-[#7b766f] font-semibold">Bảo dưỡng kỹ thuật</span>
               <span className="material-symbols-outlined text-[#7b766f] text-[20px]">build_circle</span>
             </div>
             <div className="my-3 flex items-baseline gap-2">
@@ -239,7 +370,7 @@ export const InventoryDashboard: React.FC = () => {
             <div className="w-full bg-[#e6e2db] rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#ccc5bc] h-full rounded-full" style={{ width: `${totalAllUnits > 0 ? (maintenanceCount / totalAllUnits) * 100 : 0}%` }}></div>
             </div>
-            <span className="mt-2 text-xs text-[#7b766f]">Hiệu chuẩn Collimator quang học</span>
+            <span className="mt-2 text-xs text-[#7b766f]">Vệ sinh &amp; bảo trì định kỳ</span>
           </div>
 
           {/* Card 5: Eligible for THRIFT */}
@@ -356,7 +487,7 @@ export const InventoryDashboard: React.FC = () => {
                   setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                placeholder="Tìm theo Mã hiện vật (Serial ID), Tên máy, Hợp đồng thuê..."
+                placeholder="Tìm theo Mã hiện vật (Serial ID), Tên sản phẩm, Đơn thuê..."
                 className="w-full pl-10 pr-4 py-2.5 bg-white text-[#141310] text-xs rounded border border-[#ebe8e1] shadow-sm focus:outline-none focus:border-[#576151]"
               />
             </div>
@@ -459,7 +590,14 @@ export const InventoryDashboard: React.FC = () => {
                         />
                         <div>
                           <div className="font-semibold text-sm text-[#141310]">{item.productName}</div>
-                          <div className="text-[11px] text-[#7b766f] uppercase tracking-wider">{item.category}</div>
+                          <div className="text-[11px] text-[#7b766f] flex items-center gap-1.5 mt-0.5">
+                            <span className="uppercase tracking-wider font-medium">{item.category}</span>
+                            {item.variantTag && (
+                              <span className="px-1.5 py-0.5 rounded bg-[#f1ede6] text-[#4a463f] font-normal text-[10px]">
+                                {item.variantTag}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -474,28 +612,26 @@ export const InventoryDashboard: React.FC = () => {
                     <td className="py-4 px-4 align-top">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className={`w-2 h-2 rounded-full ${item.status === 'ELIGIBLE_FOR_THRIFT'
-                              ? 'bg-[#576151]'
+                          className={`w-2 h-2 rounded-full ${
+                            item.status === 'ELIGIBLE_FOR_THRIFT'
+                              ? 'bg-purple-600'
                               : item.status === 'MAINTENANCE'
-                                ? 'bg-amber-600'
-                                : 'bg-[#576151]'
-                            }`}
+                              ? 'bg-amber-600'
+                              : item.status === 'RENTING'
+                              ? 'bg-blue-600'
+                              : 'bg-[#576151]'
+                          }`}
                         ></span>
                         <span className="font-semibold text-[#141310]">{item.conditionGrade}</span>
                       </div>
-                      {(() => {
-                        const dep = calculateThriftDiscount(item.cycleCount, 10000000);
-                        return (
-                          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs text-[#4a463f] font-medium">
-                              {item.cycleCount} lần thuê
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                              -{dep.discountPercent}% khấu hao
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-[#4a463f] font-medium">
+                          {item.cycleCount === 0 ? 'Hàng nguyên kho' : `${item.cycleCount} lần thuê`}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          -{item.depreciationRate} khấu hao
+                        </span>
+                      </div>
                       {item.maintenanceNote && (
                         <div className="text-[#576151] font-medium text-[11px] mt-0.5">{item.maintenanceNote}</div>
                       )}
@@ -503,12 +639,29 @@ export const InventoryDashboard: React.FC = () => {
 
                     {/* Col 4: Status Badge */}
                     <td className="py-4 px-4 align-top">
-                      {item.status === 'ELIGIBLE_FOR_THRIFT' && (
+                      {item.thriftStatus === 'REJECTED' ? (
+                        <div>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-800 text-[11px] uppercase tracking-wider rounded font-bold border border-red-200">
+                            <span className="material-symbols-outlined text-[14px]">cancel</span>
+                            <span>BỊ TỪ CHỐI THRIFT</span>
+                          </span>
+                          {item.thriftRejectionReason && (
+                            <div className="text-[10px] text-red-700 mt-1 max-w-[200px] leading-tight font-medium" title={item.thriftRejectionReason}>
+                              {item.thriftRejectionReason}
+                            </div>
+                          )}
+                        </div>
+                      ) : item.thriftStatus === 'PENDING' ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 text-amber-800 text-[11px] uppercase tracking-wider rounded font-bold border border-amber-200">
+                          <span className="material-symbols-outlined text-[14px]">hourglass_empty</span>
+                          <span>CHỜ ADMIN DUYỆT THRIFT</span>
+                        </span>
+                      ) : item.status === 'ELIGIBLE_FOR_THRIFT' ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#141310] text-[#f0e0cb] text-[11px] uppercase tracking-wider rounded font-bold shadow-xs">
                           <span className="material-symbols-outlined text-[14px]">verified</span>
                           <span>ĐỦ ĐIỀU KIỆN SANG THRIFT</span>
                         </span>
-                      )}
+                      ) : null}
                       {item.status === 'RENTING' && (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#ebe8e1] text-[#141310] text-[11px] uppercase tracking-wider rounded font-semibold">
                           <span className="material-symbols-outlined text-[14px]">sync_alt</span>
@@ -561,7 +714,10 @@ export const InventoryDashboard: React.FC = () => {
                     {/* Col 6: Ready Date */}
                     <td className="py-4 px-4 align-top">
                       <span
-                        className={`font-semibold ${item.status === 'ELIGIBLE_FOR_THRIFT'
+                        className={`font-semibold ${
+                          item.thriftStatus === 'REJECTED'
+                            ? 'text-red-700'
+                            : item.status === 'ELIGIBLE_FOR_THRIFT'
                             ? 'text-[#141310]'
                             : item.status === 'AVAILABLE'
                               ? 'text-[#576151]'
@@ -576,7 +732,23 @@ export const InventoryDashboard: React.FC = () => {
                     {/* Col 7: Actions */}
                     <td className="py-4 px-4 align-top text-right">
                       <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2">
-                        {item.status === 'ELIGIBLE_FOR_THRIFT' && (
+                        {item.thriftStatus === 'REJECTED' ? (
+                          <Link
+                            to={`/shop/rent/convert-thrift/${item.id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-[11px] uppercase tracking-wider rounded font-semibold shadow-xs transition-all whitespace-nowrap"
+                          >
+                            <span>Chuyển lại sang THRIFT</span>
+                            <span className="material-symbols-outlined text-[14px]">restart_alt</span>
+                          </Link>
+                        ) : item.thriftStatus === 'PENDING' ? (
+                          <Link
+                            to={`/shop/rent/convert-thrift/${item.id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] uppercase tracking-wider rounded font-semibold shadow-xs transition-all whitespace-nowrap"
+                          >
+                            <span>Xem hồ sơ gửi duyệt</span>
+                            <span className="material-symbols-outlined text-[14px]">visibility</span>
+                          </Link>
+                        ) : item.status === 'ELIGIBLE_FOR_THRIFT' ? (
                           <Link
                             to={`/shop/rent/convert-thrift/${item.id}`}
                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#141310] hover:bg-[#292724] text-white text-[11px] uppercase tracking-wider rounded font-semibold shadow-xs transition-all whitespace-nowrap"
@@ -584,7 +756,7 @@ export const InventoryDashboard: React.FC = () => {
                             <span>Chuyển sang THRIFT</span>
                             <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                           </Link>
-                        )}
+                        ) : null}
                         <Link
                           to={`/shop/rent/inventory/${item.id}`}
                           className="px-2.5 py-1.5 bg-[#f1ede6] hover:bg-[#ebe8e1] text-[#141310] text-[11px] uppercase tracking-wider rounded font-semibold transition-colors whitespace-nowrap"
@@ -667,7 +839,7 @@ export const InventoryDashboard: React.FC = () => {
               <p className="text-xs sm:text-sm text-[#4a463f] leading-relaxed">
                 Việc giải phóng hiện vật từ kho <strong className="text-[#141310]">CHO THUÊ (RENT)</strong> sang sàn{' '}
                 <strong className="text-[#141310]">BÁN ĐỨT (THRIFT)</strong> tuân thủ tiêu chuẩn giám định B-Corp Circular. Khi bấm nút{' '}
-                <span className="font-semibold text-[#141310]">"Chuyển sang THRIFT"</span>, hiện vật sẽ lập tức được đóng gói hồ sơ lịch sử thuê, đính kèm chứng nhận số bảo hành còn lại của Atelier Chronos &amp; Optics và chuyển tiếp sang bước định giá bán thứ cấp cuối cùng mà không làm gián đoạn quyền lợi của bất kỳ khách hàng thuê nào.
+                <span className="font-semibold text-[#141310]">"Chuyển sang THRIFT"</span>, hiện vật sẽ lập tức được đóng gói hồ sơ lịch sử thuê, đính kèm chứng nhận kiểm định chất lượng của xưởng và chuyển tiếp sang bước định giá bán thứ cấp cuối cùng mà không làm gián đoạn quyền lợi của bất kỳ khách hàng thuê nào.
               </p>
             </div>
             <div className="md:col-span-4 flex md:justify-end">

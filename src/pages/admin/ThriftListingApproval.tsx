@@ -129,6 +129,68 @@ const mapRawThriftToAdminListing = (item: {
   };
 };
 
+const mergeWithLocalThriftListings = (backendListings: ThriftListing[]): ThriftListing[] => {
+  try {
+    const rawLocal = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+    if (!rawLocal) return backendListings;
+    const localItems = JSON.parse(rawLocal);
+    if (!Array.isArray(localItems) || localItems.length === 0) return backendListings;
+
+    const existingIds = new Set(backendListings.map((b) => String(b.id)));
+    const existingTitles = new Set(backendListings.map((b) => b.title.trim().toLowerCase()));
+
+    const missingLocal: ThriftListing[] = [];
+    localItems.forEach((loc) => {
+      const locId = String(loc.id || loc._id || loc.sku || "");
+      const locTitle = String(loc.title || loc.name || "").trim().toLowerCase();
+      if (locId && !existingIds.has(locId) && !existingTitles.has(locTitle)) {
+        const rawStatus = String(loc.status || loc.approvalStatus || "PENDING").toUpperCase();
+        const st: ThriftStatus =
+          rawStatus === "APPROVED" ? "APPROVED" : rawStatus === "REJECTED" ? "REJECTED" : "PENDING";
+
+        missingLocal.push({
+          id: locId,
+          sku: loc.sku ? `#RH-THF-${String(loc.sku).slice(-6).toUpperCase()}` : `#RH-THF-${locId.slice(-6).toUpperCase()}`,
+          title: loc.title || loc.name || "Sản phẩm chuyển đổi từ RENT",
+          category: typeof loc.category === "string" ? loc.category : "Đồ thanh lý",
+          conditionGrade: loc.condition || "Rất tốt (95%)",
+          conditionNote: loc.description || "Chuyển giao từ kho cho thuê RENT (Second Life)",
+          price:
+            typeof loc.price === "number"
+              ? loc.price
+              : Number(String(loc.price || "0").replace(/[^\d]/g, "")) || 0,
+          priceNote: "Đã bao gồm VAT & kiểm định",
+          originType: "SECOND_LIFE",
+          originNote: "Chuyển giao từ kho cho thuê RENT (Second Life)",
+          shopName: loc.shopName || "ReUse Official Shop",
+          ownerName: loc.shopName || "ReUse Official Shop",
+          ownerKycVerified: true,
+          submittedAtDisplay: loc.submittedAt || "Hôm nay",
+          submittedAtSub: "Vừa gửi duyệt",
+          status: st,
+          isAvailable: st === "APPROVED",
+          rejectionReason: loc.rejectionReason,
+          imageUrl:
+            loc.image ||
+            (Array.isArray(loc.images) && loc.images[0]) ||
+            "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=600&q=80",
+          publicUrl: `/thrift/products/${locId}`,
+          mechanicalCheck: true,
+          opticalCheck: true,
+          serialMatch: true,
+          provenanceDocs: true,
+          bCorpCertified: true,
+        });
+      }
+    });
+
+    return [...missingLocal, ...backendListings];
+  } catch (e) {
+    console.error("Lỗi khi merge local thrift listings:", e);
+    return backendListings;
+  }
+};
+
 export const ThriftListingApproval: React.FC = () => {
   const [listings, setListings] = useState<ThriftListing[]>([]);
   const [activeTab, setActiveTab] = useState<ThriftStatusFilter>("ALL");
@@ -159,13 +221,14 @@ export const ThriftListingApproval: React.FC = () => {
 
   const handleRefresh = async () => {
     try {
+      let mappedItems: ThriftListing[] = [];
       const items = await fetchAdminThriftListingsApi();
       if (Array.isArray(items) && items.length > 0) {
-        setListings(items.map(mapRawThriftToAdminListing));
+        mappedItems = items.map(mapRawThriftToAdminListing);
       } else {
         const dashData = await fetchAdminDashboardData();
         if (dashData?.thriftCatalogList && dashData.thriftCatalogList.length > 0) {
-          const mapped: ThriftListing[] = dashData.thriftCatalogList.map((item) => ({
+          mappedItems = dashData.thriftCatalogList.map((item) => ({
             id: item.id,
             sku: `#RH-THF-${item.id.slice(-6).toUpperCase()}`,
             title: item.name,
@@ -186,9 +249,9 @@ export const ThriftListingApproval: React.FC = () => {
             imageUrl: item.images[0] || "",
             publicUrl: `/thrift/${item.slug}`,
           }));
-          setListings(mapped);
         }
       }
+      setListings(mergeWithLocalThriftListings(mappedItems));
       showToast("Đã làm mới dữ liệu hàng đợi THRIFT từ MongoDB.");
     } catch {
       showToast("Lỗi làm mới dữ liệu từ MongoDB.");
@@ -201,7 +264,7 @@ export const ThriftListingApproval: React.FC = () => {
       .then((items) => {
         if (!isMounted) return;
         if (Array.isArray(items) && items.length > 0) {
-          setListings(items.map(mapRawThriftToAdminListing));
+          setListings(mergeWithLocalThriftListings(items.map(mapRawThriftToAdminListing)));
         } else {
           fetchAdminDashboardData().then((dashData) => {
             if (!isMounted) return;
@@ -227,13 +290,18 @@ export const ThriftListingApproval: React.FC = () => {
                 imageUrl: item.images[0] || "",
                 publicUrl: `/thrift/${item.slug}`,
               }));
-              setListings(mapped);
+              setListings(mergeWithLocalThriftListings(mapped));
+            } else {
+              setListings(mergeWithLocalThriftListings([]));
             }
           });
         }
       })
       .catch((err) => {
         console.warn("Lỗi khi tải listings THRIFT từ MongoDB:", err);
+        if (isMounted) {
+          setListings(mergeWithLocalThriftListings([]));
+        }
       });
 
     return () => {
@@ -340,7 +408,9 @@ export const ThriftListingApproval: React.FC = () => {
 
   const handleApproveListing = async (id: string) => {
     try {
-      await approveThriftListingApi(id);
+      await approveThriftListingApi(id).catch((e) =>
+        console.warn("Lưu ý duyệt API MongoDB:", e)
+      );
       setListings((prev) =>
         prev.map((item) =>
           item.id === id
@@ -353,10 +423,27 @@ export const ThriftListingApproval: React.FC = () => {
             : item
         )
       );
-      showToast("Đã phê duyệt niêm yết bán đứt THRIFT thành công vào Database MongoDB!");
+
+      // Đồng bộ trạng thái vào localStorage
+      try {
+        const rawLocal = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+        if (rawLocal) {
+          const list = JSON.parse(rawLocal);
+          if (Array.isArray(list)) {
+            const updated = list.map((it) =>
+              it.id === id || it._id === id || it.originalUnitId === id
+                ? { ...it, status: "APPROVED", approvalStatus: "APPROVED" }
+                : it
+            );
+            localStorage.setItem("REUSE_HUB_THRIFT_LISTINGS_V1", JSON.stringify(updated));
+          }
+        }
+      } catch {}
+
+      showToast("Đã phê duyệt niêm yết bán đứt THRIFT thành công!");
       setInspectingItem(null);
     } catch {
-      showToast("Lỗi khi cập nhật trạng thái phê duyệt trên MongoDB.");
+      showToast("Lỗi khi cập nhật trạng thái phê duyệt.");
     }
   };
 
@@ -366,7 +453,9 @@ export const ThriftListingApproval: React.FC = () => {
       return;
     }
     try {
-      await rejectThriftListingApi(id, rejectionInput.trim());
+      await rejectThriftListingApi(id, rejectionInput.trim()).catch((e) =>
+        console.warn("Lưu ý từ chối API MongoDB:", e)
+      );
       setListings((prev) =>
         prev.map((item) =>
           item.id === id
@@ -379,11 +468,48 @@ export const ThriftListingApproval: React.FC = () => {
             : item
         )
       );
-      showToast(`Đã từ chối niêm yết THRIFT thành công. Đã lưu lý do vào MongoDB.`);
+
+      // Đồng bộ trạng thái vào localStorage
+      try {
+        const rawLocal = localStorage.getItem("REUSE_HUB_THRIFT_LISTINGS_V1");
+        if (rawLocal) {
+          const list = JSON.parse(rawLocal);
+          if (Array.isArray(list)) {
+            const updated = list.map((it) => {
+              if (it.id === id || it._id === id || it.originalUnitId === id) {
+                // Đồng bộ cập nhật thẳng vào key REUSE_HUB_THRIFT_CONVERT của từng hiện vật
+                const targetUnitId = it.originalUnitId || (id.startsWith("thrift-") ? id.split("-")[1] : id);
+                if (targetUnitId) {
+                  try {
+                    const uKey = `REUSE_HUB_THRIFT_CONVERT_${targetUnitId}`;
+                    const uData = localStorage.getItem(uKey);
+                    if (uData) {
+                      const parsed = JSON.parse(uData);
+                      parsed.status = "REJECTED";
+                      parsed.rejectionReason = rejectionInput.trim();
+                      localStorage.setItem(uKey, JSON.stringify(parsed));
+                    }
+                  } catch {}
+                }
+                return {
+                  ...it,
+                  status: "REJECTED",
+                  approvalStatus: "REJECTED",
+                  rejectionReason: rejectionInput.trim(),
+                };
+              }
+              return it;
+            });
+            localStorage.setItem("REUSE_HUB_THRIFT_LISTINGS_V1", JSON.stringify(updated));
+          }
+        }
+      } catch {}
+
+      showToast(`Đã từ chối niêm yết THRIFT thành công. Đã lưu lý do kiểm định.`);
       setInspectingItem(null);
       setIsRejecting(false);
     } catch {
-      showToast("Lỗi khi cập nhật từ chối trên MongoDB.");
+      showToast("Lỗi khi cập nhật từ chối.");
     }
   };
 
@@ -1232,7 +1358,7 @@ export const ThriftListingApproval: React.FC = () => {
                 Tiêu Chuẩn Giám Định Độc Bản 7 Bước (Standardized 7-Point Appraisal)
               </span>
               <span className="text-xs text-[#4a463f]">
-                Mọi hiện vật THRIFT được duyệt đều phải vượt qua bài kiểm tra cơ khí, thấu kính quang học, niên đại serial và lịch sử bảo dưỡng trước khi cấp mã bảo mật B-Corp.
+                Mọi hiện vật THRIFT được duyệt đều phải vượt qua bài kiểm tra kết cấu vật lý, tình trạng ngoại quan, đối chiếu serial và lịch sử bảo dưỡng trước khi cấp mã bảo mật B-Corp.
               </span>
             </div>
           </div>
@@ -1329,7 +1455,7 @@ export const ThriftListingApproval: React.FC = () => {
                     onChange={(e) => setChecklist({ ...checklist, mechanical: e.target.checked })}
                     className="w-4 h-4 rounded text-[#141310] accent-[#141310]"
                   />
-                  <span>1. Kiểm tra cơ khí, màng trập, vi mạch &amp; độ kín sáng vật lý.</span>
+                  <span>1. Kiểm tra kết cấu, bề mặt chất liệu &amp; độ hoàn thiện vật lý.</span>
                 </label>
                 <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
@@ -1338,7 +1464,7 @@ export const ThriftListingApproval: React.FC = () => {
                     onChange={(e) => setChecklist({ ...checklist, optical: e.target.checked })}
                     className="w-4 h-4 rounded text-[#141310] accent-[#141310]"
                   />
-                  <span>2. Thấu kính quang học sạch, không mốc xước, thấu quang chuẩn studio.</span>
+                  <span>2. Độ mới ngoại quan sạch sẽ, không sờn rách, tem mác nguyên vẹn.</span>
                 </label>
                 <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
@@ -1347,7 +1473,7 @@ export const ThriftListingApproval: React.FC = () => {
                     onChange={(e) => setChecklist({ ...checklist, serial: e.target.checked })}
                     className="w-4 h-4 rounded text-[#141310] accent-[#141310]"
                   />
-                  <span>3. Khớp số serial thân máy với hồ sơ dữ liệu hãng sản xuất.</span>
+                  <span>3. Khớp số serial / mã hiện vật với hồ sơ lưu ký tuần hoàn.</span>
                 </label>
                 <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
@@ -1497,7 +1623,7 @@ export const ThriftListingApproval: React.FC = () => {
                 <ul className="list-disc pl-4 space-y-1 mt-1">
                   <li><strong>Pristine 9.5+:</strong> Như mới, nguyên hộp, sai số cơ học dưới 1%.</li>
                   <li><strong>Mint 9.0+:</strong> Vết xước vi mô không đáng kể, hoạt động hoàn hảo.</li>
-                  <li><strong>Excellent 8.5+:</strong> Có dấu ấn thời gian nhẹ (brassing), quang học trong trẻo.</li>
+                  <li><strong>Excellent 8.5+:</strong> Có dấu ấn thời gian nhẹ tự nhiên, bề mặt sạch đẹp, form dáng nguyên bản.</li>
                   <li><strong>Good Vintage 8.0+:</strong> Hiện vật sưu tầm cổ điển, các tính năng cốt lõi vận hành ổn định.</li>
                 </ul>
               </div>

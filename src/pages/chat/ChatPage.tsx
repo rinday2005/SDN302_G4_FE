@@ -1,7 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { UserSidebar } from '../../components/layout/UserSidebar';
+import { getSocket } from '../../services/socket';
+import {
+  getMyConversationApi,
+  getMessagesApi,
+  deleteConversationApi,
+} from '../../services/chat.api';
+import type {
+  ConversationItem,
+  ChatMessageItem,
+} from '../../services/chat.api';
 
 interface ChatMessage {
   id: string;
@@ -31,6 +41,7 @@ interface ChatMessage {
 
 export const ChatPage: React.FC = () => {
   const { user } = useAuth();
+  const currentUserId = user?._id || user?.id || '';
   const [searchParams] = useSearchParams();
   const orderIdParam = searchParams.get('orderId');
 
@@ -40,22 +51,25 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   // Customer info
-  const customerName = user?.fullName || 'Elena Rostova';
+  const customerName = user?.fullName || 'Khách Hàng ReUse';
   const customerAvatar =
     user?.avatarUrl ||
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuBQ6QWck2gMxKHvp-BNnAYLTShVvi8aIFl7vTNPgzH49Ke6T2FhTntQMSLXaNijMGGnzXd6DY0Yc51u_8UC-77N43IUIBOalIoMpURHOhHZPkgtfYTPe08Ca65SRoXVtfjnZa2TePoqOijnQYTx8v5yspPf3n7u52KwnJtQwy0XLdW-cWKQoBwjyH29OdeTEzMIQ5A1PG9ARzYzwy_B1mz8gQwszq53cnvqgB6t5_Az';
-
-  // Topic filter
-  const [activeTopic, setActiveTopic] = useState<'all' | 'rent' | 'thrift' | 'contax'>('all');
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
 
   // Input & state
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [conversation, setConversation] = useState<ConversationItem | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  const navigate = useNavigate();
 
   // Modals
   const [isHotlineOpen, setIsHotlineOpen] = useState(false);
   const [isContractOpen, setIsContractOpen] = useState(false);
   const [zoomImage, setZoomImage] = useState<{ title: string; url: string } | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -64,81 +78,130 @@ export const ChatPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Messages list state
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    return [
-      {
-        id: 'sys-1',
-        sender: 'system',
-        senderName: 'ReUse Hub Escrow Protocol',
-        timestamp: '10:14 AM',
-        content:
-          'Tiền cọc 38.000.000₫ đã cách ly an toàn. Cửa sổ thẩm định 72h bắt đầu khi đơn vị giao hàng Nanuk bàn giao.',
-        systemDetails: {
-          title: 'Smart Escrow kích hoạt thành công (Hasselblad 907X)',
-          amount: '38.000.000₫',
-          code: '#ESC-998241',
-        },
-      },
-      {
-        id: 'msg-1',
-        sender: 'atelier',
-        senderName: 'Phạm Thùy Dương (Master Custodian)',
-        senderRole: 'CUSTODIAN',
-        senderAvatar:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuBgD0AT7Kf7zh1FWCGtS5UNoE5w02BFo5pBVmKhaNprtLB3NK_ZXDMUX0Z9EksTo5nlrg_XxyFrd7yBBzZbDcefEzU2R2MZ3HK-BwBSHL0Tnq9t2WdQqCvJSeYFuzzp3zLblmYxmMT6wr58VHRXv1a8yPcrilEixvfz0zPZ-12xlqR2I1dyuKOJ0X5V9-MtcWon9621TvJ2Ws0eYhpcKTA5DpQiOpSBXFnYmOlj5Bx-',
-        timestamp: '10:28 AM',
-        content:
-          'Chào bạn Elena. Tôi vừa hoàn tất quy trình hiệu chuẩn quang học Collimator cho thân máy Leica M6 Classic 0.72x (Black Chrome, Series #24819xx) và kiểm tra cơ cấu sensor medium format trên thân máy Hasselblad 907X 50C.\n\nMọi thông số về tốc độ màn trập từ 1/1s đến 1/1000s đều đạt dung sai cực hẹp ±2.1%. Bạn có thể xem ngay video kiểm tra thực tế và các phụ kiện nguyên bản đi kèm bên dưới:',
-        photos: [
-          {
-            title: 'Bàn test #01',
-            url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBgUw4sPIleEmRvVCsVZNueGCIgjQ-KdMrgBXwjb2X5zlJyUQSCuaGNkzQah4kxzk1BoPSW1QZzOyWgI0QLtDh7133pAUhhg61S4M01iKXKsXeyXsMLwgIAkrl4zb8vebNvtxdmmJQ8bvYGDFYsdT7b3_A6UZ_H9T_X8KamEWSLVe_AkmaRFvlnb1iX1arX14Wsgxz2ebmUOrYJXn4tNTAA2YYmor_wcpnuSpYSXdek',
-          },
-          {
-            title: 'Thấu kính & Màn trập',
-            url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDCCMW9gZiOdO9fK2e5jSiVgqJoub4MqpPbzYwXwdIa9pZBbKHpJmJJ2JRKcyIAA5iaV92hggSNk8Lv8Vt2wkR_TFIU2zzOfxTvKn3L_rmzu-VpthEIjQyYqi9zKpTfKaCJ6XJQ-bc2k7r1x9HsgKEfNQjqxVrS63P0yPiMCArAhwKxtbz8i2Z2wku86C-gwwdgc-bi-DCRB9nYohAxa5M9rWESpC9L2euaymBVhx9Q',
-          },
-          {
-            title: 'Phụ kiện kiểm định',
-            url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDI92L-jNzd4ekyAbTuyw6zaYBII0SccjIyVEEUZdoTYPeYRy4nZeScQDJ7L8MGLBqxBWwp_UwxDDT0VZS6ZtfTqg9Lrfi7LPTO19DKVAee1Tkt8pte1ci2esWi64M3sL8NS469NKzru_eirDhvwsXlfj6tRn5dM9dc6G_u9kAaBuiGDSgnOJLE7pkYY7tYkN4iL7m4vbXSLVgR69JlWCk84Gspnh-S5ZE6FJf963Dr',
-          },
-        ],
-        attachment: {
-          name: 'Bien_Ban_Do_Collimator_Leica_M6_072.pdf',
-          size: '3.4 MB',
-          type: 'PDF',
-        },
-      },
-      {
-        id: 'msg-2',
-        sender: 'customer',
-        senderName: customerName,
-        senderAvatar: customerAvatar,
-        timestamp: '10:35 AM',
-        content:
-          'Cảm ơn anh Tùng! Độ chính xác và chi tiết của biên bản test quang học rất ấn tượng.\n\nĐối với đơn Hasselblad 907X, tôi có dự định đem đi chụp dự án kiến trúc tại Đà Lạt cuối tuần này. Nhờ Atelier hỗ trợ thêm:',
-        bullets: [
-          'Bổ sung 01 viên pin dự phòng NP-TX1 (chính hãng)',
-          'Dây đeo cổ thủ công bằng da bò sáp cognac như trong ảnh layout',
-          'Khóa ren chuyển đổi Arca-Swiss plate tương thích tripod Gitzo',
-        ],
-      },
-      {
-        id: 'msg-3',
-        sender: 'atelier',
-        senderName: 'Phạm Thùy Dương',
-        senderRole: 'CUSTODIAN',
-        senderAvatar:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuCdLeHuSahX_SC8gBcVoJQWJKup41bBSnFdMvL4tTfXEQ1BkY4bKFuO4rRQfAc0gVD7lBQTlx-JA_QtSIpiTlBgXHgMdIEH-4qEOfNnV3gb34SzRHtpxxCa6Bzz8-Qb5a1vUssAkvaJQViSxhPOa5cRDeHKGjyp1yrt4RdIEJp2o1-v9Z_F31fa3m25yyu30T7SPHbOv1lqfnOC7IHolyp3zBx-XMi3DbvcXA5l1Ndk',
-        timestamp: '10:41 AM',
-        content:
-          'Hoàn toàn khả thi, Elena. Tôi đã bổ sung 01 viên pin Hasselblad chính hãng (mức chai 0%) và tấm đế Arca-Swiss bọc nỉ chống trầy vào vali chống sốc Nanuk 935 của bạn mà không tính thêm phí phụ trợ.',
-        deliveryPill:
-          'Kiện hàng đã niêm phong kẹp chì ReUse Hub #SP-7718. Shipper chuyên biệt sẽ xuất phát lúc 14:00 hôm nay.',
-      },
-    ];
-  });
+  // Xác nhận xóa hội thoại từ phía người dùng
+  const handleConfirmDelete = async () => {
+    if (!conversation?._id) return;
+    setIsDeleting(true);
+    try {
+      await deleteConversationApi(conversation._id);
+      setMessages([]);
+      setConversation(null);
+      setShowDeleteModal(false);
+      showToast('Đã xóa toàn bộ lịch sử cuộc trò chuyện thành công!');
+    } catch {
+      showToast('Có lỗi xảy ra khi xóa cuộc trò chuyện. Vui lòng thử lại!');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Hàm chuyển đổi từ ChatMessageItem (DB) sang ChatMessage (UI)
+  const mapApiMessageToUi = useCallback((m: ChatMessageItem, currentUid: string): ChatMessage => {
+    const senderIdStr = typeof m.senderId === 'object' ? m.senderId._id : m.senderId;
+    const isMe = senderIdStr === currentUid;
+    const senderFullName = typeof m.senderId === 'object' ? m.senderId.fullName : undefined;
+    const senderAvatarUrl = typeof m.senderId === 'object' ? m.senderId.avatarUrl : undefined;
+
+    return {
+      id: m._id,
+      sender: isMe ? 'customer' : 'atelier',
+      senderName: isMe ? customerName : senderFullName || 'Atelier Chronos & Optics (Xưởng)',
+      senderAvatar: isMe ? customerAvatar : senderAvatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      senderRole: isMe ? undefined : 'CUSTODIAN',
+      timestamp: m.createdAt
+        ? new Date(m.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        : 'Vừa xong',
+      content: m.text || '',
+      photos: m.imageUrl ? [{ title: 'Ảnh đính kèm', url: m.imageUrl }] : undefined,
+    };
+  }, [customerName, customerAvatar]);
+
+  // Nạp cuộc trò chuyện THẬT từ MongoDB
+  useEffect(() => {
+    let isSubscribed = true;
+
+    getMyConversationApi()
+      .then(async (conv) => {
+        if (!isSubscribed) return;
+        setConversation(conv);
+
+        // Tham gia Socket Room của cuộc trò chuyện này
+        const socket = getSocket();
+        socket.emit('join_room', { conversationId: conv._id });
+
+        // Tải lịch sử tin nhắn thật từ DB
+        const res = await getMessagesApi(conv._id);
+        if (isSubscribed) {
+          const mapped = (res.messages || []).map((m) => mapApiMessageToUi(m, currentUserId));
+          setMessages(mapped);
+        }
+      })
+      .catch((err) => {
+        console.warn('Lỗi tải cuộc trò chuyện với Xưởng:', err);
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [currentUserId, mapApiMessageToUi]);
+
+  // Lắng nghe tin nhắn mới REAL-TIME từ Socket.IO
+  useEffect(() => {
+    const socket = getSocket();
+
+    const handleNewMessage = (m: ChatMessageItem) => {
+      if (!conversation || String(m.conversationId) !== String(conversation._id)) return;
+      const msgIdStr = String(m._id);
+      const clientMsgIdStr = m.clientMsgId ? String(m.clientMsgId) : "";
+      const uiMsg = mapApiMessageToUi(m, currentUserId);
+
+      setMessages((prev) => {
+        // 1. Đã có trong danh sách -> Bỏ qua
+        if (prev.some((item) => String(item.id) === msgIdStr)) return prev;
+
+        // 2. Trùng clientMsgId với tin optimistic -> Thay thế
+        if (clientMsgIdStr && prev.some((item) => String(item.id) === clientMsgIdStr)) {
+          return prev.map((item) => (String(item.id) === clientMsgIdStr ? uiMsg : item));
+        }
+
+        // 3. Nếu là tin nhắn của chính mình và có tin tạm cùng text -> Thay thế
+        const senderIdStr = typeof m.senderId === "object" ? String(m.senderId._id) : String(m.senderId);
+        if (senderIdStr === String(currentUserId)) {
+          const tempIdx = prev.findIndex((item) => String(item.id).startsWith("temp-") && item.content === m.text);
+          if (tempIdx !== -1) {
+            const clone = [...prev];
+            clone[tempIdx] = uiMsg;
+            return clone;
+          }
+        }
+
+        // 4. Tin nhắn từ đối phương -> Thêm mới
+        return [...prev, uiMsg];
+      });
+    };
+
+    const handleUserTyping = (data: { conversationId: string; userId: string }) => {
+      if (conversation && data.conversationId === conversation._id && data.userId !== currentUserId) {
+        setIsTyping(true);
+      }
+    };
+
+    const handleUserStopTyping = (data: { conversationId: string }) => {
+      if (conversation && data.conversationId === conversation._id) {
+        setIsTyping(false);
+      }
+    };
+
+    socket.on('new_message', handleNewMessage);
+    socket.on('user_typing', handleUserTyping);
+    socket.on('user_stop_typing', handleUserStopTyping);
+
+    return () => {
+      socket.off('new_message', handleNewMessage);
+      socket.off('user_typing', handleUserTyping);
+      socket.off('user_stop_typing', handleUserStopTyping);
+    };
+  }, [conversation, currentUserId, mapApiMessageToUi]);
 
   // Auto-scroll chat to bottom
   const messageEndRef = useRef<HTMLDivElement>(null);
@@ -146,65 +209,53 @@ export const ChatPage: React.FC = () => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // Handle send message
-  const handleSendMessage = (textToSend?: string) => {
+  // Gửi tin nhắn REAL-TIME tới Xưởng Shop Owner
+  const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
-    if (!text) return;
+    if (!text || !conversation) return;
 
-    const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+    setInputText('');
+    const socket = getSocket();
+    socket.emit('stop_typing', { conversationId: conversation._id });
+
+    // Optimistic UI update
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
       sender: 'customer',
       senderName: customerName,
       senderAvatar: customerAvatar,
       timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
       content: text,
     };
+    setMessages((prev) => [...prev, optimisticMsg]);
 
-    setMessages((prev) => [...prev, newMsg]);
-    setInputText('');
-
-    // Simulate intelligent atelier reply
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      let replyContent = `Đã ghi nhận yêu cầu của bạn về: "${text}". Atelier Silvergrain đã cập nhật vào hồ sơ đối soát hiện vật.`;
-      let deliveryPill: string | undefined = undefined;
-
-      if (text.includes('bảo hiểm')) {
-        replyContent =
-          'Atelier đã mở rộng gói bảo hiểm Diamond P1 thêm 48 giờ. Mọi rủi ro quang học và trầy xước thấu kính ngoài ý muốn đều được bảo hiểm bồi hoàn 100%.';
-      } else if (text.includes('Gia hạn')) {
-        replyContent =
-          'Yêu cầu gia hạn thêm 02 ngày thuê đã được duyệt tự động. Hợp đồng Smart Escrow sẽ duy trì mức cọc hiện tại đến hết ngày 21/03/2026.';
-      } else if (text.includes('màn trập') || text.includes('video')) {
-        replyContent =
-          'Đã gửi video ghi hình tốc trập 1/1000s của Leica M6 qua hệ thống lab. Bạn có thể kiểm tra trực tiếp độ đồng pha rèm vải.';
-        deliveryPill = 'Tệp video kiểm tra cơ học #VID-M6-1000S đã đính kèm vào hồ sơ lưu ký.';
-      } else if (text.includes('Filter') || text.includes('Zeiss')) {
-        replyContent =
-          'Hiện xưởng có sẵn kính lọc UV Carl Zeiss T* 39mm và 46mm nguyên hộp chống lóa T*. Tôi đã gửi kèm theo thùng Nanuk của bạn.';
+    // Gửi qua Socket.IO tới Shop Owner kèm clientMsgId để đối soát không bị nhân đôi
+    socket.emit(
+      'send_message',
+      {
+        conversationId: conversation._id,
+        text,
+        clientMsgId: tempId,
+      },
+      (ack: { success?: boolean; data?: ChatMessageItem }) => {
+        if (ack?.success && ack?.data) {
+          setMessages((prev) =>
+            prev.map((item) => (item.id === tempId ? mapApiMessageToUi(ack.data!, currentUserId) : item))
+          );
+        }
       }
-
-      const replyMsg: ChatMessage = {
-        id: `reply-${Date.now()}`,
-        sender: 'atelier',
-        senderName: 'Phạm Thùy Dương (Master Custodian)',
-        senderRole: 'CUSTODIAN',
-        senderAvatar:
-          'https://lh3.googleusercontent.com/aida-public/AB6AXuCdLeHuSahX_SC8gBcVoJQWJKup41bBSnFdMvL4tTfXEQ1BkY4bKFuO4rRQfAc0gVD7lBQTlx-JA_QtSIpiTlBgXHgMdIEH-4qEOfNnV3gb34SzRHtpxxCa6Bzz8-Qb5a1vUssAkvaJQViSxhPOa5cRDeHKGjyp1yrt4RdIEJp2o1-v9Z_F31fa3m25yyu30T7SPHbOv1lqfnOC7IHolyp3zBx-XMi3DbvcXA5l1Ndk',
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        content: replyContent,
-        deliveryPill,
-      };
-
-      setMessages((prev) => [...prev, replyMsg]);
-    }, 1200);
+    );
   };
 
-  // Quick preset pills handler
-  const handlePresetClick = (presetText: string) => {
-    handleSendMessage(presetText);
+  // Typing emitter
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    if (!conversation) return;
+    const socket = getSocket();
+    socket.emit('typing', { conversationId: conversation._id });
   };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FBF9F5] text-brand-charcoal antialiased selection:bg-[#E8E2D5]">
@@ -282,60 +333,16 @@ export const ChatPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Filter Context Ribbons / Topic Chips */}
+            {/* Context Ribbon */}
             <div className="py-4 flex flex-wrap items-center justify-between gap-3 border-b border-brand-border/40">
-              <div className="flex items-center gap-2 overflow-x-auto thin-scrollbar pb-1 md:pb-0">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted mr-1">
-                  Luồng trao đổi:
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-semibold text-brand-charcoal">
+                  Kênh trò chuyện trực tiếp với Atelier Chronos &amp; Optics (Shop Owner)
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('all')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    activeTopic === 'all'
-                      ? 'bg-brand-charcoal text-white shadow-2xs'
-                      : 'bg-white hover:bg-brand-surface border border-brand-border text-brand-charcoal'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">all_inbox</span>
-                  Tất cả phiên
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('rent')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'rent'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-charcoal'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-brand-sage" />
-                  Thuê #RH-RNT-2024-8845 (Hasselblad 907X)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('thrift')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'thrift'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-charcoal'
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#C88A37]" />
-                  Thrift #RH-THF-2025-0814 (Leica M6 Classic)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTopic('contax')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    activeTopic === 'contax'
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal'
-                      : 'bg-white hover:bg-brand-surface border-brand-border text-brand-muted hover:text-brand-charcoal'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">help_outline</span>
-                  Tư vấn quang sai Contax T2
-                </button>
+                <span className="px-2.5 py-0.5 rounded-full bg-[#f4f0ea] text-[#1c1a18] text-[10px] font-bold">
+                  Socket.IO Real-time
+                </span>
               </div>
 
               {/* Quick Status Pill */}
@@ -358,16 +365,10 @@ export const ChatPage: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2">
                         <h2 className="text-sm font-bold text-brand-charcoal">
-                          {activeTopic === 'rent'
-                            ? 'Phiên kiểm định: Hasselblad 907X 50C (Thuê RENT)'
-                            : activeTopic === 'thrift'
-                            ? 'Phiên lưu kho: Leica M6 Classic 0.72x (Mua THRIFT)'
-                            : activeTopic === 'contax'
-                            ? 'Tư vấn quang sai & Đo tốc cơ khí Contax T2'
-                            : 'Phiên thẩm định: Leica M6 Classic & Hasselblad 907X'}
+                          Trò chuyện cùng Atelier Chronos &amp; Optics
                         </h2>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-sage/15 text-brand-sage uppercase">
-                          Đang mở
+                          Trực tuyến
                         </span>
                       </div>
                       <p className="text-[11px] text-brand-muted">
@@ -399,6 +400,27 @@ export const ChatPage: React.FC = () => {
                     >
                       <span className="material-symbols-outlined text-sm text-brand-sage">call</span>
                       <span className="hidden sm:inline">Hotline Kỹ thuật</span>
+                    </button>
+
+                    {/* Icon Thùng rác để Xóa chat (chỉ hiện modal khi bấm vào đây) */}
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteModal(true)}
+                      className="p-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                      title="Xóa cuộc trò chuyện (Bấm vào thùng rác)"
+                    >
+                      <span className="material-symbols-outlined text-base">delete</span>
+                    </button>
+
+                    {/* Nút Đóng chat (thoát phòng chat ngay lập tức, không hiện modal) */}
+                    <button
+                      type="button"
+                      onClick={() => navigate(-1)}
+                      className="px-3 py-1.5 rounded-xl border border-brand-border bg-white hover:bg-brand-sand/40 text-xs font-semibold text-brand-charcoal flex items-center gap-1.5 transition-all cursor-pointer"
+                      title="Đóng phòng chat"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                      <span className="hidden sm:inline">Đóng chat</span>
                     </button>
                   </div>
                 </div>
@@ -557,38 +579,6 @@ export const ChatPage: React.FC = () => {
                   <div ref={messageEndRef} />
                 </div>
 
-                {/* Quick Preset Prompt Pills */}
-                <div className="px-6 pt-3 pb-2 bg-brand-surface/50 border-t border-brand-border/60 flex items-center gap-2 overflow-x-auto thin-scrollbar">
-                  <span className="text-[10px] uppercase font-bold text-brand-muted shrink-0">Hỏi nhanh:</span>
-                  <button
-                    type="button"
-                    onClick={() => handlePresetClick('+ Thêm thời hạn bảo hiểm quang học')}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-sand border border-brand-border text-[11px] text-brand-charcoal font-medium whitespace-nowrap transition-colors cursor-pointer"
-                  >
-                    + Thêm thời hạn bảo hiểm quang học
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePresetClick('Gia hạn ngày trả máy thêm 2 ngày')}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-sand border border-brand-border text-[11px] text-brand-charcoal font-medium whitespace-nowrap transition-colors cursor-pointer"
-                  >
-                    Gia hạn ngày trả máy thêm 2 ngày
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePresetClick('Yêu cầu video đo màn trập Leica')}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-sand border border-brand-border text-[11px] text-brand-charcoal font-medium whitespace-nowrap transition-colors cursor-pointer"
-                  >
-                    Yêu cầu video đo màn trập Leica
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePresetClick('Hỏi phụ kiện Filter Carl Zeiss T*')}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-brand-sand border border-brand-border text-[11px] text-brand-charcoal font-medium whitespace-nowrap transition-colors cursor-pointer"
-                  >
-                    Hỏi phụ kiện Filter Carl Zeiss T*
-                  </button>
-                </div>
 
                 {/* Rich Composer Box */}
                 <div className="p-4 bg-white border-t border-brand-border/60">
@@ -604,7 +594,7 @@ export const ChatPage: React.FC = () => {
                       placeholder="Nhập tin nhắn trao đổi kỹ thuật hoặc yêu cầu với Trưởng Atelier Phạm Thùy Dương..."
                       rows={2}
                       value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
+                      onChange={handleInputChange}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
@@ -948,6 +938,57 @@ export const ChatPage: React.FC = () => {
                 onClick={() => setZoomImage(null)}
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: XÁC NHẬN XÓA HOẶC HỦY CUỘC TRÒ CHUYỆN ── */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#FAF8F5] rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-brand-border">
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200">
+                <span className="material-symbols-outlined text-2xl">delete_forever</span>
+              </div>
+              <div>
+                <h3 className="font-serif text-base font-bold text-brand-charcoal">
+                  Xác nhận xóa cuộc trò chuyện?
+                </h3>
+                <p className="text-xs text-brand-muted mt-1 leading-relaxed">
+                  Bạn có chắc chắn muốn xóa toàn bộ lịch sử tin nhắn của phiên trao đổi này không? 
+                  Hành động này <span className="font-semibold text-rose-600">không thể hoàn tác</span>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-brand-border/60">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-brand-charcoal bg-white hover:bg-brand-sand border border-brand-border transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-sm">delete</span>
+                    <span>Xóa</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

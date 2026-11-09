@@ -1,3 +1,5 @@
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
+
 export interface GalleryImage {
   id: string;
   url: string;
@@ -16,7 +18,8 @@ export interface ThriftConvertData {
   description: string;
   heroImage: string;
   images: GalleryImage[];
-  status: 'ELIGIBLE' | 'PENDING_APPROVAL' | 'CONVERTED_TO_THRIFT';
+  status: 'ELIGIBLE' | 'PENDING_APPROVAL' | 'CONVERTED_TO_THRIFT' | 'REJECTED';
+  rejectionReason?: string;
   convertedAt?: string;
   currentRentStatus: 'COMPLETED' | 'RENTING';
   hasFutureBooking: boolean;
@@ -61,255 +64,171 @@ export interface ConvertibleSpecimenProfile {
 }
 
 export const SPECIMEN_PROFILES: Record<string, ConvertibleSpecimenProfile> = {
-  'INV-HB907-01': {
-    id: 'INV-HB907-01',
-    sku: 'HBL-907X-50C',
-    productName: 'Hasselblad 907X 50C + Lens XCD 45mm f/4 P Kit',
-    category: 'Camera & Quang học / Medium Format Digital',
-    serialNumber: '#HB-907-88201',
-    conditionGrade: 'Mint- 98.0%',
-    cycleCount: 14,
-    daysRented: 78,
-    totalRevenue: '31.500.000 ₫',
-    depreciationRate: '86.5%',
-    price: '122.000.000 ₫',
-    originalPrice: '145.000.000 ₫',
-    depreciationText: 'Khấu hao -18.5% so với giá mới (145.000.000 ₫)',
+  'INV-DRES-04': {
+    id: 'INV-DRES-04',
+    sku: 'DRES-MINI-01',
+    productName: 'Party Dress Thiết Kế Tối Giản - Bản Champagne (Size Free)',
+    category: 'Thời trang RENT / Đầm Dạ Hội',
+    serialNumber: '#SN-DRES-004',
+    conditionGrade: 'Chuẩn Thrift 79.0%',
+    cycleCount: 9,
+    daysRented: 45,
+    totalRevenue: '6.480.000 ₫',
+    depreciationRate: '50.0%',
+    price: '400.000 ₫',
+    originalPrice: '800.000 ₫',
+    depreciationText: 'Khấu hao -50% so với giá gốc (800.000 ₫)',
     status: 'ELIGIBLE',
     currentRentStatus: 'COMPLETED',
     hasFutureBooking: false,
-    recentOrderCode: '#RH-RNT-2024-8845',
-    recentCustomer: 'Elena Rostova',
-    location: 'Trạm tủ ẩm A2 (Khoang bảo quản trung tâm, 40% RH), Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Phạm Thùy Dương (#01)',
-    certificateCode: '#CERT-9942-VN',
+    recentOrderCode: '#RH-RNT-DRES-04',
+    recentCustomer: 'Trần Thị Thu Thảo',
+    location: 'Kho lưu trữ tiêu chuẩn, ReUse Care Hub, Quận 1, TP. HCM',
+    curatorName: 'Chuyên viên kiểm định xưởng ReUse Hub',
+    certificateCode: '#CERT-DRES-994',
     hashProof: 'sha256:d894b8e2f073c683b58498ffaa10e8e9766914fa28db323d61b69827b5e49e21',
     description:
-      'Hiện vật lưu trữ chính hãng từ Atelier Chronos & Optics. Số lần trập màn trập thực tế (Shutter Count): 4.820 shot. Tình trạng cảm biến Medium Format 50MP không điểm chết, không bụi vi hạt sau quy trình vệ sinh Class 1000 Cleanroom ngày 24/10/2024. Ống kính XCD 45mm f/4 P thấu kính không trầy xước, vòng lấy nét êm ái tuyệt đối.\n\nPhụ kiện đi kèm: 01 Vali chống sốc Nanuk 935 chuyên dụng, 02 pin Hasselblad 3400mAh chính hãng, cáp USB-C bện dù, ngàm kẹp release và Chứng chỉ Giám định Tuần hoàn ReUse Hub #CERT-9942.',
+      'Đầm dạ hội Party Dress thiết kế tối giản chất liệu lụa cao cấp, đã hoàn thành 9 chu kỳ cho thuê tiêu chuẩn. Bề mặt vải mềm tự nhiên, giữ trọn form dáng thanh lịch. Đã qua quy trình giặt hấp sinh học và khử khuẩn ozone khép kín ngày 25/10/2026.\n\nPhụ kiện đi kèm: Túi zip bảo quản chống bụi ReUse Care, móc treo đầm thiết kế và Thẻ chứng nhận kiểm định tuần hoàn ReUse Hub #CERT-DRES-994.',
     heroImage:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuC9ew2A1dXAwNLJzGMghu7qQZKfdoUktXpUYMMMZgSzkPxMWttKQhRJ_-YFaNymqCAx6v0g_PiGASnAzKlVPQ-3eYbLJf4Hp2XS52ZNictAWODfEMfjVty4iFXwrdkJsJWCSLLgt3iYNUNyYgMb-ng_e2ahKvktVuKm0bQAn99Xs_Rof6uVYVv0PAFmruTPt2Kc1u9GHBdL_giqrRwKSomPsx0CLzd1DqPZt8o1Eht_',
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuAtmXKLrFBh-ULvSwIfPH1-6Wt20ZZ6MVkUuMWLCglFjw1kWB6QFMzh2-V6BXtow5H6r3Mbt8RSgMy-DL2iSfu901WIFIU_yZfWuObWTRd4NoP9Nh1jctTIF7wGjHkgI4D5oxH6_dDBVra7zeHdkwYMXvpTTvPzpsf0XKcML75jinBrzziZBMszcYr5tYuRg6PC9_OCoBVNoPUb4MfpHrUPrGF2yzFQQLz7iIk6cPu5',
     images: [
       {
         id: 'hero',
-        label: 'HERO',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC9ew2A1dXAwNLJzGMghu7qQZKfdoUktXpUYMMMZgSzkPxMWttKQhRJ_-YFaNymqCAx6v0g_PiGASnAzKlVPQ-3eYbLJf4Hp2XS52ZNictAWODfEMfjVty4iFXwrdkJsJWCSLLgt3iYNUNyYgMb-ng_e2ahKvktVuKm0bQAn99Xs_Rof6uVYVv0PAFmruTPt2Kc1u9GHBdL_giqrRwKSomPsx0CLzd1DqPZt8o1Eht_',
-      },
-      {
-        id: 'sensor',
-        label: 'SENSOR',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAQvh_Lh0hAruQ5t3sl7t3o4NnQ_m8XjEkwDmjyiEzZYjGysKMRzxQ_5K1Bf6tUqQjXbsXqTbDNMLubljXMDDVg4WXx9kL-s3aTUL-iF1yZ2oo7oDyWnJBjyjvGlNsU1IZPdY51YQJ19hmaQbCFf5ppBVFV8BvBeiulUkMhcqKEUM-T5LTF4RTXQqWxrkgCJKBSQeK43vH2u8Wu-7Qr48zrevkF7QRwvm3u--oSaSmu',
-      },
-      {
-        id: 'dials',
-        label: 'DIALS',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAUUwaoa-ksSKhJIs6iiDYrYokH8C3myEIpNz2f7miF_0CsrlvmMj1_olRmQGDT6-eMdLl-LXetw2kZtsc8vwvSps-LGeNYPXQ7YXkCHAZplQDIecDHPcQYuapXqDtvUoBHOacrePwPf5Nn-EjKwP8Z0V6Umy2njdVpbOCdaoL-GGwKX1IRfcvQg3EdTK7e_NLpMLrNHUfzr8P4EJmubDz__NV7RxH5tKqRgJC0-Lwo',
-      },
-      {
-        id: 'serial',
-        label: 'SERIAL',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBjEHNIq4DAvJT-MgHsfaFwBcCuDqb3R5lxWbSdxqzmBSBKNsIfq9W0s7HvhkV3gPbrk-HUcbFJCbZqvNpdenA7lxCa9aRxRKCZxyezuhAL6A8cUQrrjPrNDQDJg8oVtUGr2Mfa7Gmz_WJb_ITSpu8AGRxsCVgmeFyTi5PxVqPcLYCNwYdKCSHBtThQ4ubkPIkZAFk-hzIO3aLjwUHRoH0piiOY0GS3sbOw__5FbYP5',
-      },
-      {
-        id: 'case',
-        label: 'CASE',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAmRB29b3jWNLq9rlxZdOmPq4swRshMmc9zqbKO3JqMiqRB5ZMx9J8XBSYLPoyZPv3lazUQYk5Off-ILzRxpWeriY8U1KvjMe9MUBy-AGDsKLd5D5oVmOWtznUFdui6HTZYcGSgBMvexv2_dH82WMTFfaMpi6Ef4IcliZRfTqNSOlURsDljaztkvtOksHABRo5cid89gx4lfTYAYs60WUhqsxOwgf9pKhuDsPYp7YFv',
-      },
-    ],
-  },
-
-  'INV-LCA-M10R-01': {
-    id: 'INV-LCA-M10R-01',
-    sku: 'LCA-M10R',
-    productName: 'Leica M10-R Black Chrome Finish',
-    category: 'Camera & Quang học / 35mm Rangefinder Digital',
-    serialNumber: '#LC-98214',
-    conditionGrade: 'Excellent 89.0%',
-    cycleCount: 18,
-    daysRented: 92,
-    totalRevenue: '42.800.000 ₫',
-    depreciationRate: '86.0%',
-    price: '148.000.000 ₫',
-    originalPrice: '215.000.000 ₫',
-    depreciationText: 'Khấu hao -31.1% so với giá mới (215.000.000 ₫)',
-    status: 'ELIGIBLE',
-    currentRentStatus: 'COMPLETED',
-    hasFutureBooking: false,
-    recentOrderCode: '#RH-RNT-2024-8702',
-    recentCustomer: 'Đặng Minh Trí',
-    location: 'Trạm tủ ẩm A1 (Khoang Leica Master), Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Phạm Thùy Dương (#01)',
-    certificateCode: '#CERT-8819-VN',
-    hashProof: 'sha256:7f3a992bc44101e4a773d1000bb78a2e1f4044c010a3d4f849ef9b071aa57c32',
-    description:
-      'Hiện vật Leica M10-R cảm biến 40MP chuẩn Đức. Đã qua 18 chu kỳ cho thuê tuyển chọn, buồng cơ khí lấy nét rangefinder được căn chỉnh Collimator quang học chuẩn xác 100%. Lớp mạ đen ánh đồng nhẹ ở viền kim loại mang đậm dấu ấn patina di sản nghệ thuật.\n\nPhụ kiện đi kèm: Hộp da Leica nguyên bản, 02 pin Leica BP-SCL5 zin, đế báng tay cầm kim loại, nắp cap body kim loại và Giấy chứng thực lưu ký ReUse Hub.',
-    heroImage:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuBK7q-wXNwM9mQtifEuLln07MzCCWjhLKW72k8Ju_sd9XzTdnHkb_mkrn8yuEh7iV7sIRrjASilOQJ4TsXO50XJELSkZRk5mC9I4VMGwJ7nu5VhhtbAf8lG1aVAd5sdtxkZEdWP7NWFqtNAyoa3RZaB20tFIHkC0udo1w1ak4g1uRq--5lLDVbza1ek1VFUzAGFRheKUcG02GYpRZjOmRZwNhmOPDwp2euls1oy2xYG',
-    images: [
-      {
-        id: 'hero',
-        label: 'HERO',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBK7q-wXNwM9mQtifEuLln07MzCCWjhLKW72k8Ju_sd9XzTdnHkb_mkrn8yuEh7iV7sIRrjASilOQJ4TsXO50XJELSkZRk5mC9I4VMGwJ7nu5VhhtbAf8lG1aVAd5sdtxkZEdWP7NWFqtNAyoa3RZaB20tFIHkC0udo1w1ak4g1uRq--5lLDVbza1ek1VFUzAGFRheKUcG02GYpRZjOmRZwNhmOPDwp2euls1oy2xYG',
-      },
-      {
-        id: 'sensor',
-        label: 'SENSOR',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAQvh_Lh0hAruQ5t3sl7t3o4NnQ_m8XjEkwDmjyiEzZYjGysKMRzxQ_5K1Bf6tUqQjXbsXqTbDNMLubljXMDDVg4WXx9kL-s3aTUL-iF1yZ2oo7oDyWnJBjyjvGlNsU1IZPdY51YQJ19hmaQbCFf5ppBVFV8BvBeiulUkMhcqKEUM-T5LTF4RTXQqWxrkgCJKBSQeK43vH2u8Wu-7Qr48zrevkF7QRwvm3u--oSaSmu',
-      },
-      {
-        id: 'dials',
-        label: 'TOP PLATE',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAUUwaoa-ksSKhJIs6iiDYrYokH8C3myEIpNz2f7miF_0CsrlvmMj1_olRmQGDT6-eMdLl-LXetw2kZtsc8vwvSps-LGeNYPXQ7YXkCHAZplQDIecDHPcQYuapXqDtvUoBHOacrePwPf5Nn-EjKwP8Z0V6Umy2njdVpbOCdaoL-GGwKX1IRfcvQg3EdTK7e_NLpMLrNHUfzr8P4EJmubDz__NV7RxH5tKqRgJC0-Lwo',
-      },
-      {
-        id: 'case',
-        label: 'BOX & CASE',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAmRB29b3jWNLq9rlxZdOmPq4swRshMmc9zqbKO3JqMiqRB5ZMx9J8XBSYLPoyZPv3lazUQYk5Off-ILzRxpWeriY8U1KvjMe9MUBy-AGDsKLd5D5oVmOWtznUFdui6HTZYcGSgBMvexv2_dH82WMTFfaMpi6Ef4IcliZRfTqNSOlURsDljaztkvtOksHABRo5cid89gx4lfTYAYs60WUhqsxOwgf9pKhuDsPYp7YFv',
-      },
-    ],
-  },
-
-  'INV-HB500-02': {
-    id: 'INV-HB500-02',
-    sku: 'HBL-500CM',
-    productName: 'Hasselblad 500C/M Body + Carl Zeiss Planar 80mm f/2.8 T*',
-    category: 'Camera & Quang học / Classic Medium Format Film',
-    serialNumber: '#HB-500-44910',
-    conditionGrade: 'Good Vintage 86.0%',
-    cycleCount: 22,
-    daysRented: 110,
-    totalRevenue: '38.000.000 ₫',
-    depreciationRate: '89.0%',
-    price: '48.500.000 ₫',
-    originalPrice: '65.000.000 ₫',
-    depreciationText: 'Khấu hao -25.4% so với giá thị trường vintage (65.000.000 ₫)',
-    status: 'ELIGIBLE',
-    currentRentStatus: 'COMPLETED',
-    hasFutureBooking: false,
-    recentOrderCode: '#RH-RNT-2024-8114',
-    recentCustomer: 'Lê Hoàng Nam',
-    location: 'Kho lưu trữ triển lãm Vintage, Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Phạm Thùy Dương (#01)',
-    certificateCode: '#CERT-7731-VN',
-    hashProof: 'sha256:33bc91928aee77bb0198cc21a4f00129bc81109aed8271e89921bcff40128821',
-    description:
-      'Huyền thoại cơ khí Thụy Điển Hasselblad 500C/M kết hợp cùng thấu kính Carl Zeiss Planar 80mm T* kinh điển. Máy đã hoàn thành 22 chu kỳ chụp thời trang analog, buồng gương lật đã qua CLA toàn diện tháng 10/2024. Kính ngắm Waist-Level trong vắt, back phim A12 lên film mượt mà 100% không chồng hình.\n\nPhụ kiện đi kèm: Back film A12 zin trùng serial, kính ngắm thể thao WLF, dây đeo da thủ công Atelier, hood che nắng Carl Zeiss kim loại.',
-    heroImage:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDUN8HCi3sOXhTeh0dmehNYmo57zAHDye6SQDMIHO6MV0gs1lM8acz6IPVme5655aZzTIZcuBfeWTIShx9pWOMGfQguL-0rQ48jmhYIGGP97rfl7-9ODCHu4Bfr8f0eug6R1WoUO8pCOMtEA18LBcsfab6iSn_7v87Rehv8FjtphcR29tVHavTUarY6T57TmL__j8QfWk--_feDS3RT8vWba8Bigrfx6CdXpyWA-ixS',
-    images: [
-      {
-        id: 'hero',
-        label: 'HERO',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDUN8HCi3sOXhTeh0dmehNYmo57zAHDye6SQDMIHO6MV0gs1lM8acz6IPVme5655aZzTIZcuBfeWTIShx9pWOMGfQguL-0rQ48jmhYIGGP97rfl7-9ODCHu4Bfr8f0eug6R1WoUO8pCOMtEA18LBcsfab6iSn_7v87Rehv8FjtphcR29tVHavTUarY6T57TmL__j8QfWk--_feDS3RT8vWba8Bigrfx6CdXpyWA-ixS',
-      },
-      {
-        id: 'optics',
-        label: 'PLANAR 80MM',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAUUwaoa-ksSKhJIs6iiDYrYokH8C3myEIpNz2f7miF_0CsrlvmMj1_olRmQGDT6-eMdLl-LXetw2kZtsc8vwvSps-LGeNYPXQ7YXkCHAZplQDIecDHPcQYuapXqDtvUoBHOacrePwPf5Nn-EjKwP8Z0V6Umy2njdVpbOCdaoL-GGwKX1IRfcvQg3EdTK7e_NLpMLrNHUfzr8P4EJmubDz__NV7RxH5tKqRgJC0-Lwo',
+        label: 'MẶT TRƯỚC',
+        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAtmXKLrFBh-ULvSwIfPH1-6Wt20ZZ6MVkUuMWLCglFjw1kWB6QFMzh2-V6BXtow5H6r3Mbt8RSgMy-DL2iSfu901WIFIU_yZfWuObWTRd4NoP9Nh1jctTIF7wGjHkgI4D5oxH6_dDBVra7zeHdkwYMXvpTTvPzpsf0XKcML75jinBrzziZBMszcYr5tYuRg6PC9_OCoBVNoPUb4MfpHrUPrGF2yzFQQLz7iIk6cPu5',
       },
       {
         id: 'back',
-        label: 'A12 BACK',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBjEHNIq4DAvJT-MgHsfaFwBcCuDqb3R5lxWbSdxqzmBSBKNsIfq9W0s7HvhkV3gPbrk-HUcbFJCbZqvNpdenA7lxCa9aRxRKCZxyezuhAL6A8cUQrrjPrNDQDJg8oVtUGr2Mfa7Gmz_WJb_ITSpu8AGRxsCVgmeFyTi5PxVqPcLYCNwYdKCSHBtThQ4ubkPIkZAFk-hzIO3aLjwUHRoH0piiOY0GS3sbOw__5FbYP5',
+        label: 'MẶT SAU',
+        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAtmXKLrFBh-ULvSwIfPH1-6Wt20ZZ6MVkUuMWLCglFjw1kWB6QFMzh2-V6BXtow5H6r3Mbt8RSgMy-DL2iSfu901WIFIU_yZfWuObWTRd4NoP9Nh1jctTIF7wGjHkgI4D5oxH6_dDBVra7zeHdkwYMXvpTTvPzpsf0XKcML75jinBrzziZBMszcYr5tYuRg6PC9_OCoBVNoPUb4MfpHrUPrGF2yzFQQLz7iIk6cPu5',
       },
     ],
   },
 
-  'INV-CAN-R6M2-03': {
-    id: 'INV-CAN-R6M2-03',
-    sku: 'CAN-R6M2-KIT',
-    productName: 'Canon EOS R6 Mark II + RF 24-70mm f/2.8L IS USM',
-    category: 'Camera & Quang học / Full-Frame Hybrid Mirrorless',
-    serialNumber: '#CN-44091',
-    conditionGrade: 'Near Mint 94.0%',
-    cycleCount: 9,
-    daysRented: 45,
-    totalRevenue: '20.250.000 ₫',
-    depreciationRate: '38.0%',
-    price: '68.000.000 ₫',
-    originalPrice: '82.000.000 ₫',
-    depreciationText: 'Khấu hao -17.1% so với giá mới (82.000.000 ₫)',
-    status: 'RENTING',
-    currentRentStatus: 'RENTING',
-    hasFutureBooking: false,
-    recentOrderCode: '#RH-RNT-2024-8819',
-    recentCustomer: 'Atelier Lumina',
-    location: 'Trạm kiểm định cơ giới, Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Phạm Thùy Dương (#01)',
-    certificateCode: '#CERT-6610-VN',
-    hashProof: 'sha256:11ac4481023aeb990022cc447711fe900bb11881aa0022ff8811dd6622aa33bb',
-    description:
-      'Bộ máy Hybrid chuyên nghiệp Canon EOS R6 Mark II kèm ống kính đỏ đa dụng RF 24-70mm f/2.8L IS USM. Tốc độ chụp thể thao 40fps điện tử và quay video 4K60p oversampled 6K không giới hạn thời gian. Thân máy và ống kính giữ gìn kỹ lưỡng, không va chạm góc cạnh.\n\nPhụ kiện đi kèm: 02 pin Canon LP-E6NH zin, sạc đôi Canon, kính lọc bảo vệ B+W nano, hood che nắng RF và vali Nanuk chống sốc.',
-    heroImage:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuAIHLrLcDmPMcS5-_NhJCPF7j8kJeK6ZVVNyM9TleU2xRvucrUFOoBZtCcOPiJSHUjl7Iv01SAasTblH67pco0LosJeDVpwMfNGnlxFjjZQaEIfKVE3qq9KUiKtqHpPjyd__HpuJ3I-0Y423cALOtPLP-n8ZjzSQX4cv0Lfthqb28MOCTdgPczzcjt9U-ITeVCj7267pW-zsHNBukp8W_BJ_-3rRsNEQoQ8_VJrPm_g',
-    images: [
-      {
-        id: 'hero',
-        label: 'HERO',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAIHLrLcDmPMcS5-_NhJCPF7j8kJeK6ZVVNyM9TleU2xRvucrUFOoBZtCcOPiJSHUjl7Iv01SAasTblH67pco0LosJeDVpwMfNGnlxFjjZQaEIfKVE3qq9KUiKtqHpPjyd__HpuJ3I-0Y423cALOtPLP-n8ZjzSQX4cv0Lfthqb28MOCTdgPczzcjt9U-ITeVCj7267pW-zsHNBukp8W_BJ_-3rRsNEQoQ8_VJrPm_g',
-      },
-      {
-        id: 'lens',
-        label: 'RF 24-70L',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAUUwaoa-ksSKhJIs6iiDYrYokH8C3myEIpNz2f7miF_0CsrlvmMj1_olRmQGDT6-eMdLl-LXetw2kZtsc8vwvSps-LGeNYPXQ7YXkCHAZplQDIecDHPcQYuapXqDtvUoBHOacrePwPf5Nn-EjKwP8Z0V6Umy2njdVpbOCdaoL-GGwKX1IRfcvQg3EdTK7e_NLpMLrNHUfzr8P4EJmubDz__NV7RxH5tKqRgJC0-Lwo',
-      },
-    ],
-  },
-
-  'LCA-M6-TITAN': {
-    id: 'LCA-M6-TITAN',
-    sku: 'LCA-M6-TITAN',
-    productName: 'Leica M6 Classic Titanium Finish (1994)',
-    category: 'Camera & Quang học / 35mm Analog Film Rangefinder',
-    serialNumber: '#LC-M6-1994-098',
-    conditionGrade: 'Near Mint 95.0%',
-    cycleCount: 16,
-    daysRented: 64,
-    totalRevenue: '24.320.000 ₫',
-    depreciationRate: '85.0%',
-    price: '85.000.000 ₫',
-    originalPrice: '95.000.000 ₫',
-    depreciationText: 'Khấu hao -10.5% so với giá thị trường sưu tầm (95.000.000 ₫)',
-    status: 'FUTURE_BOOKING',
+  'INV-SNEK-03': {
+    id: 'INV-SNEK-03',
+    sku: 'SNK-ARCH-01',
+    productName: 'Classic Sneakers Da Thật Archive - Bản Đen Triple (Size 42)',
+    category: 'Giày dép / Sneakers Da Thật',
+    serialNumber: '#SN-SNEK-003',
+    conditionGrade: 'Chuẩn Thrift 81.0%',
+    cycleCount: 8,
+    daysRented: 40,
+    totalRevenue: '4.800.000 ₫',
+    depreciationRate: '45.0%',
+    price: '330.000 ₫',
+    originalPrice: '600.000 ₫',
+    depreciationText: 'Khấu hao -45% so với giá gốc (600.000 ₫)',
+    status: 'ELIGIBLE',
     currentRentStatus: 'COMPLETED',
-    hasFutureBooking: true,
-    recentOrderCode: '#RH-RNT-2024-8501',
-    recentCustomer: 'Vũ Quốc Bảo',
-    location: 'Tủ kính bảo mật tầng 2, Atelier Chronos, Quận 1, TP. HCM',
-    curatorName: 'Phạm Thùy Dương (#01)',
-    certificateCode: '#CERT-5509-VN',
-    hashProof: 'sha256:88ee1100aa77ffbb2299dd3366cc0011883399eedd2211bb7744ff8899aa1100',
+    hasFutureBooking: false,
+    recentOrderCode: '#RH-RNT-SNEK-03',
+    recentCustomer: 'Nguyễn Hoàng Nam',
+    location: 'Kệ giày kiểm định, ReUse Care Hub, Quận 1, TP. HCM',
+    curatorName: 'Chuyên viên kiểm định xưởng ReUse Hub',
+    certificateCode: '#CERT-SNEK-882',
+    hashProof: 'sha256:7f3a992bc44101e4a773d1000bb78a2e1f4044c010a3d4f849ef9b071aa57c32',
     description:
-      'Phiên bản Leica M6 Classic Titanium cực hiếm xuất xưởng năm 1994 tại Solms, Đức. Vỏ bọc da đà điểu nguyên bản màu xám khói, khung máy phủ titanium chống oxy hóa tuyệt đối. Kính ngắm 0.72x sáng rõ, đo sáng điểm nhạy bén, hoạt động cơ khí 100% không cần pin vẫn trập chính xác mọi tốc độ.\n\nPhụ kiện đi kèm: Dây da Leica titan đặc chủng, nắp cap body titanium, bao da mềm và Hộ chiếu bảo hành ReUse Hub.',
+      'Đôi sneaker da thật phong cách archive vintage bền bỉ. Đã hoàn thành 8 vòng luân chuyển, đế giày còn nguyên độ bám, da thật có lớp patina cổ điển tự nhiên. Đã được vệ sinh chuyên sâu diệt khuẩn nano bạc.\n\nPhụ kiện đi kèm: Hộp giấy tái chế ReUse, túi vải canvas đựng giày và Thẻ chứng nhận kiểm định tuần hoàn ReUse Hub.',
     heroImage:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCmYdkWVRHHB9Xxm1mQhTzNT9Xt1x3TNJOxHqrHlSpsLP_iZle-nGzIIVxf4RIBPGf5eZ4ZP98H0CxD0lNmbkzzPkI7Ow6AE9fbAimD9cu9Oe4AT_l62Fyf-KlsvRKaSUQEv_aod7MoRX-Hqzl57xvMvo_q5tNsH0LJzegWuVpl2aAB8-OzZZk1AIB0gYfWSEwcBs92HBanEw8QlQWEPkSmVx6S5dbVSx7Fn_k1bbiB',
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuCBGX9MLaXkDPpkpvRKdy2axzNTQbnNx_zdNdPhaZIyGar7jQumeRDAiXCgdqV-vo2remereT9vKy1u0lXTPcTjUwHWw2BUN5nVjtbW3A7Kck2D8oSAuMlA4YWikHGVx2wLPa4O73p6BniZAEsLW2gaF64ui2yqlzuI6QxQw-FAJ6EEbSwiKl9WQGZVRuhW0izycAPRBT0Wp20b8b6yIXFPDTRtD61j3kfI03X6CBtE',
     images: [
       {
         id: 'hero',
-        label: 'HERO',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCmYdkWVRHHB9Xxm1mQhTzNT9Xt1x3TNJOxHqrHlSpsLP_iZle-nGzIIVxf4RIBPGf5eZ4ZP98H0CxD0lNmbkzzPkI7Ow6AE9fbAimD9cu9Oe4AT_l62Fyf-KlsvRKaSUQEv_aod7MoRX-Hqzl57xvMvo_q5tNsH0LJzegWuVpl2aAB8-OzZZk1AIB0gYfWSEwcBs92HBanEw8QlQWEPkSmVx6S5dbVSx7Fn_k1bbiB',
-      },
-      {
-        id: 'shutter',
-        label: 'SHUTTER DIAL',
-        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAUUwaoa-ksSKhJIs6iiDYrYokH8C3myEIpNz2f7miF_0CsrlvmMj1_olRmQGDT6-eMdLl-LXetw2kZtsc8vwvSps-LGeNYPXQ7YXkCHAZplQDIecDHPcQYuapXqDtvUoBHOacrePwPf5Nn-EjKwP8Z0V6Umy2njdVpbOCdaoL-GGwKX1IRfcvQg3EdTK7e_NLpMLrNHUfzr8P4EJmubDz__NV7RxH5tKqRgJC0-Lwo',
+        label: 'MẶT TRƯỚC',
+        url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCBGX9MLaXkDPpkpvRKdy2axzNTQbnNx_zdNdPhaZIyGar7jQumeRDAiXCgdqV-vo2remereT9vKy1u0lXTPcTjUwHWw2BUN5nVjtbW3A7Kck2D8oSAuMlA4YWikHGVx2wLPa4O73p6BniZAEsLW2gaF64ui2yqlzuI6QxQw-FAJ6EEbSwiKl9WQGZVRuhW0izycAPRBT0Wp20b8b6yIXFPDTRtD61j3kfI03X6CBtE',
       },
     ],
   },
 };
 
 /**
- * Lấy dữ liệu khởi tạo chuẩn cho một hiện vật bất kỳ dựa trên ID hoặc SKU
+ * Lấy dữ liệu khởi tạo chuẩn cho một hiện vật bất kỳ dựa trên ID/SKU và đối tượng sản phẩm từ MongoDB
  */
-export function getInitialThriftDataForUnit(unitIdOrSku?: string): ThriftConvertData {
-  const key = unitIdOrSku || 'INV-HB907-01';
-  const profile = SPECIMEN_PROFILES[key] || SPECIMEN_PROFILES['INV-HB907-01'];
+export function getInitialThriftDataForUnit(
+  unitIdOrSku?: string,
+  matchedProduct?: {
+    sku?: string;
+    name?: string;
+    category?: unknown;
+    pricePerDay?: number;
+    replacementValue?: number;
+    coverImage?: string;
+    description?: string;
+    totalUnits?: number;
+    rentingUnits?: number;
+    maintenanceUnits?: number;
+  }
+): ThriftConvertData {
+  if (matchedProduct && matchedProduct.name) {
+    const unitNumber = parseInt(unitIdOrSku?.match(/-(\d+)$/)?.[1] || '1', 10);
+    const catName =
+      typeof matchedProduct.category === 'object' && matchedProduct.category !== null
+        ? (matchedProduct.category as { name?: string }).name || 'Thời trang RENT'
+        : String(matchedProduct.category || 'Thời trang RENT');
+    const total = Number(matchedProduct.totalUnits) || 1;
+    const vInfo = getUnitVariantAndCondition(
+      matchedProduct.name,
+      catName,
+      unitNumber,
+      total,
+      matchedProduct.rentingUnits || 0,
+      matchedProduct.maintenanceUnits || 0
+    );
+    const origPriceNum =
+      matchedProduct.replacementValue || (matchedProduct.pricePerDay || 200000) * 30;
+    const thriftPriceNum =
+      Math.round((origPriceNum * (1 - vInfo.discountPercent / 100)) / 1000) * 1000;
+    const unitSku = matchedProduct.sku || 'RENT-PROD';
+    const unitId =
+      unitIdOrSku || `INV-${unitSku.slice(-4).toUpperCase()}-${String(unitNumber).padStart(2, '0')}`;
+    const serialNumber = `#SN-${unitSku.slice(-4).toUpperCase()}-${String(unitNumber).padStart(3, '0')}`;
+    const imgUrl = matchedProduct.coverImage || 'https://placehold.co/600x400';
+
+    return {
+      unitId,
+      sku: unitSku,
+      title: `${matchedProduct.name} - ${vInfo.variantShort} (Thanh lý THRIFT)`,
+      category: catName,
+      condition: `${vInfo.conditionGrade} - Đã qua thẩm định xưởng`,
+      price: `${new Intl.NumberFormat('vi-VN').format(thriftPriceNum)} ₫`,
+      originalPrice: `${new Intl.NumberFormat('vi-VN').format(origPriceNum)} ₫`,
+      depreciationText: `Khấu hao -${vInfo.discountPercent}% sau ${vInfo.cycleCount} chu kỳ cho thuê`,
+      description: `Hiện vật chính hãng lưu kho xưởng ReUse Hub, đã hoàn tất ${vInfo.cycleCount} chu kỳ cho thuê tiêu chuẩn. ${matchedProduct.description || ''}\n\nĐã qua quy trình kiểm định chất lượng, khử trùng ozone và làm sạch chuyên sâu. Phụ kiện đi kèm: Bao bì bảo quản chuyên dụng và Thẻ chứng nhận kiểm định tuần hoàn ReUse Hub.`,
+      heroImage: imgUrl,
+      images: [
+        { id: 'img-1', label: 'MẶT TRƯỚC', url: imgUrl },
+        { id: 'img-2', label: 'MẶT SAU', url: imgUrl },
+        { id: 'img-3', label: 'CHI TIẾT', url: imgUrl },
+        { id: 'img-4', label: 'ĐÓNG GÓI', url: imgUrl },
+      ],
+      status: 'ELIGIBLE',
+      currentRentStatus: 'COMPLETED',
+      hasFutureBooking: false,
+      serialNumber,
+      cycleCount: vInfo.cycleCount,
+      daysRented: vInfo.cycleCount * 5,
+      totalRevenue: `${new Intl.NumberFormat('vi-VN').format(
+        vInfo.cycleCount * (matchedProduct.pricePerDay || 200000) * 4
+      )} ₫`,
+      sourceTag: 'Kho Cho Thuê RENT (Chuyển giao tuần hoàn)',
+      inspectorName: 'Chuyên viên kiểm định xưởng ReUse Hub',
+      certificateCode: `#CERT-${unitSku.slice(-4).toUpperCase()}-${unitNumber}94`,
+      hashProof: `sha256:${unitSku.toLowerCase()}${unitNumber}d894b8e2f073c683b58498ffaa10e8e9`,
+      recentOrderCode: `#RH-RNT-${unitSku.slice(-4).toUpperCase()}-${unitNumber}`,
+      recentCustomer: 'Khách hàng ReUse Hub (Hoàn tất)',
+    };
+  }
+
+  const key = unitIdOrSku || 'INV-DRES-04';
+  const profile = SPECIMEN_PROFILES[key] || Object.values(SPECIMEN_PROFILES)[0];
 
   return {
     unitId: profile.id,
     sku: profile.sku,
-    title: `${profile.productName} (Ex-Rental Archive ${profile.conditionGrade.split(' ')[0]})`,
+    title: profile.productName,
     category: profile.category,
-    condition: `${profile.conditionGrade} - Đã qua thẩm định buồng máy`,
+    condition: `${profile.conditionGrade} - Đã qua thẩm định xưởng`,
     price: profile.price,
     originalPrice: profile.originalPrice,
     depreciationText: profile.depreciationText,
@@ -323,7 +242,7 @@ export function getInitialThriftDataForUnit(unitIdOrSku?: string): ThriftConvert
     cycleCount: profile.cycleCount,
     daysRented: profile.daysRented,
     totalRevenue: profile.totalRevenue,
-    sourceTag: 'Returned RENT Inventory (Chuyển giao từ Kho RENT)',
+    sourceTag: 'Kho Cho Thuê RENT (Chuyển giao tuần hoàn)',
     inspectorName: profile.curatorName,
     certificateCode: profile.certificateCode,
     hashProof: profile.hashProof,

@@ -112,7 +112,23 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((p: ShopProductItem) => !p.sku.startsWith('mock-'));
+          return parsed.filter((p: ShopProductItem) => {
+            const skuLower = (p.sku || '').toLowerCase();
+            const nameLower = (p.name || '').toLowerCase();
+            const catLower = (typeof p.category === 'string' ? p.category : '').toLowerCase();
+            const isMockCamera =
+              skuLower.startsWith('mock-') ||
+              skuLower === 'hbl-907x-50c' ||
+              skuLower === 'sny-fx3-cine' ||
+              skuLower === 'lca-m10r-chr' ||
+              skuLower === 'fji-gfx100-ii' ||
+              skuLower === 'can-r5c-cine' ||
+              nameLower.includes('hasselblad') ||
+              nameLower.includes('leica') ||
+              catLower.includes('camera') ||
+              catLower.includes('máy ảnh');
+            return !isMockCamera;
+          });
         }
       } catch (err) {
         console.error('Lỗi parse localStorage:', err);

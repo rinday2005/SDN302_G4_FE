@@ -348,13 +348,24 @@ export const rejectThriftListingApi = async (id: string, rejectionReason: string
  */
 export const fetchAdminThriftListingsApi = async (): Promise<RawPendingThriftItem[]> => {
   try {
-    const res = await api.get("/admin/listings");
+    const res = await api.get("/admin/listings?limit=100");
     const data = res.data?.data || res.data;
     if (data?.thrift?.items && Array.isArray(data.thrift.items) && data.thrift.items.length > 0) {
       return data.thrift.items;
     }
   } catch (err) {
     console.warn("Lỗi khi tải toàn bộ danh sách THRIFT từ Admin API:", err);
+  }
+
+  // Thử thêm endpoint pending chuyên biệt nếu cần
+  try {
+    const res = await api.get("/admin/listings/pending?type=THRIFT&limit=100");
+    const data = res.data?.data || res.data;
+    if (data?.thrift?.items && Array.isArray(data.thrift.items) && data.thrift.items.length > 0) {
+      return data.thrift.items;
+    }
+  } catch (err) {
+    console.warn("Lỗi khi tải pending listings từ Admin API:", err);
   }
 
   // Fallback to /thrift/listings to always populate real MongoDB listings with latest images

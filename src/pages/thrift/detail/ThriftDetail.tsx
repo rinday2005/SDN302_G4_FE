@@ -9,6 +9,7 @@ import {
 } from '../../data/thrift/thriftDetailData';
 import type { ThriftProductDetail, ThriftDetailThumbnail } from '../../data/thrift/thriftDetailData';
 import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
+import { useCustomerChat } from '../../../context/customer-chat-context';
 
 type InfoTab = 'desc' | 'audit' | 'origin' | 'shipping';
 
@@ -17,9 +18,11 @@ export const ThriftDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isWishlisted, toggleWishlist, addToCart } = useCartWishlist();
+  const { openChat } = useCustomerChat();
 
   const baseProduct: ThriftProductDetail = useMemo(() => getThriftProductDetail(id), [id]);
   const [dbProduct, setDbProduct] = useState<Partial<ThriftProductDetail> | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedSize, setSelectedSize] = useState<string>('L');
   const [shopOwnerInfo, setShopOwnerInfo] = useState({
     id: '6ac39f4b216ef5928d9c46bb',
@@ -116,6 +119,9 @@ export const ThriftDetail: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Could not load live thrift listing:', err);
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
   }, [id]);
 
@@ -209,8 +215,18 @@ export const ThriftDetail: React.FC = () => {
   };
 
   const handleChat = () =>
-    handleProtected(`chat với Shop Owner về "${product.title}"`, `/thrift/${product.slug}`,
-      () => { /* chat action */ });
+    handleProtected(`chat với Shop Owner về "${product.title}"`, `/thrift/${product.slug}`, () => {
+      openChat({
+        shopId: shopOwnerInfo.id,
+        serviceType: 'THRIFT',
+        product: {
+          title: product.title,
+          image: product.mainImage,
+          price: product.price,
+          shopId: shopOwnerInfo.id,
+        },
+      });
+    });
 
   const closeAuthModal = () => setAuthModal({ open: false, actionName: '', targetUrl: '' });
 
@@ -271,7 +287,50 @@ export const ThriftDetail: React.FC = () => {
         </div>
       )}
 
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12">
+      {isLoading || !dbProduct ? (
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12 animate-pulse">
+          {/* Breadcrumb Skeleton */}
+          <div className="flex items-center gap-2">
+            <div className="h-4 bg-[#EAE6DE] rounded w-16" />
+            <div className="h-4 bg-[#EAE6DE] rounded w-4" />
+            <div className="h-4 bg-[#EAE6DE] rounded w-16" />
+            <div className="h-4 bg-[#EAE6DE] rounded w-4" />
+            <div className="h-4 bg-[#EAE6DE] rounded w-36" />
+          </div>
+
+          {/* Two-column product display skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+            {/* LEFT: Gallery Skeleton */}
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-[#E7E2DA] p-3 shadow-sm">
+                <div className="aspect-[4/3] rounded-xl bg-[#EAE6DE]" />
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                <div className="aspect-square rounded-xl bg-[#EAE6DE]" />
+                <div className="aspect-square rounded-xl bg-[#EAE6DE]" />
+                <div className="aspect-square rounded-xl bg-[#EAE6DE]" />
+                <div className="aspect-square rounded-xl bg-[#EAE6DE]" />
+              </div>
+            </div>
+
+            {/* RIGHT: Product Specs Skeleton */}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <div className="h-4 bg-[#EAE6DE] rounded w-1/4" />
+                <div className="h-8 bg-[#EAE6DE] rounded w-3/4" />
+                <div className="h-4 bg-[#EAE6DE] rounded w-1/3" />
+              </div>
+              <div className="p-4 bg-white rounded-2xl border border-[#E7E2DA] space-y-3">
+                <div className="h-10 bg-[#EAE6DE] rounded w-1/2" />
+                <div className="h-4 bg-[#EAE6DE] rounded w-2/3" />
+              </div>
+              <div className="h-20 bg-white rounded-2xl border border-[#E7E2DA] p-4" />
+              <div className="h-12 bg-[#EAE6DE] rounded-full w-full" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12">
         {/* ── Breadcrumb ── */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-[#78736A] tracking-wide">
           <Link to="/" className="hover:text-[#1C1A18] transition-colors">Trang chủ</Link>
@@ -687,6 +746,7 @@ export const ThriftDetail: React.FC = () => {
           </div>
         </section>
       </div>
+      )}
     </div>
   );
 };

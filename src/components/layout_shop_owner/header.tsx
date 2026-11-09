@@ -1,8 +1,9 @@
 import { useNotification } from "../../hooks/useNotification";
 import React, { useContext, useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { AuthContext } from "../../context/auth-context";
 import { defaultShopProfile } from "../../pages/data/shop/dashboardData";
+import { useShopChat } from "../../context/shop-chat-context";
 
 interface ShopHeaderProps {
   onToggleSidebar?: () => void;
@@ -16,6 +17,8 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
   const auth = useContext(AuthContext);
   const user = auth?.user;
   const navigate = useNavigate();
+  const location = useLocation();
+  const { openChatDrawer, unreadTotal } = useShopChat();
 
   const {
     notifications,
@@ -172,39 +175,45 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
             </span>
           </div>
 
-          {/* KHỐI GIỮA: Ô tìm kiếm / Thông tin nhanh */}
-          <div className="hidden md:flex items-center gap-4 flex-1 max-w-xl mx-4">
-            <div className="relative w-full max-w-md">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-[#78716c]">
-                search
+        {/* KHỐI PHẢI: Nút Xem sàn + Chat + Thông báo + Profile Dropdown */}
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Nút thoát về sàn mua sắm dành cho khách */}
+          <Link
+            to="/"
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#57534e] hover:text-[#141310] hover:bg-[#ebe8e1] rounded-lg transition-colors border border-[#dddad3]"
+            title="Quay lại giao diện người mua"
+          >
+            <span className="material-symbols-outlined text-[16px]">storefront</span>
+            <span className="hidden sm:inline">Xem sàn</span>
+          </Link>
+
+          {/* NÚT CHAT KHÁCH HÀNG REAL-TIME (CẠNH NOTIFICATIONS) */}
+          <button
+            type="button"
+            onClick={() => {
+              const isThriftPage = location.pathname.includes("/thrift");
+              openChatDrawer(isThriftPage ? "THRIFT" : "RENT");
+            }}
+            className="p-1.5 text-[#57534e] hover:text-[#141310] hover:bg-[#ebe8e1] transition-colors rounded-lg relative cursor-pointer group flex items-center justify-center"
+            title={
+              unreadTotal > 0
+                ? `Có ${unreadTotal} người đang gửi tin nhắn`
+                : `Tin nhắn khách hàng (${location.pathname.includes("/thrift") ? "Bán đứt THRIFT" : "Cho thuê RENT"})`
+            }
+            aria-label="Tin nhắn khách hàng"
+          >
+            <span className="material-symbols-outlined text-[21px] block transition-transform group-hover:scale-110">
+              chat
+            </span>
+            {unreadTotal > 0 && (
+              <span className="min-w-[19px] h-[19px] px-1 rounded-full bg-rose-600 text-white font-mono text-[10px] font-bold flex items-center justify-center absolute -top-1 -right-1 shadow-sm border-2 border-[#fdf9f2] animate-bounce z-10 pointer-events-none">
+                {unreadTotal > 99 ? "99+" : unreadTotal}
               </span>
-              <input
-                type="text"
-                placeholder="Tìm mã đơn hàng, sản phẩm, hiện vật..."
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-[#f4efe6] border border-[#dddad3] text-xs text-[#1c1c18] placeholder-[#78716c] focus:outline-none focus:border-[#141310] focus:bg-white transition-all"
-              />
-            </div>
+            )}
+          </button>
 
-            <div className="hidden xl:flex items-center gap-2 px-3 py-1 rounded-full bg-[#d8e3ce]/70 border border-[#c4d4b7] text-[11px] text-[#3f4a3a] shrink-0 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-              <span>Escrow Active • Bàn kiểm định mở</span>
-            </div>
-          </div>
-
-          {/* KHỐI PHẢI: Nút Xem sàn + Thông báo + Profile Dropdown */}
-          <div className="flex items-center gap-3 shrink-0">
-            {/* Nút thoát về sàn mua sắm dành cho khách */}
-            <Link
-              to="/"
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-[#57534e] hover:text-[#141310] hover:bg-[#ebe8e1] rounded-lg transition-colors border border-[#dddad3]"
-              title="Quay lại giao diện người mua"
-            >
-              <span className="material-symbols-outlined text-[16px]">storefront</span>
-              <span className="hidden sm:inline">Xem sàn</span>
-            </Link>
-
-            {/* Nút thông báo kèm Dropdown */}
-            <div className="relative" ref={notifDropdownRef}>
+          {/* Nút thông báo kèm Dropdown */}
+          <div className="relative" ref={notifDropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsNotifOpen((prev) => !prev)}

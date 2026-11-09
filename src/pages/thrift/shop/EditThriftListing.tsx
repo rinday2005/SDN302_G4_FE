@@ -405,10 +405,10 @@ export const EditThriftListing: React.FC = () => {
                       Mã Sản Phẩm Gốc (RENT SKU)
                     </span>
                     <div className="font-title-md text-title-md text-on-surface font-semibold">
-                      Hasselblad 907X 50C + Lens XCD Kit
+                      {initialItem?.title || 'Party Dress Thiết Kế Tối Giản'}
                     </div>
                     <span className="font-body-sm text-body-sm text-secondary font-mono font-medium">
-                      #HBL-907X-50C
+                      #{initialItem?.sku || 'DRES-MINI-01'}
                     </span>
                   </div>
                   <div className="p-4 bg-surface rounded-DEFAULT border border-surface-dim">
@@ -416,10 +416,10 @@ export const EditThriftListing: React.FC = () => {
                       Định Danh Lưu Kho (Inventory Barcode)
                     </span>
                     <div className="font-title-md text-title-md text-on-surface font-semibold">
-                      #INV-HB907-01
+                      #{initialItem?.id || 'INV-DRES-04'}
                     </div>
                     <span className="font-body-sm text-body-sm text-on-surface-variant font-mono">
-                      Laser Serial: #HB-907-88201
+                      Serial: {initialItem?.serialNumber || '#SN-DRES-004'}
                     </span>
                   </div>
                 </div>

@@ -18,6 +18,7 @@ import { getPublicRentProductDetailApi } from '../../../services/rentProduct.api
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { getUserProfileAddress, calculateDynamicShippingFee, normalizeShopBranch } from '../../../utils/address';
 import { ProductReviewsSection } from '../../../components/review/ProductReviewsSection';
+import { useCustomerChat } from '../../../context/customer-chat-context';
 
 type TabKey = 'desc' | 'terms' | 'audit' | 'deposit' | 'shipping';
 
@@ -25,8 +26,10 @@ export const RentProductDetail: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { openChat } = useCustomerChat();
 
   const [apiProduct, setApiProduct] = useState<RentProductDetailData | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Fetch real product details from API if id matches database product
   useEffect(() => {
@@ -92,6 +95,9 @@ export const RentProductDetail: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Could not fetch rent product from API:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
       });
 
     return () => {
@@ -297,7 +303,16 @@ export const RentProductDetail: React.FC = () => {
 
   const handleChat = () => {
     handleProtectedAction('trò chuyện trực tiếp với Shop Owner', () => {
-      navigate('/chat');
+      openChat({
+        shopId: product.ownerId,
+        serviceType: 'RENT',
+        product: {
+          title: product.title,
+          image: product.images[0]?.src || '',
+          price: product.pricePerDay,
+          shopId: product.ownerId,
+        },
+      });
     });
   };
 
@@ -372,6 +387,43 @@ export const RentProductDetail: React.FC = () => {
       )}
 
       {/* Main Inner Container */}
+      {isLoading || !apiProduct ? (
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12 animate-pulse">
+          <div className="flex items-center gap-2">
+            <div className="h-4 bg-[#EAE6DE] rounded w-16" />
+            <div className="h-4 bg-[#EAE6DE] rounded w-4" />
+            <div className="h-4 bg-[#EAE6DE] rounded w-16" />
+            <div className="h-4 bg-[#EAE6DE] rounded w-4" />
+            <div className="h-4 bg-[#EAE6DE] rounded w-36" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+            <div className="space-y-4">
+              <div className="bg-white rounded-2xl border border-[#E7E2DA] p-3 shadow-sm">
+                <div className="aspect-[4/3] rounded-xl bg-[#EAE6DE]" />
+              </div>
+              <div className="grid grid-cols-4 gap-3">
+                <div className="aspect-square rounded-xl bg-[#EAE6DE]" />
+                <div className="aspect-square rounded-xl bg-[#EAE6DE]" />
+                <div className="aspect-square rounded-xl bg-[#EAE6DE]" />
+                <div className="aspect-square rounded-xl bg-[#EAE6DE]" />
+              </div>
+            </div>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <div className="h-4 bg-[#EAE6DE] rounded w-1/4" />
+                <div className="h-8 bg-[#EAE6DE] rounded w-3/4" />
+                <div className="h-4 bg-[#EAE6DE] rounded w-1/3" />
+              </div>
+              <div className="p-4 bg-white rounded-2xl border border-[#E7E2DA] space-y-3">
+                <div className="h-10 bg-[#EAE6DE] rounded w-1/2" />
+                <div className="h-4 bg-[#EAE6DE] rounded w-2/3" />
+              </div>
+              <div className="h-20 bg-white rounded-2xl border border-[#E7E2DA] p-4" />
+              <div className="h-12 bg-[#EAE6DE] rounded-full w-full" />
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12">
         {/* 1. BREADCRUMB */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-xs text-[#78736A] tracking-wide">
@@ -1035,6 +1087,7 @@ export const RentProductDetail: React.FC = () => {
           </div>
         </section>
       </div>
+      )}
       {/* In-app Toast Notification */}
       <div
         className={`fixed bottom-6 right-6 z-50 transform transition-all duration-300 pointer-events-none px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm font-medium ${

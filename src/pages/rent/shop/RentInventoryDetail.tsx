@@ -1,36 +1,109 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
-import { mockInventoryUnits } from '../../data/shop/inventoryData';
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
 
 export const RentInventoryDetail: React.FC = () => {
   const { itemId } = useParams<{ itemId: string }>();
   const { products } = useShop();
 
-  // Tìm kiếm sản phẩm thực tế từ MongoDB
-  const matchedProduct = products.find(
-    (p) => p.sku === itemId || `specimen-${p.sku}` === itemId || itemId?.includes(p.sku)
-  );
+  // Tìm kiếm sản phẩm thực tế từ MongoDB ShopContext
+  const matchedProduct =
+    products.find((p) => {
+      if (!itemId) return false;
+      const cleanItemId = itemId.toLowerCase();
+      const cleanSku = (p.sku || '').toLowerCase();
+      return (
+        cleanSku === cleanItemId ||
+        `specimen-${cleanSku}` === cleanItemId ||
+        cleanItemId.includes(cleanSku) ||
+        (cleanSku.length >= 4 && cleanItemId.includes(cleanSku.slice(-4)))
+      );
+    }) || products[0];
 
-  // Tìm kiếm hiện vật từ mock data hoặc sinh từ MongoDB Product
-  const defaultUnit = mockInventoryUnits.find((u) => u.id === itemId) || mockInventoryUnits[0];
-  const unit = matchedProduct
-    ? {
-        ...defaultUnit,
-        id: `INV-${matchedProduct.sku.slice(-6).toUpperCase()}-01`,
-        sku: matchedProduct.sku,
-        productName: matchedProduct.name,
-        category: matchedProduct.category,
-        imageUrl: matchedProduct.coverImage || defaultUnit.imageUrl,
-        conditionGrade: matchedProduct.condition || defaultUnit.conditionGrade,
-      }
-    : defaultUnit;
+  // Trích xuất số thứ tự hiện vật nếu có (ví dụ: INV-8820-02 -> 2)
+  const unitNumber = parseInt(itemId?.match(/-(\d+)$/)?.[1] || '1', 10);
+  const unitSku = matchedProduct?.sku || 'RENT-PROD';
+  const unitId = itemId?.startsWith('INV-')
+    ? itemId
+    : `INV-${unitSku.slice(-4).toUpperCase()}-${String(unitNumber).padStart(2, '0')}`;
+  const serialNumber = `#SN-${unitSku.slice(-4).toUpperCase()}-${String(unitNumber).padStart(3, '0')}`;
 
-  // State điều khiển mô phỏng trạng thái (ELIGIBLE | RENTING | MAINTENANCE)
-  const [specimenState, setSpecimenState] = useState<'ELIGIBLE' | 'RENTING' | 'MAINTENANCE'>('ELIGIBLE');
+  const isRenting = unitNumber <= (matchedProduct?.rentingUnits || 0);
+  const isMaintenance =
+    !isRenting &&
+    unitNumber <= (matchedProduct?.rentingUnits || 0) + (matchedProduct?.maintenanceUnits || 0);
+  const initialStatus: 'ELIGIBLE' | 'RENTING' | 'MAINTENANCE' = isRenting
+    ? 'RENTING'
+    : isMaintenance
+    ? 'MAINTENANCE'
+    : 'ELIGIBLE';
+
+  const [specimenState, setSpecimenState] = useState<'ELIGIBLE' | 'RENTING' | 'MAINTENANCE'>(initialStatus);
 
   const handleExportIdentityCard = () => {
     alert('Đang tổng hợp Thẻ Lý Lịch Hiện Vật Độc Bản có mã QR bảo chứng chuỗi khối...');
+  };
+
+  if (!matchedProduct) {
+    return (
+      <div className="w-full min-h-[60vh] flex flex-col items-center justify-center p-8 bg-[#fdf9f2] text-center font-sans">
+        <span className="material-symbols-outlined text-4xl text-[#7b766f] mb-3">inventory_2</span>
+        <h2 className="font-serif text-2xl text-[#141310] mb-2">Chưa tìm thấy hiện vật</h2>
+        <p className="text-xs text-[#7b766f] mb-6">Hiện vật này có thể chưa được tạo hoặc chưa đồng bộ từ cơ sở dữ liệu.</p>
+        <Link
+          to="/shop/rent/inventory"
+          className="px-5 py-2.5 rounded bg-[#141310] text-white text-xs font-semibold uppercase tracking-wider"
+        >
+          Về Kho Hiện vật
+        </Link>
+      </div>
+    );
+  }
+
+  const categoryName =
+    typeof matchedProduct.category === 'object' && matchedProduct.category !== null
+      ? (matchedProduct.category as { name?: string }).name || 'Thời trang RENT'
+      : String(matchedProduct.category || 'Thời trang RENT');
+
+  const total = matchedProduct.totalUnits || 1;
+  const renting = matchedProduct.rentingUnits || 0;
+  const maintenance = matchedProduct.maintenanceUnits || 0;
+
+  const variantInfo = getUnitVariantAndCondition(
+    matchedProduct.name,
+    categoryName,
+    unitNumber,
+    total,
+    renting,
+    maintenance
+  );
+
+  const unit = {
+    id: unitId,
+    sku: matchedProduct.sku,
+    productName: total > 1 ? `${matchedProduct.name} - ${variantInfo.variantShort}` : matchedProduct.name,
+    category: categoryName,
+    variantTag: variantInfo.variantTag,
+    imageUrl: matchedProduct.coverImage || 'https://placehold.co/600x400',
+    conditionGrade: variantInfo.conditionGrade,
+    serialNumber,
+    location: matchedProduct.location || 'Kho lưu trữ tiêu chuẩn • ReUse Care Hub',
+    cycleCount: variantInfo.cycleCount,
+    depreciationRate: variantInfo.depreciationRate,
+    listedRentPrice: `${new Intl.NumberFormat('vi-VN').format(matchedProduct.pricePerDay || 0)} ₫ / ngày`,
+    proposedThriftPrice: `${new Intl.NumberFormat('vi-VN').format(
+      Math.round(
+        ((matchedProduct.replacementValue || matchedProduct.pricePerDay * 30) *
+          (1 - variantInfo.discountPercent / 100)) /
+          1000
+      ) * 1000
+    )} ₫`,
+    curatorName: 'Chuyên viên kiểm định xưởng',
+    thumbnailMount: matchedProduct.coverImage,
+    thumbnailSensor: matchedProduct.coverImage,
+    thumbnailOptics: matchedProduct.coverImage,
+    thumbnailCase: matchedProduct.coverImage,
   };
 
   return (
@@ -57,15 +130,15 @@ export const RentInventoryDetail: React.FC = () => {
           <div className="flex items-center gap-3 flex-wrap">
             {/* Interactive State Demo Switcher */}
             <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded shadow-sm text-xs border border-[#ebe8e1]">
-              <span className="text-[#7b766f] uppercase tracking-wider text-[11px] font-semibold">Mô phỏng trạng thái:</span>
+              <span className="text-[#7b766f] uppercase tracking-wider text-[11px] font-semibold">Trạng thái hiện vật:</span>
               <select
                 className="bg-transparent text-[#141310] font-medium focus:outline-none cursor-pointer pr-2"
                 value={specimenState}
                 onChange={(e) => setSpecimenState(e.target.value as 'ELIGIBLE' | 'RENTING' | 'MAINTENANCE')}
               >
-                <option value="ELIGIBLE">1. ĐỦ ĐIỀU KIỆN SANG THRIFT (Hiện tại)</option>
-                <option value="RENTING">2. ĐANG CHO THUÊ (Active Rental)</option>
-                <option value="MAINTENANCE">3. ĐANG BẢO DƯỠNG (Under Service)</option>
+                <option value="ELIGIBLE">ĐỦ ĐIỀU KIỆN SANG THRIFT</option>
+                <option value="RENTING">ĐANG CHO THUÊ (Active Rental)</option>
+                <option value="MAINTENANCE">ĐANG BẢO DƯỠNG (Under Service)</option>
               </select>
             </div>
 
@@ -95,10 +168,10 @@ export const RentInventoryDetail: React.FC = () => {
               <div className="absolute top-4 left-4 flex flex-col gap-1.5">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#141310]/90 text-white backdrop-blur-md rounded text-[11px] font-mono tracking-widest shadow-md">
                   <span className="material-symbols-outlined text-[13px] text-amber-300">verified</span>
-                  CUSTODY SEAL: #RH-TAG-88201
+                  CUSTODY SEAL: #{unit.serialNumber.replace('#', '')}
                 </div>
                 <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/85 text-[#141310] backdrop-blur-md rounded text-[10px] font-mono uppercase tracking-wider shadow-sm">
-                  Trạm tủ ẩm A2 • Q.1, TP. HCM
+                  {unit.location}
                 </div>
               </div>
               <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded text-[#141310] shadow-sm flex items-center gap-2">
@@ -113,33 +186,33 @@ export const RentInventoryDetail: React.FC = () => {
                 <img
                   className="w-full h-full object-cover"
                   src={unit.thumbnailMount || unit.imageUrl}
-                  alt="Bayonet mount inspection"
+                  alt="Inspection angle 1"
                 />
-                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Mount</div>
+                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Mặt trước</div>
               </div>
               <div className="aspect-square bg-[#e6e2db] rounded overflow-hidden shadow-sm">
                 <img
                   className="w-full h-full object-cover"
                   src={unit.thumbnailSensor || unit.imageUrl}
-                  alt="Sensor inspection"
+                  alt="Inspection angle 2"
                 />
-                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Sensor</div>
+                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Mặt sau</div>
               </div>
               <div className="aspect-square bg-[#e6e2db] rounded overflow-hidden shadow-sm">
                 <img
                   className="w-full h-full object-cover"
                   src={unit.thumbnailOptics || unit.imageUrl}
-                  alt="Lens optics inspection"
+                  alt="Inspection details"
                 />
-                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Optics</div>
+                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Chi tiết</div>
               </div>
               <div className="aspect-square bg-[#e6e2db] rounded overflow-hidden shadow-sm">
                 <img
                   className="w-full h-full object-cover"
                   src={unit.thumbnailCase || unit.imageUrl}
-                  alt="Nanuk hard case inspection"
+                  alt="Inspection package"
                 />
-                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Case</div>
+                <div className="absolute bottom-1 right-1 bg-[#141310]/80 text-[9px] font-mono text-white px-1 rounded">Đóng gói</div>
               </div>
             </div>
           </div>
@@ -153,13 +226,13 @@ export const RentInventoryDetail: React.FC = () => {
                   {specimenState === 'RENTING' && (
                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#e6e2db] text-[#1c1c18] text-[12px] font-semibold tracking-wider uppercase rounded shadow-sm">
                       <span className="w-2 h-2 rounded-full bg-amber-600 animate-pulse"></span>
-                      ĐANG CHO THUÊ (#RH-RNT-2024-8902)
+                      ĐANG CHO THUÊ (LUÂN CHUYỂN HOẠT ĐỘNG)
                     </div>
                   )}
                   {specimenState === 'MAINTENANCE' && (
                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#e6e2db] text-[#1c1c18] text-[12px] font-semibold tracking-wider uppercase rounded shadow-sm">
                       <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                      ĐANG BẢO DƯỠNG BUỒNG KÍNH (CLASS 1000)
+                      ĐANG BẢO DƯỠNG VỆ SINH ĐỊNH KỲ
                     </div>
                   )}
                   {specimenState === 'ELIGIBLE' && (
@@ -181,7 +254,8 @@ export const RentInventoryDetail: React.FC = () => {
                   {unit.productName}
                 </h1>
                 <p className="text-xs text-[#7b766f] mt-2 italic font-serif">
-                  Hiện vật quang học di sản trung định dạng (Medium Format) chuẩn Atelier Chronos. Đăng ký lưu ký số hoá độc bản phục vụ nhiếp ảnh kiến trúc &amp; mỹ thuật lưu niệm.
+                  {matchedProduct.description ||
+                    'Hiện vật thiết bị chuyên dụng lưu kho xưởng. Đăng ký lưu ký số hoá độc bản phục vụ đối kiểm chất lượng & luân chuyển RENT/THRIFT.'}
                 </p>
               </div>
 
@@ -196,20 +270,20 @@ export const RentInventoryDetail: React.FC = () => {
                   <span className="font-mono text-sm font-bold text-[#141310]">SN: {unit.serialNumber}</span>
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-[#ebe8e1]">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Ngàm Ống Kính</span>
-                  <span className="font-mono text-sm font-bold text-[#141310]">XCD Medium Format</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Thương Hiệu / Phân Loại</span>
+                  <span className="font-mono text-sm font-bold text-[#141310]">{matchedProduct.brand || unit.category}</span>
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-[#ebe8e1]">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Shutter Actuations</span>
-                  <span className="font-mono text-sm font-bold text-[#141310]">{unit.shutterActuations || '4.820 / 100.000'}</span>
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Khấu Hao Vận Hành</span>
+                  <span className="font-mono text-sm font-bold text-[#141310]">{unit.depreciationRate} ({unit.cycleCount} lượt)</span>
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-[#ebe8e1]">
                   <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Chuyên Viên Quản Lý</span>
-                  <span className="text-sm font-medium text-[#141310]">{unit.curatorName || 'Phạm Thùy Dương (#01)'}</span>
+                  <span className="text-sm font-medium text-[#141310]">{unit.curatorName}</span>
                 </div>
                 <div className="bg-white p-3 rounded shadow-sm border border-[#ebe8e1]">
                   <span className="text-[11px] font-mono uppercase tracking-wider text-[#7b766f] block">Giá Niêm Yết Thuê</span>
-                  <span className="font-mono text-sm font-bold text-[#141310]">{unit.listedRentPrice || '450.000 ₫ / ngày'}</span>
+                  <span className="font-mono text-sm font-bold text-[#141310]">{unit.listedRentPrice}</span>
                 </div>
               </div>
             </div>
@@ -295,24 +369,24 @@ export const RentInventoryDetail: React.FC = () => {
           {/* Circularity 5 Criteria Validation Table */}
           <div className="mt-6 pt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 border-t border-[#dddad3]">
             <div className="bg-white/80 p-3.5 rounded shadow-sm flex flex-col justify-between border border-[#ebe8e1]">
-              <span className="text-[11px] text-[#7b766f] font-medium">1. Hoàn tất đơn gần nhất</span>
+              <span className="text-[11px] text-[#7b766f] font-medium">1. Định danh lưu kho</span>
               <div className="flex items-center justify-between mt-2">
-                <span className="font-bold text-xs text-[#141310] font-mono">#RH-8845</span>
-                <span className="text-[10px] font-bold text-[#3f4a3a] bg-[#d8e3ce] px-2 py-0.5 rounded">ĐẠT (Nghiệm thu)</span>
+                <span className="font-bold text-xs text-[#141310] font-mono">#{unit.id}</span>
+                <span className="text-[10px] font-bold text-[#3f4a3a] bg-[#d8e3ce] px-2 py-0.5 rounded">ĐẠT (Hợp lệ)</span>
               </div>
             </div>
             <div className="bg-white/80 p-3.5 rounded shadow-sm flex flex-col justify-between border border-[#ebe8e1]">
               <span className="text-[11px] text-[#7b766f] font-medium">2. Vị trí thực tế xưởng</span>
               <div className="flex items-center justify-between mt-2">
-                <span className="font-bold text-xs text-[#141310] font-mono">Tủ ẩm A2 (Q.1)</span>
+                <span className="font-bold text-xs text-[#141310] font-mono">Tại xưởng</span>
                 <span className="text-[10px] font-bold text-[#3f4a3a] bg-[#d8e3ce] px-2 py-0.5 rounded">ĐẠT (Đã hồi kho)</span>
               </div>
             </div>
             <div className="bg-white/80 p-3.5 rounded shadow-sm flex flex-col justify-between border border-[#ebe8e1]">
               <span className="text-[11px] text-[#7b766f] font-medium">3. Biên bản kỹ thuật</span>
               <div className="flex items-center justify-between mt-2">
-                <span className="font-bold text-xs text-[#141310] font-mono">Mint- 98.0%</span>
-                <span className="text-[10px] font-bold text-[#3f4a3a] bg-[#d8e3ce] px-2 py-0.5 rounded">ĐẠT (Sensor sạch)</span>
+                <span className="font-bold text-xs text-[#141310] font-mono">{unit.conditionGrade}</span>
+                <span className="text-[10px] font-bold text-[#3f4a3a] bg-[#d8e3ce] px-2 py-0.5 rounded">ĐẠT (Chuẩn kiểm định)</span>
               </div>
             </div>
             <div className="bg-white/80 p-3.5 rounded shadow-sm flex flex-col justify-between border border-[#ebe8e1]">
@@ -325,8 +399,8 @@ export const RentInventoryDetail: React.FC = () => {
             <div className="bg-white/80 p-3.5 rounded shadow-sm flex flex-col justify-between border border-[#ebe8e1]">
               <span className="text-[11px] text-[#7b766f] font-medium">5. Ngưỡng chu kỳ vòng đời</span>
               <div className="flex items-center justify-between mt-2">
-                <span className="font-bold text-xs text-[#141310] font-mono">{unit.cycleCount} / 10 Chu kỳ</span>
-                <span className="text-[10px] font-bold text-[#3f4a3a] bg-[#d8e3ce] px-2 py-0.5 rounded">ĐẠT (Khấu hao 86%)</span>
+                <span className="font-bold text-xs text-[#141310] font-mono">{unit.cycleCount} Chu kỳ</span>
+                <span className="text-[10px] font-bold text-[#3f4a3a] bg-[#d8e3ce] px-2 py-0.5 rounded">ĐẠT ({unit.depreciationRate})</span>
               </div>
             </div>
           </div>
@@ -359,11 +433,11 @@ export const RentInventoryDetail: React.FC = () => {
               <div className="flex items-center justify-between text-xs pb-3 border-b border-[#f1ede6]">
                 <span className="text-[#7b766f] font-medium">Tình trạng vận hành:</span>
                 <span className="font-semibold text-[#576151] flex items-center gap-1 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#576151]"></span> SẴN SÀNG LƯU KHO LẠNH
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#576151]"></span> SẴN SÀNG LƯU KHO XƯỞNG
                 </span>
               </div>
               <p className="text-sm text-[#1c1c18] leading-relaxed">
-                Đã hoàn tất đối kiểm hồi xưởng sau đơn thuê <strong>{unit.currentOrderCode || '#RH-RNT-2024-8845'}</strong> (Khách thuê: {unit.currentCustomerName || 'Elena Rostova'}). Hiện vật đang được lưu kho an toàn tại <strong>{unit.location}</strong>.
+                Hiện vật độc bản mã <strong>#{unit.id}</strong> (Số sê-ri: <strong>{unit.serialNumber}</strong>) đang được lưu kho bảo quản an toàn tại <strong>{unit.location}</strong>. Toàn bộ đối kiểm xuất/nhập xưởng được bảo chứng qua Smart Escrow.
               </p>
               <div className="bg-[#f7f3ec] p-3 rounded text-xs">
                 {specimenState === 'RENTING' ? (
@@ -441,7 +515,7 @@ export const RentInventoryDetail: React.FC = () => {
               <div className="flex flex-col gap-1.5 text-xs text-[#4a463f]">
                 <div className="font-semibold text-[#141310] text-sm">Chuẩn chuyển giao bền vững (Circular Maturity)</div>
                 <p>
-                  Hiện vật đã đạt điểm rơi khấu hao tối ưu (trên 80%). Theo quy chế Atelier B-Corp, tiếp tục duy trì cho thuê sẽ phát sinh nguy cơ rủi ro cảm biến 50MP; do đó chuyển giao sang quyền sở hữu vĩnh viễn (THRIFT) là khuyến nghị tối ưu nhất.
+                  Hiện vật đạt tỉ lệ khấu hao vận hành {unit.depreciationRate}. Theo chuẩn luân chuyển thiết bị, việc chuyển nhượng sang sàn bán đứt THRIFT giúp thu hồi giá trị đầu tư và tạo điều kiện tối ưu để xưởng tái trang bị thế hệ thiết bị mới.
                 </p>
               </div>
             </div>
@@ -459,43 +533,31 @@ export const RentInventoryDetail: React.FC = () => {
 
             <div className="bg-white p-4 rounded-lg shadow-sm flex flex-col gap-4 border border-[#ebe8e1]">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-[#141310] uppercase tracking-wider font-mono">Tháng 11 — 12 / 2024</span>
-                <span className="px-2 py-0.5 bg-[#d8e3ce] text-[#3f4a3a] text-[10px] font-bold rounded">Trống Lịch 100%</span>
-              </div>
-              {/* Mini Calendar Strip */}
-              <div className="grid grid-cols-7 gap-1 text-center font-mono text-xs">
-                <span className="text-[#7b766f] text-[10px]">T2</span>
-                <span className="text-[#7b766f] text-[10px]">T3</span>
-                <span className="text-[#7b766f] text-[10px]">T4</span>
-                <span className="text-[#7b766f] text-[10px]">T5</span>
-                <span className="text-[#7b766f] text-[10px]">T6</span>
-                <span className="text-[#7b766f] text-[10px]">T7</span>
-                <span className="text-[#7b766f] text-[10px]">CN</span>
-                <div className="p-2 bg-[#ebe8e1] text-[#7b766f] rounded line-through">17</div>
-                <div className="p-2 bg-[#ebe8e1] text-[#7b766f] rounded line-through">18</div>
-                <div className="p-2 bg-[#d8e3ce]/50 font-bold text-[#576151] rounded">19</div>
-                <div className="p-2 bg-[#d8e3ce] text-[#141310] font-bold rounded ring-1 ring-[#576151]">20</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">21</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">22</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">23</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">24</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">25</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">26</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">27</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">28</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">29</div>
-                <div className="p-2 bg-[#f7f3ec] text-[#141310] rounded">30</div>
+                <span className="font-bold text-[#141310] uppercase tracking-wider font-mono">
+                  Lịch hoạt động hiện tại
+                </span>
+                <span className="px-2 py-0.5 bg-[#d8e3ce] text-[#3f4a3a] text-[10px] font-bold rounded">
+                  {specimenState === 'RENTING'
+                    ? 'Đang có khách thuê'
+                    : specimenState === 'MAINTENANCE'
+                    ? 'Đang bảo dưỡng'
+                    : 'Trống lịch 100%'}
+                </span>
               </div>
 
               {/* Timeline Status Notes */}
-              <div className="space-y-2 pt-2 border-t border-[#f1ede6] text-xs">
+              <div className="space-y-2.5 pt-2 border-t border-[#f1ede6] text-xs">
                 <div className="flex items-start gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#576151] mt-1.5 shrink-0"></span>
-                  <span className="text-[#1c1c18]"><strong>Hiện tại (19/11):</strong> Hoàn trả &amp; kiểm tra buồng kín xong, không có lịch chờ.</span>
+                  <span className="text-[#1c1c18]">
+                    <strong>Trạng thái:</strong> {specimenState === 'RENTING' ? 'Hiện vật đang trong vòng luân chuyển thuê ngoài xưởng.' : specimenState === 'MAINTENANCE' ? 'Đang trong quy trình bảo trì, vệ sinh định kỳ.' : 'Sẵn sàng giao máy ngay khi có đơn thuê phát sinh.'}
+                  </span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#d8e3ce] mt-1.5 shrink-0"></span>
-                  <span className="text-[#7b766f]"><strong>60 Ngày tới:</strong> Không có xung đột lịch custody. Đạt điều kiện đóng băng để chuyển sàn bán.</span>
+                  <span className="text-[#7b766f]">
+                    <strong>Quyền hạn:</strong> {specimenState === 'ELIGIBLE' ? 'Đủ điều kiện đóng băng để chuyển sàn bán đứt THRIFT.' : 'Đang có ràng buộc luân chuyển, tạm khóa chức năng chuyển sàn.'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -506,7 +568,7 @@ export const RentInventoryDetail: React.FC = () => {
                 Quy định bảo lưu luân chuyển
               </div>
               <p className="text-[#4a463f] leading-relaxed">
-                Nếu có bất kỳ khách hàng nào thanh toán tiền cọc giữ máy trong tương lai, hệ thống sẽ tự động phong tỏa nút "Chuyển giao THRIFT" để đảm bảo giao ước cung ứng RENT.
+                Khi có khách hàng đặt thuê hiện vật trong tương lai, hệ thống sẽ tự động phong tỏa nút "Chuyển giao THRIFT" để bảo đảm cam kết cung ứng RENT.
               </p>
             </div>
           </div>
@@ -519,104 +581,30 @@ export const RentInventoryDetail: React.FC = () => {
               <span className="font-mono text-[11px] uppercase tracking-wider text-[#576151] font-bold">Mục 02 • Hồ sơ luân chuyển</span>
               <h3 className="font-serif text-xl text-[#141310]">Lịch Sử Thuê &amp; Khách Hàng Lưu Ký</h3>
             </div>
-            <span className="text-xs text-[#7b766f] font-mono">Hiển thị {unit.recentOrders?.length || 4} đơn thuê gần nhất</span>
+            <Link
+              to="/shop/rent/orders"
+              className="text-xs text-[#7b766f] hover:text-[#141310] font-mono uppercase font-semibold flex items-center gap-1"
+            >
+              <span>Xem đơn hàng xưởng</span>
+              <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
+            </Link>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs bg-white rounded-lg overflow-hidden border border-[#ebe8e1]">
-              <thead>
-                <tr className="bg-[#ebe8e1] font-mono text-[11px] uppercase tracking-wider text-[#4a463f]">
-                  <th className="py-3 px-4 font-semibold">Mã Hợp Đồng</th>
-                  <th className="py-3 px-4 font-semibold">Khách Hàng Lưu Ký</th>
-                  <th className="py-3 px-4 font-semibold">Thời Gian Thuê</th>
-                  <th className="py-3 px-4 font-semibold">Doanh Thu RENT</th>
-                  <th className="py-3 px-4 font-semibold">Cọc Escrow</th>
-                  <th className="py-3 px-4 font-semibold">Tình Trạng Trả Máy</th>
-                  <th className="py-3 px-4 font-semibold text-right">Chi Tiết</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f1ede6]">
-                {(unit.recentOrders || [
-                  {
-                    orderCode: '#RH-RNT-2024-8845',
-                    customerName: 'Elena Rostova',
-                    duration: '14/11 — 19/11/2024 (5 ngày)',
-                    revenue: '2.250.000 ₫',
-                    escrow: '16.000.000 ₫',
-                    status: 'Đã hoàn cọc 100%',
-                    returnCondition: 'Hoàn hảo, không vết xước',
-                  },
-                  {
-                    orderCode: '#RH-RNT-2024-8712',
-                    customerName: 'Trần Quốc Nam',
-                    duration: '28/10 — 02/11/2024 (5 ngày)',
-                    revenue: '2.250.000 ₫',
-                    escrow: '16.000.000 ₫',
-                    status: 'Đã hoàn tất thanh toán',
-                    returnCondition: 'Sensor sạch, ngàm tốt',
-                  },
-                  {
-                    orderCode: '#RH-RNT-2024-8501',
-                    customerName: 'Lê Minh Khoa',
-                    duration: '10/10 — 15/10/2024 (5 ngày)',
-                    revenue: '2.250.000 ₫',
-                    escrow: '16.000.000 ₫',
-                    status: 'Hoàn tất an toàn',
-                    returnCondition: 'Tốt, có vết bụi nhẹ đã thổi',
-                  },
-                  {
-                    orderCode: '#RH-RNT-2024-8210',
-                    customerName: 'Studio Lumina',
-                    duration: '15/09 — 25/09/2024 (10 ngày)',
-                    revenue: '4.050.000 ₫',
-                    escrow: '16.000.000 ₫',
-                    status: 'Đã hoàn 100%',
-                    returnCondition: 'Hoàn trả nguyên vẹn phụ kiện',
-                  },
-                ]).map((order, idx) => (
-                  <tr key={idx} className="hover:bg-[#f7f3ec] transition-colors">
-                    <td className="py-4 px-4 font-mono font-bold text-[#141310]">
-                      {order.orderCode}
-                      <span className="block text-[10px] text-[#576151] font-normal font-sans">
-                        {idx === 0 ? 'Gần nhất • Đã quyết toán' : 'Đã quyết toán'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="font-semibold text-[#141310]">{order.customerName}</div>
-                      <div className="text-[11px] text-[#7b766f]">Xác thực tài khoản cá nhân</div>
-                    </td>
-                    <td className="py-4 px-4 font-mono">
-                      <div>{order.duration}</div>
-                    </td>
-                    <td className="py-4 px-4 font-mono font-semibold text-[#141310]">{order.revenue}</td>
-                    <td className="py-4 px-4">
-                      <div className="font-mono text-[#141310] font-medium">{order.escrow}</div>
-                      <div className="text-[10px] text-[#576151] font-semibold">{order.status}</div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="inline-flex items-center gap-1 text-[#576151] font-medium">
-                        <span className="material-symbols-outlined text-[15px]">check_circle</span>
-                        {order.returnCondition}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <Link
-                        to="/shop/rent/orders"
-                        className="inline-flex items-center gap-1 font-semibold text-[#141310] hover:text-[#576151] transition-colors font-mono uppercase text-[11px]"
-                      >
-                        Xem đơn thuê →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center justify-between text-xs text-[#7b766f] pt-2 border-t border-[#dddad3]">
-            <span>Tổng cộng doanh thu luân chuyển lũy kế: <strong className="text-[#141310] font-mono">31.500.000 ₫</strong></span>
-            <Link className="font-mono uppercase tracking-wider text-[#141310] hover:text-[#576151] font-medium" to="/shop/rent/orders">
-              Xem tất cả 14 chu kỳ lưu ký →
-            </Link>
+          <div className="bg-white p-8 rounded-lg text-center border border-[#ebe8e1] space-y-2">
+            <span className="material-symbols-outlined text-3xl text-[#7b766f]">history_toggle_off</span>
+            <p className="text-sm font-semibold text-[#141310]">Hiện vật chưa phát sinh lịch sử đơn thuê cá thể</p>
+            <p className="text-xs text-[#7b766f] max-w-xl mx-auto">
+              Khi khách hàng đặt thuê hiện vật #{unit.id}, hợp đồng thuê, thông tin khách hàng và nhật ký đối kiểm xuất/nhập xưởng sẽ tự động đồng bộ tại đây.
+            </p>
+            <div className="pt-2">
+              <Link
+                to="/shop/rent/orders"
+                className="inline-flex items-center gap-1 px-4 py-2 bg-[#f1ede6] hover:bg-[#ebe8e1] rounded text-xs font-semibold uppercase text-[#141310] transition-colors"
+              >
+                <span>Kiểm tra danh sách đơn thuê của xưởng</span>
+                <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -625,12 +613,12 @@ export const RentInventoryDetail: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#dddad3] pb-4">
             <div>
               <span className="font-mono text-[11px] uppercase tracking-wider text-[#576151] font-bold">Mục 04 • Chứng thư thẩm định vật lý</span>
-              <h3 className="font-serif text-xl text-[#141310]">Nhật Ký Tình Trạng &amp; Thẩm Định Buồng Máy</h3>
+              <h3 className="font-serif text-xl text-[#141310]">Nhật Ký Tình Trạng &amp; Thẩm Định Hiện Vật</h3>
             </div>
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white rounded shadow-sm text-xs font-mono border border-[#ebe8e1]">
-              <span className="text-[#576151] font-bold">GRADE MINT- 98.0%</span>
+              <span className="text-[#576151] font-bold">{unit.conditionGrade}</span>
               <span>•</span>
-              <span>Shutter: 4.820 shots</span>
+              <span>Mã #{unit.id}</span>
             </div>
           </div>
 
@@ -639,19 +627,21 @@ export const RentInventoryDetail: React.FC = () => {
             <div className="relative flex flex-col gap-2">
               <div className="absolute -left-6 sm:-left-8 top-1.5 w-4 h-4 rounded-full bg-[#576151] ring-4 ring-[#f1ede6]"></div>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono text-xs font-bold text-[#141310]">19/11/2024 — TÌNH TRẠNG HIỆN TẠI ĐƯỢC CHỨNG THỰC (LATEST GRADE)</span>
-                <span className="px-2 py-0.5 bg-[#d8e3ce] text-[#3f4a3a] text-[10px] font-mono font-bold rounded">Niêm phong #RH-SEAL-907</span>
+                <span className="font-mono text-xs font-bold text-[#141310]">TÌNH TRẠNG HIỆN TẠI ĐƯỢC CHỨNG THỰC (LATEST GRADE)</span>
+                <span className="px-2 py-0.5 bg-[#d8e3ce] text-[#3f4a3a] text-[10px] font-mono font-bold rounded">
+                  Niêm phong #{unit.serialNumber.replace('#', '')}
+                </span>
               </div>
               <div className="bg-white p-4 rounded-lg shadow-sm text-xs space-y-2 border border-[#ebe8e1]">
                 <p className="text-[#1c1c18] leading-relaxed">
-                  <strong>Nghiệm thu sau đơn #RH-RNT-2024-8845:</strong> Kiểm định viên cao cấp <em>Marcus Vance</em> xác nhận: Cảm biến 50MP sạch 100%, không phát hiện hạt bụi buồng gương tại khẩu f/16. Ngàm XCD không cấn trầy, các tiếp điểm mạ vàng điện tử nguyên bản. Màn hình lật cảm ứng 3.2-inch sáng rõ, không lưu ảnh.
+                  Thiết bị <strong>{unit.productName}</strong> đạt chuẩn kiểm định xưởng với phân hạng tình trạng <strong>{unit.conditionGrade}</strong>. Hiện vật được lưu trữ và bảo quản tiêu chuẩn tại {unit.location}.
                 </p>
                 <div className="flex flex-wrap gap-4 pt-1 font-mono text-[11px] text-[#7b766f]">
-                  <span>Độ toàn vẹn bề mặt: <strong>98.0%</strong></span>
+                  <span>Mã SKU: <strong>{unit.sku}</strong></span>
                   <span>•</span>
-                  <span>Độ trong thấu kính XCD: <strong>100%</strong></span>
+                  <span>Chu kỳ luân chuyển: <strong>{unit.cycleCount} lượt</strong></span>
                   <span>•</span>
-                  <span>Màn trập cơ học: <strong>4.820 / 100.000</strong></span>
+                  <span>Tỉ lệ khấu hao: <strong>{unit.depreciationRate}</strong></span>
                 </div>
               </div>
             </div>
@@ -660,41 +650,12 @@ export const RentInventoryDetail: React.FC = () => {
             <div className="relative flex flex-col gap-2">
               <div className="absolute -left-6 sm:-left-8 top-1.5 w-4 h-4 rounded-full bg-[#141310] ring-4 ring-[#f1ede6]"></div>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono text-xs font-bold text-[#141310]">20/10/2024 — BẢO DƯỠNG ĐỊNH KỲ TẬP TRUNG (CLASS 1000 LAB)</span>
-                <span className="px-2 py-0.5 bg-[#ebe8e1] text-[#7b766f] text-[10px] font-mono font-medium rounded">Bảo trì cấp 2</span>
+                <span className="font-mono text-xs font-bold text-[#141310]">TÌNH TRẠNG KHI NHẬP KHO XƯỞNG (ORIGINAL RECEIPT)</span>
+                <span className="px-2 py-0.5 bg-[#ebe8e1] text-[#7b766f] text-[10px] font-mono font-medium rounded">Khởi tạo</span>
               </div>
               <div className="bg-white p-4 rounded-lg shadow-sm text-xs space-y-1.5 border border-[#ebe8e1]">
                 <p className="text-[#1c1c18] leading-relaxed">
-                  Vệ sinh khử khuẩn quang học buồng kín chuẩn Class 1000. Nâng cấp Firmware thân máy lên v1.4.2 (bổ sung lấy nét nhận diện khoảng cách tối ưu). Tra dầu chuyên dụng vòng zoom và vòng lấy nét ống kính XCD 45mm.
-                </p>
-                <div className="text-[#7b766f] font-mono text-[11px]">Kỹ thuật viên trưởng: Đỗ Gia Bảo • Thời gian lưu trạm: 14 Giờ</div>
-              </div>
-            </div>
-
-            {/* Step 3 */}
-            <div className="relative flex flex-col gap-2">
-              <div className="absolute -left-6 sm:-left-8 top-1.5 w-4 h-4 rounded-full bg-[#7b766f] ring-4 ring-[#f1ede6]"></div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono text-xs font-bold text-[#141310]">02/11/2024 — NGHIỆM THU HOÀN TRẢ ĐƠN #8712</span>
-                <span className="px-2 py-0.5 bg-[#ebe8e1] text-[#7b766f] text-[10px] font-mono font-medium rounded">Nghiệm thu tiêu chuẩn</span>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow-sm text-xs border border-[#ebe8e1]">
-                <p className="text-[#1c1c18] leading-relaxed">
-                  Nghiệm thu vật phẩm sau đợt thuê của khách Trần Quốc Nam. Bề mặt da bọc tay cầm nguyên vẹn, vòng cao su lấy nét chắc chắn. Test phơi sáng 30 giây đạt tỉ lệ tín hiệu/nhiễu (SNR) tối ưu.
-                </p>
-              </div>
-            </div>
-
-            {/* Step 4 */}
-            <div className="relative flex flex-col gap-2">
-              <div className="absolute -left-6 sm:-left-8 top-1.5 w-4 h-4 rounded-full bg-[#4a463f] ring-4 ring-[#f1ede6]"></div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono text-xs font-bold text-[#141310]">15/01/2024 — TÌNH TRẠNG BAN ĐẦU KHI NHẬP KHO XƯỞNG (ORIGINAL MINT)</span>
-                <span className="px-2 py-0.5 bg-[#d8e3ce]/50 text-[#3f4a3a] text-[10px] font-mono font-bold rounded">Grade Pristine (100%)</span>
-              </div>
-              <div className="bg-white p-4 rounded-lg shadow-sm text-xs space-y-1 border border-[#ebe8e1]">
-                <p className="text-[#1c1c18] leading-relaxed">
-                  Nhập kho mới từ đối tác phân phối ủy quyền Hasselblad Scandinavia. Nguyên đai nguyên kiện hộp gỗ thủ công &amp; vali chống sốc Nanuk. Màn trập: 12 shot test xuất xưởng. Cấp mã lưu ký #INV-HB907-01.
+                  Hiện vật hoàn tất đăng ký giám hộ và nhập kho hệ thống. Khởi tạo mã định danh độc bản <strong>#{unit.id}</strong> (Serial: {unit.serialNumber}). Sẵn sàng cấp phép cho hoạt động thuê RENT hoặc chuyển nhượng THRIFT.
                 </p>
               </div>
             </div>

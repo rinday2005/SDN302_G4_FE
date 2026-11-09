@@ -62,7 +62,7 @@ export const ShopThriftListingDetail: React.FC = () => {
   const [editPrice, setEditPrice] = useState(listing.price.toLocaleString('vi-VN'));
   const [editNotes, setEditNotes] = useState(
     listing.curatorNotes ||
-    'Bộ máy ảnh medium format Hasselblad 907X 50C kỷ niệm thiết kế cổ điển Thụy Điển, bao gồm thân máy siêu mỏng 907X, lưng số CFV II 50C với màn hình cảm ứng lật 3.2 inch và ống kính prime XCD 45mm f/4 P có màn trập lá tích hợp tốc độ đồng bộ đèn flash lên đến 1/2000s.'
+    'Hiện vật chính hãng lưu kho xưởng ReUse Hub đã hoàn tất chu kỳ cho thuê tiêu chuẩn. Đã qua quy trình kiểm định chất lượng form dáng, khử trùng ozone và làm sạch chuyên sâu.'
   );
 
   // Customer Chat Modal State
@@ -72,12 +72,12 @@ export const ShopThriftListingDetail: React.FC = () => {
     {
       sender: 'buyer',
       time: '14:20 Hôm nay',
-      text: 'Chào Atelier Chronos, mình muốn hỏi máy Hasselblad 907X này cảm biến có hạt bụi nào khi chụp ở f/16 không ạ?',
+      text: 'Chào Shop, mình muốn hỏi hiện vật thanh lý THRIFT này còn đủ phụ kiện và thẻ chứng nhận kiểm định không ạ?',
     },
     {
       sender: 'shop',
       time: '14:25 Hôm nay',
-      text: 'Chào bạn, xưởng đã test chụp phòng sạch Class 1000 tại f/16 và f/22, cảm biến sạch 100% không tì vết. Kèm ảnh phóng đại quang học trong hồ sơ lưu ký số bạn nhé!',
+      text: 'Chào bạn, hiện vật đã được xưởng kiểm định chất lượng, khử trùng ozone và niêm phong đầy đủ kèm thẻ bảo chứng chất lượng ReUse Hub bạn nhé!',
     },
   ]);
 
@@ -491,10 +491,10 @@ export const ShopThriftListingDetail: React.FC = () => {
                       Sản Phẩm RENT Khởi Nguyên
                     </div>
                     <div className="font-title-md text-title-md text-primary font-medium">
-                      Hasselblad 907X 50C + Lens XCD Kit
+                      {listing.title || 'Party Dress Thiết Kế Tối Giản'}
                     </div>
                     <div className="font-body-sm text-body-sm text-on-surface-variant font-mono">
-                      Catalog Code: #HBL-907X-50C
+                      Catalog Code: #{listing.sku || 'DRES-MINI-01'}
                     </div>
                   </div>
                   <div className="p-3.5 bg-surface rounded-DEFAULT space-y-1 border border-surface-dim">
@@ -502,10 +502,10 @@ export const ShopThriftListingDetail: React.FC = () => {
                       Mã Lưu Kho Hiện Vật Gốc
                     </div>
                     <div className="font-title-md text-title-md text-primary font-medium">
-                      Kho Atelier Chronos #INV-HB907-01
+                      Kho ReUse Care #{listing.originalRentInvId || listing.id || 'INV-DRES-04'}
                     </div>
                     <div className="font-body-sm text-body-sm text-on-surface-variant font-mono">
-                      Laser Serial: #HB-907-88201
+                      Serial: {listing.serialNumber || '#SN-DRES-004'}
                     </div>
                   </div>
                 </div>
@@ -519,10 +519,8 @@ export const ShopThriftListingDetail: React.FC = () => {
                     </span>
                   </div>
                   <p className="font-body-md text-body-md text-on-surface-variant leading-relaxed">
-                    Hoàn tất giám định ngày <strong>19/11/2024</strong> (theo đơn thuê hoàn tất{' '}
-                    <strong>#RH-RNT-2024-8845</strong> - Khách thuê: Elena Rostova). Cảm biến đạt chuẩn phòng sạch{' '}
-                    <strong>Class 1000 Cleanroom</strong>, thấu kính không xước mốc hay bong lớp tráng phủ anti-reflex,
-                    tổng 14 chu kỳ luân chuyển an toàn tối ưu.
+                    Hoàn tất kiểm định chất lượng (theo đơn thuê hoàn tất{' '}
+                    <strong>#RH-RNT-2026-8845</strong>). Bề mặt chất liệu và form dáng đạt chuẩn kiểm định xưởng ReUse Hub, tổng {listing.rentalCycles || 8} chu kỳ luân chuyển an toàn tối ưu.
                   </p>
                 </div>
 
@@ -591,17 +589,11 @@ export const ShopThriftListingDetail: React.FC = () => {
                 {/* Condition Detailed text */}
                 <div className="space-y-3 font-body-md text-body-md text-on-surface-variant leading-relaxed">
                   <h4 className="font-title-md text-title-md text-primary font-semibold">
-                    Mô Tả Chi Tiết Mục Đăng Từ Xưởng Atelier Chronos
+                    Mô Tả Chi Tiết Mục Đăng Từ Xưởng ReUse Hub
                   </h4>
                   <p>
-                    Bộ máy ảnh medium format Hasselblad 907X 50C kỷ niệm thiết kế cổ điển Thụy Điển, bao gồm thân máy siêu
-                    mỏng 907X, lưng số CFV II 50C với màn hình cảm ứng lật 3.2 inch và ống kính prime XCD 45mm f/4 P có
-                    màn trập lá tích hợp tốc độ đồng bộ đèn flash lên đến 1/2000s.
-                  </p>
-                  <p>
-                    Hiện vật xuất xứ từ kho RENT cao cấp của xưởng, đã trải qua kiểm định tia UV cảm biến, chuẩn trực ống
-                    kính qua máy Collimator điện tử chuyên dụng và khử tĩnh điện toàn phần. Màn hình đã dán kính cường lực
-                    quang học 9H từ ngày đầu mở hộp.
+                    {listing.description ||
+                      'Hiện vật chính hãng lưu kho xưởng ReUse Hub đã hoàn tất chu kỳ cho thuê tiêu chuẩn. Đã qua quy trình kiểm định chất lượng form dáng, khử trùng ozone và làm sạch chuyên sâu.'}
                   </p>
 
                   <div className="pt-2">
@@ -611,27 +603,19 @@ export const ShopThriftListingDetail: React.FC = () => {
                     <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-on-surface">
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-[16px] text-secondary">check</span>
-                        <span>02 Pin gốc Hasselblad 3400mAh</span>
+                        <span>Bao bì &amp; túi bảo quản chống bụi chuyên dụng</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-[16px] text-secondary">check</span>
-                        <span>Hub sạc đôi chính hãng Hasselblad</span>
+                        <span>Hộp / Móc treo bảo quản tiêu chuẩn ReUse Care</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-[16px] text-secondary">check</span>
-                        <span>Nắp đậy trước, sau &amp; che lưng số</span>
+                        <span>Thẻ chứng nhận thẩm định tuần hoàn ReUse Hub</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-[16px] text-secondary">check</span>
-                        <span>Vali chống nước Nanuk 910 bọt xốp cắt CNC</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[16px] text-secondary">check</span>
-                        <span>Cáp dữ liệu Tether Pro USB-C 5Gbps</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[16px] text-secondary">check</span>
-                        <span>Chứng thư lưu ký xưởng &amp; tem niêm ReUse Hub</span>
+                        <span>Biên bản kiểm định &amp; lịch sử luân chuyển kho</span>
                       </li>
                     </ul>
                   </div>

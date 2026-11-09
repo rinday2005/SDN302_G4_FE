@@ -1,26 +1,22 @@
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useShop } from '../../../context/ShopContext';
-import { mockRentProducts } from '../../data/shop/rentProductsData';
-
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
 export const RentProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { products } = useShop();
 
-  // Lấy dữ liệu sản phẩm tương ứng từ MongoDB ShopContext hoặc mock data
+  // Lấy dữ liệu sản phẩm tương ứng từ MongoDB ShopContext
   const matchedProduct = products.find((p) => p.sku === id || (p as { _id?: string })._id === id);
-  const product = matchedProduct || mockRentProducts.find((p) => p.sku === id) || mockRentProducts[0];
+  const product = matchedProduct || products[0];
 
   // Danh sách ảnh 4 góc giám định
-  const inspectionAngleImages = product.inspectionImages?.length
+  const inspectionAngleImages = product?.inspectionImages?.length
     ? product.inspectionImages
-    : product.coverImage
+    : product?.coverImage
     ? [product.coverImage]
     : [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuB5mewsMdaznDQrFK3uXQ0ihH8fVJyGA-WwquJd7sHBRJcbcASR1h27dY0EvVQTUaE69efi0nc6VSjoejNknSYsRdmO8MUGxl8UfYvNkQwMYFHbcvEBLKUrbsKj7QJfR8VzHSex4ytaneQ6Vfe5TMT_tFbtg-wysYGL3leviHOWD9x2ksGBMixc-9RCj_42X9g8exMpZ2BuvEwG0WbMj1VoX5TIamV0rJ0SdTxOKs8D',
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCT-OQ367RurILCr0jpdGdNGfpHFT-WqdCF6Oq35n4oaSaBpANBBXeAs4ktLCvxqk0koCY36igHYPWdSQrz9Pb7nCNo1TvbiKRKIAtOL5gUxc02M00a1pbYHhl21_ZrBiDepTYB1JxrPmDKbdjRCXiAPYb7OHaPR9nzQFCcxm0d4I19Xl0XpUglbILawc4TSuN7MB6a2WeX7u-picVp1m93K0Nd7KPkzannCN3w92vo',
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuAQ9AFXrozgzjAjZS06ET7kj4_p_AHlmdARrZhSO4zoBDTkKvSEocbrbxbY19GU40IhXxxUBydeKobXsidYauNtblWcV572MaBP1nVzlYLVXvEvWblq2o87dvMtSM8LzFRiJR3pk4HqfO42ovSmJFJjJrLZ4TZ8A1YOnuAD6MwTLupK0JSqDn4_ETghWwOxL3n0xP8_0Rpp2cgWc8z3VZkIkM-NIRXZz5AOvC4ipoS7',
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCg-wK086gI3TlRyzKSKjwyOQYqjrGDMEvdr90lwqo7PUr6KbBaK3bVQfHrYQt5aWi-FI6dr_VErQHtfzflWiBhG0qLLJJerOcxHkboPMqwOIfX7k2zwLaOIgQXdAsSKPypn0civfMCdPukEVFgth7WuRZbRmXwMgL9h1ihco5JkQeY96JKpAWJjE2iU2slgtywZEhhgUG0csMsHY_YM-PbfFyeunfLfx7j89XS2csw',
     ];
 
   const [selectedAngleIndex, setSelectedAngleIndex] = useState(0);
@@ -28,6 +24,7 @@ export const RentProductDetail: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
 
   const handlePauseToggle = () => {
+    if (!product) return;
     const confirmed = window.confirm(
       isPaused
         ? 'Bạn có muốn mở lại cho thuê sản phẩm này?'
@@ -38,9 +35,18 @@ export const RentProductDetail: React.FC = () => {
     }
   };
 
-  const handleImmediateDispatch = () => {
-    alert('Đang chuẩn bị lệnh điều phối cho thân máy SN #HB-907-88202 tại Tủ A2 Quận 1. Vui lòng đối chiếu biên bản bàn giao kẹp chì.');
-  };
+  if (!product) {
+    return (
+      <div className="w-full min-h-[60vh] flex flex-col items-center justify-center p-8 bg-[#fdf9f2] text-center font-sans">
+        <span className="material-symbols-outlined text-4xl text-[#7b766f] mb-3">inventory_2</span>
+        <h2 className="font-serif text-2xl text-[#141310] mb-2">Chưa tìm thấy sản phẩm</h2>
+        <p className="text-xs text-[#7b766f] mb-6">Sản phẩm có thể chưa được tạo hoặc chưa đồng bộ từ cơ sở dữ liệu.</p>
+        <Link to="/shop/rent/products" className="px-5 py-2.5 rounded bg-[#141310] text-white text-xs font-semibold uppercase tracking-wider">
+          Về danh sách sản phẩm
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full flex flex-col font-sans text-[#1c1c18] bg-[#fdf9f2]">
@@ -232,7 +238,7 @@ export const RentProductDetail: React.FC = () => {
               <div className="text-sm text-[#4a463f] leading-relaxed space-y-4">
                 <p>{product.description}</p>
                 <p>
-                  Đi kèm trong bộ kit cho thuê là ống kính chuyên dụng <strong>XCD 45mm f/4 P</strong> – lens medium format lấy nét tự động nhỏ gọn và siêu tĩnh với màn trập tích hợp trung tâm hỗ trợ đồng bộ đèn flash tốc độ cao lên tới 1/2000s, đem đến chiều sâu ảnh quang học vô tiền khoáng hậu.
+                  Sản phẩm được lưu kho và bảo dưỡng định kỳ theo tiêu chuẩn xưởng ReUse Care Hub, đảm bảo tình trạng thẩm định và niêm phong kiểm định chất lượng trước khi bàn giao cho khách thuê.
                 </p>
               </div>
 
@@ -246,15 +252,15 @@ export const RentProductDetail: React.FC = () => {
                   <ul className="space-y-2 text-xs text-[#4a463f]">
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span>Bắt buộc giao nhận kèm vali cứng Nanuk chống sốc có khóa kẹp chì số độc quyền.</span>
+                      <span>Kiểm tra tem niêm phong số hoá và chụp ảnh 4 góc đối kiểm trước khi xuất kho.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span>Kiểm tra độ sạch cảm biến tại chỗ 3 khẩu độ (f/4, f/11, f/22) với White Sheet test.</span>
+                      <span>Kiểm định bề mặt chất liệu, form dáng và phụ kiện đi kèm theo biên bản bàn giao.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span>Hai thỏi pin nguyên bản sạc tối thiểu 50% trước khi niêm phong xuất kho.</span>
+                      <span>Khử trùng ozone và đóng gói túi bảo quản chuyên dụng trước khi niêm phong.</span>
                     </li>
                   </ul>
                 </div>
@@ -267,7 +273,7 @@ export const RentProductDetail: React.FC = () => {
                   <ul className="space-y-2 text-xs text-[#4a463f]">
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span><strong>Zero Deductible Fair Wear &amp; Tear:</strong> Trầy viền vi tính học chấp nhận theo khấu hao tự nhiên.</span>
+                      <span><strong>Fair Wear &amp; Tear:</strong> Chấp nhận hao mòn vi mô tự nhiên theo số chu kỳ thuê thực tế.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
@@ -275,7 +281,7 @@ export const RentProductDetail: React.FC = () => {
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-[16px] text-[#576151] shrink-0 mt-0.5">check_circle</span>
-                      <span>Được phép tản bộ ngoại cảnh, nghiêm cấm sử dụng dưới mưa lớn hoặc môi trường axit/cát mặn không che chắn.</span>
+                      <span>Tuân thủ hướng dẫn bảo quản, không tự ý can thiệp hóa chất tẩy rửa mạnh ngoài quy chuẩn.</span>
                     </li>
                   </ul>
                 </div>
@@ -290,108 +296,140 @@ export const RentProductDetail: React.FC = () => {
                     <span className="material-symbols-outlined text-[#576151] text-[22px]">format_list_bulleted</span>
                     <h2 className="font-serif text-xl text-[#141310]">Kho Hiện Vật Cụ Thể (Serialized Units)</h2>
                   </div>
-                  <p className="text-xs text-[#7b766f]">Quản lý định danh từng thân máy thuộc SKU {product.sku}</p>
+                  <p className="text-xs text-[#7b766f]">Quản lý định danh từng hiện vật cá thể thuộc SKU {product.sku}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <div className="text-[11px] text-[#7b766f] uppercase">Hiệu suất luân chuyển</div>
-                    <div className="text-sm font-bold text-[#141310]">50% Đang Hoạt Động</div>
+                    <div className="text-sm font-bold text-[#141310]">
+                      {Math.round(((product.rentingUnits || 0) / Math.max(1, product.totalUnits || 1)) * 100)}% Đang Thuê
+                    </div>
                   </div>
                   {/* Inline Mini Circular Donut SVG */}
                   <div className="relative w-11 h-11 shrink-0">
                     <svg className="w-11 h-11 -rotate-90" viewBox="0 0 36 36">
                       <path className="text-[#ebe8e1]" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3.5"></path>
-                      <path className="text-[#576151]" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeDasharray="50, 100" strokeLinecap="round" strokeWidth="3.5"></path>
+                      <path
+                        className="text-[#576151]"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeDasharray={`${Math.round(((product.rentingUnits || 0) / Math.max(1, product.totalUnits || 1)) * 100)}, 100`}
+                        strokeLinecap="round"
+                        strokeWidth="3.5"
+                      ></path>
                     </svg>
-                    <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-[#141310]">1/2</div>
+                    <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-[#141310]">
+                      {product.rentingUnits || 0}/{product.totalUnits || 1}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Units List */}
               <div className="flex flex-col gap-4">
-                {/* Unit 1 */}
-                <div className="p-5 rounded-lg bg-[#f7f3ec] hover:bg-[#f1ede6] transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 border border-[#ebe8e1]">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded bg-[#576151]/15 text-[#576151] flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-[22px]">cached</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-semibold text-sm text-[#141310]">Thân máy #01</span>
-                        <span className="font-mono text-xs font-semibold bg-[#e6e2db] px-2 py-0.5 rounded text-[#141310]">
-                          SN: #HB-907-88201
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-[#dbe6d1] text-[#151e11] text-[11px] font-bold uppercase">
-                          ĐANG CHO THUÊ
-                        </span>
-                      </div>
-                      <div className="text-xs text-[#7b766f] flex flex-wrap items-center gap-3">
-                        <span>Khách thuê: <strong className="text-[#141310]">Elena Rostova</strong> (Đơn <Link className="underline text-[#141310] hover:text-[#576151]" to="/shop/rent/orders">#RH-RNT-2024-8845</Link>)</span>
-                        <span>•</span>
-                        <span>Hạn hoàn trả: <strong className="text-[#576151] font-semibold">19/11/2024 (còn 2 ngày)</strong></span>
-                      </div>
-                      <div className="text-[11px] text-[#7b766f] flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[14px]">pin_drop</span>
-                        <span>Vị trí hiện tại: Đang lưu hành khách thực nghiệm</span>
-                        <span>•</span>
-                        <span>Tích lũy: 8 chu kỳ hoàn tất</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex md:flex-col items-center md:items-end justify-between shrink-0 gap-2">
-                    <Link
-                      to="/shop/rent/orders"
-                      className="px-3.5 py-1.5 rounded bg-white text-[#141310] hover:bg-[#ebe8e1] transition-colors text-xs uppercase tracking-wider font-semibold inline-flex items-center gap-1 shadow-sm"
-                    >
-                      <span>Xem đơn thuê</span>
-                      <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                    </Link>
-                    <span className="text-[11px] text-[#576151] font-medium">Bảo chứng Escrow kích hoạt</span>
-                  </div>
-                </div>
+                {Array.from({ length: Math.max(1, product.totalUnits || 1) }).map((_, idx) => {
+                  const unitNum = idx + 1;
+                  const isRenting = unitNum <= (product.rentingUnits || 0);
+                  const isMaintenance =
+                    !isRenting && unitNum <= (product.rentingUnits || 0) + (product.maintenanceUnits || 0);
+                  const serialNum = `#SN-${product.sku.slice(-4).toUpperCase()}-${String(unitNum).padStart(3, '0')}`;
+                  const unitId = `INV-${product.sku.slice(-4).toUpperCase()}-${String(unitNum).padStart(2, '0')}`;
+                  const variantInfo = getUnitVariantAndCondition(
+                    product.name,
+                    String(product.category || ''),
+                    unitNum,
+                    product.totalUnits || 1,
+                    product.rentingUnits || 0,
+                    product.maintenanceUnits || 0
+                  );
 
-                {/* Unit 2 */}
-                <div className="p-5 rounded-lg bg-[#f7f3ec] hover:bg-[#f1ede6] transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 border border-[#ebe8e1]">
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded bg-[#d8e3ce] text-[#3f4a3a] flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-[22px]">check_box</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-semibold text-sm text-[#141310]">Thân máy #02</span>
-                        <span className="font-mono text-xs font-semibold bg-[#e6e2db] px-2 py-0.5 rounded text-[#141310]">
-                          SN: #HB-907-88202
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-[#d8e3ce] text-[#3f4a3a] text-[11px] font-bold uppercase">
-                          SẴN SÀNG XUẤT KHO
-                        </span>
-                      </div>
-                      <div className="text-xs text-[#7b766f] flex flex-wrap items-center gap-3">
-                        <span>Tình trạng thẩm định: <strong className="text-[#141310] font-semibold">Mint- (98.5%)</strong></span>
-                        <span>•</span>
-                        <span>Collimator &amp; Mặt bích: <span className="text-[#576151] font-medium">Đạt chuẩn 0.002mm sai số</span></span>
-                      </div>
-                      <div className="text-[11px] text-[#7b766f] flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[14px]">shelves</span>
-                        <span>Vị trí: Tủ chống ẩm A2 - Trạm điều phối Q.1, TP.HCM</span>
-                        <span>•</span>
-                        <span>Cảm biến: Đã khử ion tĩnh điện</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex md:flex-col items-center md:items-end justify-between shrink-0 gap-2">
-                    <button
-                      type="button"
-                      onClick={handleImmediateDispatch}
-                      className="px-3.5 py-1.5 rounded bg-[#576151] text-white hover:bg-[#3f4a3a] transition-opacity text-xs tracking-wider uppercase inline-flex items-center gap-1 font-semibold"
+                  return (
+                    <div
+                      key={unitNum}
+                      className="p-5 rounded-lg bg-[#f7f3ec] hover:bg-[#f1ede6] transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 border border-[#ebe8e1]"
                     >
-                      <span className="material-symbols-outlined text-[14px]">local_shipping</span>
-                      <span>Điều phối tức thì</span>
-                    </button>
-                    <span className="text-[11px] text-[#7b766f]">Sẵn sàng điều phối trong 30 phút</span>
-                  </div>
-                </div>
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={`w-10 h-10 rounded flex items-center justify-center shrink-0 ${
+                            isRenting
+                              ? 'bg-[#576151]/15 text-[#576151]'
+                              : isMaintenance
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-[#d8e3ce] text-[#3f4a3a]'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[22px]">
+                            {isRenting ? 'cached' : isMaintenance ? 'build' : 'check_box'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-semibold text-sm text-[#141310]">
+                              Hiện vật #{String(unitNum).padStart(2, '0')}: {variantInfo.variantShort}
+                            </span>
+                            <span className="font-mono text-xs font-semibold bg-[#e6e2db] px-2 py-0.5 rounded text-[#141310]">
+                              SN: {serialNum}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
+                                isRenting
+                                  ? 'bg-[#dbe6d1] text-[#151e11]'
+                                  : isMaintenance
+                                  ? 'bg-amber-100 text-amber-900'
+                                  : 'bg-[#d8e3ce] text-[#3f4a3a]'
+                              }`}
+                            >
+                              {isRenting
+                                ? 'ĐANG CHO THUÊ'
+                                : isMaintenance
+                                ? 'ĐANG BẢO DƯỠNG'
+                                : 'SẴN SÀNG XUẤT KHO'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-[#7b766f] flex flex-wrap items-center gap-3">
+                            <span>
+                              Tình trạng thẩm định:{' '}
+                              <strong className="text-[#141310] font-semibold">
+                                {variantInfo.conditionGrade}
+                              </strong>
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Chu kỳ:{' '}
+                              <span className="text-[#141310] font-medium">
+                                {variantInfo.cycleCount === 0 ? 'Hàng nguyên kho' : `${variantInfo.cycleCount} lần thuê`}
+                              </span>
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Vị trí:{' '}
+                              <span className="text-[#576151] font-medium">
+                                {product.location || 'Kho lưu trữ xưởng • ReUse Care Hub'}
+                              </span>
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#7b766f] flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[14px]">pin_drop</span>
+                            <span>Lưu kho giám hộ độc bản theo mã SKU</span>
+                            <span>•</span>
+                            <span>Mã hiện vật: #{unitId}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex md:flex-col items-center md:items-end justify-between shrink-0 gap-2">
+                        <Link
+                          to={`/shop/rent/inventory/${unitId}`}
+                          className="px-3.5 py-1.5 rounded bg-white text-[#141310] hover:bg-[#ebe8e1] transition-colors text-xs uppercase tracking-wider font-semibold inline-flex items-center gap-1 shadow-sm"
+                        >
+                          <span>Hồ sơ hiện vật</span>
+                          <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                        </Link>
+                        <span className="text-[11px] text-[#576151] font-medium">Đồng bộ MongoDB</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
@@ -405,74 +443,22 @@ export const RentProductDetail: React.FC = () => {
                   </div>
                   <p className="text-xs text-[#7b766f]">Nhật ký điều phối và doanh thu phát sinh trên mã sản phẩm</p>
                 </div>
-                <Link to="/shop/rent/orders" className="text-xs uppercase tracking-wider text-[#576151] hover:text-[#141310] font-semibold flex items-center gap-1">
-                  <span>Xem toàn bộ 14 đơn</span>
+                <Link
+                  to="/shop/rent/orders"
+                  className="text-xs uppercase tracking-wider text-[#576151] hover:text-[#141310] font-semibold flex items-center gap-1"
+                >
+                  <span>Xem toàn bộ đơn thuê</span>
                   <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                 </Link>
               </div>
 
-              {/* Table Container */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="bg-[#f1ede6] text-[#4a463f] uppercase tracking-wider font-semibold">
-                      <th className="py-3 px-4 rounded-l">Mã đơn &amp; Khách thuê</th>
-                      <th className="py-3 px-4">Thời gian thuê</th>
-                      <th className="py-3 px-4">Doanh thu</th>
-                      <th className="py-3 px-4">Ký quỹ Escrow</th>
-                      <th className="py-3 px-4">Trạng thái</th>
-                      <th className="py-3 px-4 text-right rounded-r">Chi tiết</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#f1ede6]">
-                    <tr className="hover:bg-[#f7f3ec] transition-colors">
-                      <td className="py-4 px-4">
-                        <div className="font-semibold text-[#141310]">#RH-RNT-2024-8845</div>
-                        <div className="text-[#7b766f]">Elena Rostova (SN #HB-907-88201)</div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="text-[#141310] font-medium">14/11 - 19/11/2024</div>
-                        <div className="text-[#7b766f]">5 ngày (Trọn gói)</div>
-                      </td>
-                      <td className="py-4 px-4 font-semibold text-[#141310]">2.250.000 ₫</td>
-                      <td className="py-4 px-4 text-[#7b766f]">16.000.000 ₫</td>
-                      <td className="py-4 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-[#dbe6d1] text-[#151e11] font-semibold">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#576151]"></span>
-                          ĐANG THUÊ (IN CUSTODY)
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <Link to="/shop/rent/orders" className="p-1.5 text-[#7b766f] hover:text-[#141310] inline-block">
-                          <span className="material-symbols-outlined text-[18px]">visibility</span>
-                        </Link>
-                      </td>
-                    </tr>
-                    <tr className="hover:bg-[#f7f3ec] transition-colors">
-                      <td className="py-4 px-4">
-                        <div className="font-semibold text-[#141310]">#RH-RNT-2024-8712</div>
-                        <div className="text-[#7b766f]">Trần Quốc Nam (SN #HB-907-88202)</div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="text-[#141310] font-medium">28/10 - 02/11/2024</div>
-                        <div className="text-[#7b766f]">5 ngày (Studio commercial)</div>
-                      </td>
-                      <td className="py-4 px-4 font-semibold text-[#141310]">2.250.000 ₫</td>
-                      <td className="py-4 px-4 text-[#7b766f] line-through">16.000.000 ₫</td>
-                      <td className="py-4 px-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-[#ebe8e1] text-[#141310] font-semibold">
-                          <span className="material-symbols-outlined text-[12px] text-[#576151]">check</span>
-                          HOÀN TẤT &amp; GIẢI NGÂN
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <Link to="/shop/rent/orders" className="p-1.5 text-[#7b766f] hover:text-[#141310] inline-block">
-                          <span className="material-symbols-outlined text-[18px]">visibility</span>
-                        </Link>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              {/* Table Container / Empty State */}
+              <div className="p-8 text-center bg-[#fdfbf7] rounded-lg border border-[#ebe8e1] space-y-2">
+                <span className="material-symbols-outlined text-3xl text-[#7b766f]">history</span>
+                <p className="text-sm font-semibold text-[#141310]">Chưa có đơn thuê nào phát sinh cho sản phẩm này</p>
+                <p className="text-xs text-[#7b766f]">
+                  Khi khách hàng đặt thuê sản phẩm trên sàn, các đơn hàng kèm doanh thu và ký quỹ Escrow sẽ hiển thị tại đây.
+                </p>
               </div>
             </section>
 
@@ -481,7 +467,7 @@ export const RentProductDetail: React.FC = () => {
               <div className="flex items-center justify-between pb-4 border-b border-[#f1ede6]">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#576151] text-[22px]">policy</span>
-                  <h2 className="font-serif text-xl text-[#141310]">Lịch sử Thẩm định &amp; Kiểm duyệt Admin</h2>
+                  <h2 className="font-serif text-xl text-[#141310]">Lịch sử Thẩm định &amp; Kiểm duyệt</h2>
                 </div>
                 <span className="text-[11px] uppercase tracking-wider text-[#7b766f]">SỔ CÁI BẤT BIẾN (AUDIT TRAIL)</span>
               </div>
@@ -493,28 +479,13 @@ export const RentProductDetail: React.FC = () => {
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-sm text-[#141310]">Khởi tạo hồ sơ niêm yết</span>
-                      <span className="font-mono text-xs text-[#7b766f]">12/03/2026 09:30</span>
                     </div>
                     <p className="text-xs text-[#7b766f]">
-                      Chủ xưởng <strong>Phạm Thùy Dương</strong> nộp hồ sơ niêm yết mới kèm 4 ảnh macro cảm biến kiểm định và tài liệu thông số kỹ thuật gốc Hasselblad.
+                      Sản phẩm <strong>{product.name}</strong> (Mã SKU #{product.sku}) được khởi tạo trên hệ thống, nộp kèm thông số kỹ thuật và hình ảnh giám định thực tế.
                     </p>
-                    <div className="text-[11px] text-[#7b766f] uppercase tracking-wider">Hồ sơ #DOC-2026-HBL907 • Trạng thái: Chờ phân bổ giám định viên</div>
-                  </div>
-                </div>
-
-                <div className="relative flex items-start gap-4">
-                  <span className="absolute -left-6 mt-1 w-4 h-4 rounded-full bg-[#dbe6d1] flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#576151]"></span>
-                  </span>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-sm text-[#141310]">Tiếp nhận giám định quang học</span>
-                      <span className="font-mono text-xs text-[#7b766f]">12/03/2026 11:15</span>
+                    <div className="text-[11px] text-[#7b766f] uppercase tracking-wider">
+                      Phân loại: {typeof product.category === 'object' && product.category !== null ? (product.category as { name?: string }).name || 'Thiết bị RENT' : String(product.category || 'Thiết bị RENT')}
                     </div>
-                    <p className="text-xs text-[#7b766f]">
-                      Giám định viên ReUse Hub (<strong>Marcus Vance</strong>) tiếp nhận đối chiếu số Serial quốc tế, kiểm tra bước ren ngàm XCD và quét mã QR niêm phong thân máy.
-                    </p>
-                    <div className="text-[11px] text-[#576151] uppercase tracking-wider font-semibold">Kết quả: Đạt tiêu chuẩn phân hạng Grade A+ (Bảo tàng)</div>
                   </div>
                 </div>
 
@@ -524,16 +495,30 @@ export const RentProductDetail: React.FC = () => {
                   </span>
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-sm text-[#141310]">Phê chuẩn chính thức &amp; Kích hoạt Escrow</span>
-                      <span className="font-mono text-xs text-[#576151] font-semibold">12/03/2026 13:45</span>
-                      <span className="px-2 py-0.5 rounded bg-[#d8e3ce] text-[#3f4a3a] text-[10px] uppercase font-bold">HOÀN TẤT DUYỆT</span>
+                      <span className="font-semibold text-sm text-[#141310]">
+                        {product.approvalStatus === 'APPROVED'
+                          ? 'Đã được duyệt & Hoạt động'
+                          : product.approvalStatus === 'REJECTED'
+                          ? 'Hồ sơ bị từ chối'
+                          : 'Đang chờ phê duyệt'}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
+                          product.approvalStatus === 'APPROVED'
+                            ? 'bg-[#d8e3ce] text-[#3f4a3a]'
+                            : product.approvalStatus === 'REJECTED'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {product.approvalStatus || 'APPROVED'}
+                      </span>
                     </div>
                     <p className="text-xs text-[#7b766f]">
-                      Ban quản trị Admin phê chuẩn trạng thái <strong>ACTIVE</strong>. Mức ký quỹ 16.000.000 ₫ được chứng thực bảo hiểm B-Corp Standard, sản phẩm xuất hiện công khai trên bản đồ RENT.
+                      {product.approvalStatus === 'APPROVED'
+                        ? `Sản phẩm đã được hệ thống phê duyệt. Mức giá thuê niêm yết ${new Intl.NumberFormat('vi-VN').format(product.pricePerDay || 0)} ₫/ngày và tiền đặt cọc ${new Intl.NumberFormat('vi-VN').format(product.deposit || 0)} ₫.`
+                        : product.rejectionReason || 'Hồ sơ đang trong hàng đợi thẩm định của quản trị viên hệ thống.'}
                     </p>
-                    <div className="p-3 rounded bg-[#f7f3ec] text-[#4a463f] font-mono text-[11px] mt-1 border border-[#ebe8e1]">
-                      Chữ ký điện tử thẩm định: RSA-4096-SEC-TOKEN-VANCE-890218 // TX-ESCROW-POOL-APPROVED
-                    </div>
                   </div>
                 </div>
               </div>
@@ -563,11 +548,11 @@ export const RentProductDetail: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#ebe8e1]">
                   <div className="bg-white p-3 rounded shadow-xs border border-[#ebe8e1]">
                     <span className="text-[11px] text-[#7b766f] uppercase block">Thời hạn tối thiểu</span>
-                    <span className="font-semibold text-sm text-[#141310]">02 Ngày</span>
+                    <span className="font-semibold text-sm text-[#141310]">{product.minDays || 1} Ngày</span>
                   </div>
                   <div className="bg-white p-3 rounded shadow-xs border border-[#ebe8e1]">
                     <span className="text-[11px] text-[#7b766f] uppercase block">Thời hạn tối đa</span>
-                    <span className="font-semibold text-sm text-[#141310]">30 Ngày</span>
+                    <span className="font-semibold text-sm text-[#141310]">{product.maxDays || 30} Ngày</span>
                   </div>
                 </div>
               </div>
@@ -578,15 +563,17 @@ export const RentProductDetail: React.FC = () => {
                   <div className="flex items-start gap-3">
                     <span className="material-symbols-outlined text-[#576151] text-[22px] shrink-0 mt-0.5">lock_clock</span>
                     <div>
-                      <div className="font-semibold text-sm text-[#141310]">{product.deposit.toLocaleString()} ₫</div>
+                      <div className="font-semibold text-sm text-[#141310]">{(product.deposit || 0).toLocaleString()} ₫</div>
                       <div className="text-xs text-[#7b766f]">Tiền cọc bảo chứng Smart Escrow</div>
-                      <div className="text-[11px] text-[#576151] mt-1 font-medium">Khóa ký quỹ tự động • Hoàn 100% trong 24h</div>
+                      <div className="text-[11px] text-[#576151] mt-1 font-medium">Khóa ký quỹ tự động • Hoàn 100% khi trả máy</div>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-3.5 rounded bg-[#f7f3ec] border border-[#ebe8e1]">
                   <span className="text-xs text-[#7b766f]">Giá trị thay thế niêm yết</span>
-                  <span className="font-bold text-sm text-[#141310]">{product.replacementValue?.toLocaleString() || '145.000.000'} ₫</span>
+                  <span className="font-bold text-sm text-[#141310]">
+                    {(product.replacementValue || product.pricePerDay * 30 || 0).toLocaleString()} ₫
+                  </span>
                 </div>
               </div>
 
@@ -611,8 +598,10 @@ export const RentProductDetail: React.FC = () => {
               {/* Sparkline Graphic */}
               <div className="p-4 rounded-lg bg-[#ebe8e1]/50 flex flex-col gap-2 border border-[#ebe8e1]">
                 <div className="flex items-center justify-between text-xs text-[#7b766f]">
-                  <span>Doanh thu tích lũy 30 ngày</span>
-                  <span className="font-bold text-[#141310]">6.750.000 ₫</span>
+                  <span>Doanh thu ước tính luân chuyển</span>
+                  <span className="font-bold text-[#141310]">
+                    {((product.rentingUnits || 0) * (product.pricePerDay || 0) * 5).toLocaleString()} ₫
+                  </span>
                 </div>
                 <div className="w-full h-10 mt-1">
                   <svg className="w-full h-full text-[#576151]" fill="none" viewBox="0 0 200 40">
@@ -645,7 +634,9 @@ export const RentProductDetail: React.FC = () => {
                     src={product.coverImage}
                   />
                   <div className="absolute top-3 left-3 bg-[#141310]/90 text-white text-[10px] px-2 py-0.5 rounded uppercase tracking-wider backdrop-blur-sm">
-                    {product.category.toUpperCase()}
+                    {typeof product.category === 'object' && product.category !== null
+                      ? (product.category as { name?: string }).name?.toUpperCase() || 'RENT'
+                      : String(product.category || 'RENT').toUpperCase()}
                   </div>
                   <div className="absolute top-3 right-3 bg-white/90 text-[#141310] p-1.5 rounded-full shadow-sm">
                     <span className="material-symbols-outlined text-[16px] block">bookmark_border</span>
@@ -654,7 +645,7 @@ export const RentProductDetail: React.FC = () => {
                 <div className="p-4 flex flex-col gap-3 bg-white">
                   <div className="flex items-center gap-1.5 text-[#576151] text-[11px]">
                     <span className="material-symbols-outlined text-[14px]">verified</span>
-                    <span>Atelier Chronos &amp; Optics</span>
+                    <span>{product.brand || 'Xưởng thiết bị đối tác'}</span>
                   </div>
                   <div className="font-serif text-sm text-[#141310] leading-snug line-clamp-2">
                     {product.name}
@@ -683,10 +674,10 @@ export const RentProductDetail: React.FC = () => {
             <div className="p-6 rounded-xl bg-[#ebe8e1]/60 flex flex-col gap-3 border border-[#ebe8e1]">
               <div className="flex items-center gap-2 text-[#141310] font-semibold text-sm">
                 <span className="material-symbols-outlined text-[#576151]">policy</span>
-                <span>Cam kết Bản quyền Xưởng</span>
+                <span>Cam kết Bảo chứng Thiết bị</span>
               </div>
               <p className="text-xs text-[#4a463f] leading-relaxed">
-                Sản phẩm được bảo đảm bởi <strong>Atelier Chronos &amp; Optics</strong>. Mọi thao tác bàn giao qua giao thức đối kiểm số hóa với Smart Escrow bảo lưu toàn quyền lợi tài chính của chủ sở hữu.
+                Sản phẩm được bảo đảm bởi <strong>{product.brand || 'Xưởng thiết bị'}</strong>. Mọi thao tác bàn giao qua giao thức đối kiểm số hóa với Smart Escrow bảo lưu toàn quyền lợi tài chính của chủ sở hữu.
               </p>
             </div>
           </aside>

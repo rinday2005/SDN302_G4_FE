@@ -2,22 +2,24 @@ import { useNotification } from "../../hooks/useNotification";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
-  Search,
-  Heart,
-  Bell,
-  ShoppingBag,
-  User,
-  Menu,
-  X,
-  LogOut,
-  Package,
-  SlidersHorizontal,
-  LayoutDashboard,
-  Store,
-} from "lucide-react";
-import { useCartWishlist } from "../../context/CartWishlistContext";
+    Search,
+    Heart,
+    Bell,
+    ShoppingBag,
+    User,
+    Menu,
+    X,
+    LogOut,
+    Package,
+    SlidersHorizontal,
+    LayoutDashboard,
+    Store,
+    MessageCircle
+} from 'lucide-react';
+import { useCartWishlist } from '../../context/CartWishlistContext';
+import { useCustomerChat } from '../../context/customer-chat-context';
 
-export type UserRole = "GUEST" | "USER" | "SHOP" | "ADMIN";
+export type UserRole = 'GUEST' | 'USER' | 'SHOP' | 'ADMIN';
 
 interface HeaderProps {
   userRole?: UserRole;
@@ -34,150 +36,149 @@ export const Header: React.FC<HeaderProps> = ({
   cartCount,
   onLogout,
 }) => {
-  const { wishlistCount: ctxWishlistCount, cartCount: ctxCartCount } = useCartWishlist();
-  const effectiveWishlistCount =
-    wishlistCount !== undefined ? wishlistCount : ctxWishlistCount;
-  const effectiveCartCount = cartCount !== undefined ? cartCount : ctxCartCount;
+    const { wishlistCount: ctxWishlistCount, cartCount: ctxCartCount } = useCartWishlist();
+    const { unreadTotal: chatUnreadCount, openChat } = useCustomerChat();
+    const effectiveWishlistCount = wishlistCount !== undefined ? wishlistCount : ctxWishlistCount;
+    const effectiveCartCount = cartCount !== undefined ? cartCount : ctxCartCount;
 
-  // Tự động nhận diện role người dùng đã đăng nhập nếu prop userRole chưa truyền
-  const effectiveRole = useMemo<UserRole>(() => {
-    if (userRole && userRole !== "GUEST") return userRole;
-    try {
-      const token = localStorage.getItem("token") || localStorage.getItem("accessToken");
-      const u = localStorage.getItem("user");
-      if (token && u) {
-        const parsed = JSON.parse(u);
-        const r = String(parsed.role || "USER").toUpperCase();
-        if (r === "SHOP_OWNER" || r === "SHOP") return "SHOP";
-        if (r === "ADMIN") return "ADMIN";
-        return "USER";
-      }
-    } catch {
-      // ignore
-    }
-    return userRole || "GUEST";
-  }, [userRole]);
-
-  const [, setNotifSync] = useState(0);
-  const {
-    notifications,
-    unreadCount: liveUnreadCount,
-    total,
-    popupNotification,
-    dismissPopup,
-    markAsRead,
-    markAllAsRead,
-  } = useNotification();
-
-  // Dynamically calculate notifications scoped to currently logged-in user
-  const effectiveNotificationCount = useMemo(() => {
-    if (notificationCount !== undefined) return notificationCount;
-    if (effectiveRole === "GUEST") return 0;
-    return liveUnreadCount;
-  }, [notificationCount, effectiveRole, liveUnreadCount]);
-
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
-  const [headerAvatar, setHeaderAvatar] = useState<string>(() => {
-    try {
-      const u = localStorage.getItem("user");
-      const parsedUser = u ? JSON.parse(u) : null;
-      const uId = parsedUser?._id || parsedUser?.id;
-      const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
-      if (p) {
-        const parsed = JSON.parse(p);
-        if (parsed.avatarUrl) return parsed.avatarUrl;
-      }
-      if (parsedUser) {
-        if (parsedUser.avatarUrl || parsedUser.avatar)
-          return parsedUser.avatarUrl || parsedUser.avatar;
-      }
-    } catch {
-      // ignore
-    }
-    return "";
-  });
-  const [headerName, setHeaderName] = useState<string>(() => {
-    try {
-      const u = localStorage.getItem("user");
-      const parsedUser = u ? JSON.parse(u) : null;
-      const uId = parsedUser?._id || parsedUser?.id;
-      const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
-      if (p) {
-        const parsed = JSON.parse(p);
-        if (parsed.fullName) return parsed.fullName;
-      }
-      if (parsedUser) {
-        if (parsedUser.fullName) return parsedUser.fullName;
-      }
-    } catch {
-      // ignore
-    }
-    return "Tài khoản của tôi";
-  });
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const notifDropdownRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
-
-  const formatTimeAgo = (dateStr?: string) => {
-    if (!dateStr) return "Vừa xong";
-    try {
-      const diffMs = Date.now() - new Date(dateStr).getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      if (diffMins < 1) return "Vừa xong";
-      if (diffMins < 60) return `${diffMins} phút trước`;
-      const diffHours = Math.floor(diffMins / 60);
-      if (diffHours < 24) return `${diffHours} giờ trước`;
-      return new Date(dateStr).toLocaleDateString("vi-VN");
-    } catch {
-      return "Gần đây";
-    }
-  };
-
-  // Đồng bộ avatar & tên từ hồ sơ cá nhân
-  useEffect(() => {
-    const handleAvatarSync = (e: Event) => {
-      const customEvent = e as CustomEvent<{
-        avatarUrl?: string;
-        fullName?: string;
-      } | null>;
-      if (customEvent.detail === null) {
-        setHeaderAvatar("");
-        setHeaderName("Tài khoản của tôi");
-        return;
-      }
-      if (customEvent.detail?.avatarUrl !== undefined) {
-        setHeaderAvatar(customEvent.detail.avatarUrl);
-      }
-      if (customEvent.detail?.fullName) {
-        setHeaderName(customEvent.detail.fullName);
-      }
-      setNotifSync((prev) => prev + 1);
-      try {
-        const u = localStorage.getItem("user");
-        const parsedUser = u ? JSON.parse(u) : null;
-        const uId = parsedUser?._id || parsedUser?.id;
-        const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
-        if (p) {
-          const parsed = JSON.parse(p);
-          if (parsed.avatarUrl) setHeaderAvatar(parsed.avatarUrl);
-          if (parsed.fullName) setHeaderName(parsed.fullName);
+    // Tự động nhận diện role người dùng đã đăng nhập nếu prop userRole chưa truyền
+    const effectiveRole = useMemo<UserRole>(() => {
+        if (userRole && userRole !== 'GUEST') return userRole;
+        try {
+            const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+            const u = localStorage.getItem('user');
+            if (token && u) {
+                const parsed = JSON.parse(u);
+                const r = String(parsed.role || 'USER').toUpperCase();
+                if (r === 'SHOP_OWNER' || r === 'SHOP') return 'SHOP';
+                if (r === 'ADMIN') return 'ADMIN';
+                return 'USER';
+            }
+        } catch {
+            // ignore
         }
-      } catch {
-        // ignore
-      }
+        return userRole || 'GUEST';
+    }, [userRole]);
+
+    const [, setNotifSync] = useState(0);
+    const {
+        notifications,
+        unreadCount: liveUnreadCount,
+        total,
+        popupNotification,
+        dismissPopup,
+        markAsRead,
+        markAllAsRead,
+    } = useNotification();
+
+    // Dynamically calculate notifications scoped to currently logged-in user
+    const effectiveNotificationCount = useMemo(() => {
+        if (notificationCount !== undefined) return notificationCount;
+        if (effectiveRole === 'GUEST') return 0;
+        return liveUnreadCount;
+    }, [notificationCount, effectiveRole, liveUnreadCount]);
+
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+    const [isNotifDropdownOpen, setIsNotifDropdownOpen] = useState(false);
+    const [headerAvatar, setHeaderAvatar] = useState<string>(() => {
+        try {
+            const u = localStorage.getItem('user');
+            const parsedUser = u ? JSON.parse(u) : null;
+            const uId = parsedUser?._id || parsedUser?.id;
+            const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
+            if (p) {
+                const parsed = JSON.parse(p);
+                if (parsed.avatarUrl) return parsed.avatarUrl;
+            }
+            if (parsedUser) {
+                if (parsedUser.avatarUrl || parsedUser.avatar) return parsedUser.avatarUrl || parsedUser.avatar;
+            }
+        } catch {
+            // ignore
+        }
+        return '';
+    });
+    const [headerName, setHeaderName] = useState<string>(() => {
+        try {
+            const u = localStorage.getItem('user');
+            const parsedUser = u ? JSON.parse(u) : null;
+            const uId = parsedUser?._id || parsedUser?.id;
+            const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
+            if (p) {
+                const parsed = JSON.parse(p);
+                if (parsed.fullName) return parsed.fullName;
+            }
+            if (parsedUser) {
+                if (parsedUser.fullName) return parsedUser.fullName;
+            }
+        } catch {
+            // ignore
+        }
+        return 'Tài khoản của tôi';
+    });
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const notifDropdownRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
+
+    const formatTimeAgo = (dateStr?: string) => {
+        if (!dateStr) return 'Vừa xong';
+        try {
+            const diffMs = Date.now() - new Date(dateStr).getTime();
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 1) return 'Vừa xong';
+            if (diffMins < 60) return `${diffMins} phút trước`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours} giờ trước`;
+            return new Date(dateStr).toLocaleDateString('vi-VN');
+        } catch {
+            return 'Gần đây';
+        }
     };
 
-    window.addEventListener("profile_updated", handleAvatarSync);
-    window.addEventListener("user_profile_updated", handleAvatarSync);
-    window.addEventListener("storage", handleAvatarSync);
-    return () => {
-      window.removeEventListener("profile_updated", handleAvatarSync);
-      window.removeEventListener("user_profile_updated", handleAvatarSync);
-      window.removeEventListener("storage", handleAvatarSync);
-    };
-  }, []);
+    // Đồng bộ avatar & tên từ hồ sơ cá nhân
+    useEffect(() => {
+        const handleAvatarSync = (e: Event) => {
+            const customEvent = e as CustomEvent<{
+                avatarUrl?: string;
+                fullName?: string;
+            } | null>;
+            if (customEvent.detail === null) {
+                setHeaderAvatar('');
+                setHeaderName('Tài khoản của tôi');
+                return;
+            }
+            if (customEvent.detail?.avatarUrl !== undefined) {
+                setHeaderAvatar(customEvent.detail.avatarUrl);
+            }
+            if (customEvent.detail?.fullName) {
+                setHeaderName(customEvent.detail.fullName);
+            }
+            setNotifSync((prev) => prev + 1);
+            try {
+                const u = localStorage.getItem('user');
+                const parsedUser = u ? JSON.parse(u) : null;
+                const uId = parsedUser?._id || parsedUser?.id;
+                const p = uId ? localStorage.getItem(`user_profile_${uId}`) : null;
+                if (p) {
+                    const parsed = JSON.parse(p);
+                    if (parsed.avatarUrl) setHeaderAvatar(parsed.avatarUrl);
+                    if (parsed.fullName) setHeaderName(parsed.fullName);
+                }
+            } catch {
+                // ignore
+            }
+        };
+
+        window.addEventListener('profile_updated', handleAvatarSync);
+        window.addEventListener('user_profile_updated', handleAvatarSync);
+        window.addEventListener('storage', handleAvatarSync);
+        return () => {
+            window.removeEventListener('profile_updated', handleAvatarSync);
+            window.removeEventListener('user_profile_updated', handleAvatarSync);
+            window.removeEventListener('storage', handleAvatarSync);
+        };
+    }, []);
 
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
@@ -302,6 +303,24 @@ export const Header: React.FC<HeaderProps> = ({
                     </span>
                   )}
                 </Link>
+
+                {/* Chat với Shop Owner Icon (hiện khi đã login) */}
+                {effectiveRole !== "GUEST" && (
+                  <button
+                    type="button"
+                    aria-label="Tin nhắn với Shop"
+                    onClick={() => openChat()}
+                    className="relative p-2 text-stone-700 hover:text-black hover:bg-stone-100 rounded-full transition-colors cursor-pointer"
+                    title="Trò chuyện với Atelier Shop Owner"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    {chatUnreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-bold leading-tight flex items-center justify-center shadow-xs animate-pulse">
+                        {chatUnreadCount}
+                      </span>
+                    )}
+                  </button>
+                )}
 
                 {/* Notifications Icon + Dropdown (hiện khi đã login) */}
                 {effectiveRole !== "GUEST" && (
@@ -618,6 +637,19 @@ export const Header: React.FC<HeaderProps> = ({
                   <Heart className="w-4 h-4" />
                   <span>Yêu thích ({effectiveWishlistCount})</span>
                 </Link>
+                {effectiveRole !== "GUEST" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      openChat();
+                    }}
+                    className="flex items-center gap-1.5 hover:text-black font-medium cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Chat {chatUnreadCount > 0 && `(${chatUnreadCount})`}</span>
+                  </button>
+                )}
                 <Link
                   to="/cart"
                   onClick={() => setIsMobileMenuOpen(false)}

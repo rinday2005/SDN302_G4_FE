@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useShop } from '../../../context/ShopContext';
+import { getUnitVariantAndCondition } from '../../../utils/inventoryUnitHelper';
 import type {
   GalleryImage,
   ThriftConvertData,
@@ -13,20 +15,49 @@ import {
   parseVndPrice,
   formatVndPrice,
 } from '../../../utils/thriftPricing';
+import {
+  convertRentalToThriftApi,
+  createThriftListingApi,
+  type ConvertRentalToThriftPayload,
+} from '../../../services/thrift.api';
 
 const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   const navigate = useNavigate();
+  const { products } = useShop();
+
+  // Tìm sản phẩm tương ứng từ MongoDB ShopContext
+  const matchedProduct = useMemo(() => {
+    if (!products || products.length === 0) return undefined;
+    return (
+      products.find((p) => {
+        const cleanTarget = targetId.toLowerCase();
+        const cleanSku = (p.sku || '').toLowerCase();
+        return (
+          cleanSku === cleanTarget ||
+          cleanTarget.includes(cleanSku) ||
+          (cleanSku.length >= 4 && cleanTarget.includes(cleanSku.slice(-4)))
+        );
+      }) || products[0]
+    );
+  }, [products, targetId]);
 
   const storageKey = `REUSE_HUB_THRIFT_CONVERT_${targetId}`;
 
-  // State chính của form: Đọc từ localStorage theo targetId để F5 không bị reset
+  // State chính của form: Đọc từ localStorage theo targetId để F5 không bị reset (tự động loại bỏ dữ liệu camera cũ)
   const [formData, setFormData] = useState<ThriftConvertData>(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Đảm bảo dữ liệu đọc lên đúng ID hiện vật hiện tại
-        if (parsed.unitId === targetId || parsed.sku === targetId) {
+        const titleLower = (parsed.title || '').toLowerCase();
+        const catLower = (parsed.category || '').toLowerCase();
+        const isOldCamera =
+          titleLower.includes('hasselblad') ||
+          titleLower.includes('leica') ||
+          catLower.includes('camera') ||
+          catLower.includes('máy ảnh');
+
+        if (!isOldCamera && (parsed.unitId === targetId || parsed.sku === targetId)) {
           return parsed;
         }
       }
@@ -34,8 +65,82 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
       console.error('Lỗi khi đọc localStorage:', e);
     }
     // Nếu chưa có trong localStorage thì lấy data cấu hình chuẩn từ file data
-    return getInitialThriftDataForUnit(targetId);
+    return getInitialThriftDataForUnit(targetId, matchedProduct);
   });
+
+  // Tự động đồng bộ sản phẩm thực tế từ MongoDB khi matchedProduct tải xong hoặc khi formData còn lưu data camera cũ
+  useEffect(() => {
+    if (matchedProduct) {
+      const titleLower = (formData.title || '').toLowerCase();
+      const catLower = (formData.category || '').toLowerCase();
+      const isOldCamera =
+        titleLower.includes('hasselblad') ||
+        titleLower.includes('leica') ||
+        catLower.includes('camera') ||
+        catLower.includes('máy ảnh');
+
+      if (isOldCamera || !formData.title || formData.unitId !== targetId) {
+        const fresh = getInitialThriftDataForUnit(targetId, matchedProduct);
+        setFormData(fresh);
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(fresh));
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [matchedProduct, targetId, formData.title, formData.category, formData.unitId, storageKey]);
+
+  // Danh sách hiện vật chuyển đổi đồng bộ từ dữ liệu thật
+  const availableSpecimens = useMemo(() => {
+    if (!products || products.length === 0) {
+      return AVAILABLE_CONVERT_SPECIMENS;
+    }
+    const list: { id: string; name: string; price: string }[] = [];
+    products.forEach((p) => {
+      const skuLower = (p.sku || '').toLowerCase();
+      const nameLower = (p.name || '').toLowerCase();
+      if (
+        skuLower.startsWith('mock-') ||
+        nameLower.includes('hasselblad') ||
+        nameLower.includes('leica') ||
+        nameLower.includes('sony alpha') ||
+        nameLower.includes('canon eos')
+      ) {
+        return;
+      }
+      const total = Number(p.totalUnits) || 1;
+      const cand = total <= 2 ? Array.from({ length: total }, (_, idx) => idx + 1) : [1, total];
+      if (targetId && targetId.toUpperCase().includes(p.sku.slice(-4).toUpperCase())) {
+        const parts = targetId.split('-');
+        const idxNum = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(idxNum) && idxNum >= 1 && idxNum <= total) {
+          cand.push(idxNum);
+        }
+      }
+      const uniqueCand = Array.from(new Set(cand)).sort((a, b) => a - b);
+
+      for (const i of uniqueCand) {
+        const id = `INV-${p.sku.slice(-4).toUpperCase()}-${String(i).padStart(2, '0')}`;
+        const vInfo = getUnitVariantAndCondition(
+          p.name,
+          String(p.category || ''),
+          i,
+          total,
+          p.rentingUnits || 0,
+          p.maintenanceUnits || 0
+        );
+        const origPrice = p.replacementValue || (p.pricePerDay || 100000) * 30;
+        const estPrice = Math.round((origPrice * (1 - vInfo.discountPercent / 100)) / 1000) * 1000;
+        list.push({
+          id,
+          name: `${p.name} - ${vInfo.variantShort}`,
+          price: `${new Intl.NumberFormat('vi-VN').format(estPrice)} ₫`,
+        });
+      }
+    });
+    return list.length > 0 ? list : AVAILABLE_CONVERT_SPECIMENS;
+  }, [products, targetId]);
 
   // UI state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -55,12 +160,74 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
     }
   }, [formData, storageKey]);
 
+  // Đồng bộ trạng thái duyệt / từ chối từ Admin
+  useEffect(() => {
+    let isMounted = true;
+    const syncAdminStatus = () => {
+      try {
+        const raw = localStorage.getItem('REUSE_HUB_THRIFT_LISTINGS_V1');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const matched = list.find(
+              (it: any) =>
+                it.originalUnitId === targetId ||
+                it.unitId === targetId ||
+                it.sku === formData.sku ||
+                it.id === targetId ||
+                it._id === targetId ||
+                (targetId && it.originalUnitId && it.originalUnitId.toLowerCase().includes(targetId.toLowerCase()))
+            );
+            if (matched && isMounted) {
+              const remoteStatus = String(matched.status || matched.approvalStatus || '').toUpperCase();
+              if (remoteStatus === 'REJECTED') {
+                setFormData((prev) => {
+                  if (prev.status === 'REJECTED' && prev.rejectionReason === matched.rejectionReason) return prev;
+                  const updated: ThriftConvertData = {
+                    ...prev,
+                    status: 'REJECTED',
+                    rejectionReason:
+                      matched.rejectionReason ||
+                      'Ban kiểm duyệt Admin đã từ chối hồ sơ này. Vui lòng cập nhật lại thông tin/hình ảnh.',
+                  };
+                  try {
+                    localStorage.setItem(storageKey, JSON.stringify(updated));
+                  } catch {}
+                  return updated;
+                });
+              } else if (remoteStatus === 'APPROVED') {
+                setFormData((prev) => {
+                  if (prev.status === 'CONVERTED_TO_THRIFT') return prev;
+                  const updated: ThriftConvertData = { ...prev, status: 'CONVERTED_TO_THRIFT' };
+                  try {
+                    localStorage.setItem(storageKey, JSON.stringify(updated));
+                  } catch {}
+                  return updated;
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi kiểm tra trạng thái Admin:', err);
+      }
+    };
+
+    syncAdminStatus();
+    window.addEventListener('storage', syncAdminStatus);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', syncAdminStatus);
+    };
+  }, [targetId, formData.sku, storageKey]);
+
   // Kiểm tra điều kiện AC 1: Không cho convert nếu đang thuê hoặc có lịch đặt trước
   const isCurrentlyRenting = formData.currentRentStatus === 'RENTING';
   const hasFutureBooking = formData.hasFutureBooking;
   const isEligible = !isCurrentlyRenting && !hasFutureBooking;
+  const isRejected = formData.status === 'REJECTED';
   const isAlreadyConverted =
-    formData.status === 'PENDING_APPROVAL' || formData.status === 'CONVERTED_TO_THRIFT';
+    (formData.status === 'PENDING_APPROVAL' || formData.status === 'CONVERTED_TO_THRIFT') && !isRejected;
 
   // Handler cập nhật input
   const handleInputChange = <K extends keyof ThriftConvertData>(
@@ -122,71 +289,149 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   };
 
   // Xử lý Submit chuyển giao THRIFT (AC 3)
-  const handleConfirmSubmit = () => {
+  const handleConfirmSubmit = async () => {
     setIsConfirmModalOpen(false);
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const now = new Date().toLocaleString('vi-VN');
-      const updatedData: ThriftConvertData = {
-        ...formData,
-        status: 'PENDING_APPROVAL',
-        convertedAt: now,
-      };
+    const now = new Date().toLocaleString('vi-VN');
+    const numericPrice = parseVndPrice(formData.price) || Number(formData.price.replace(/[^\d]/g, '')) || 0;
+    const galleryUrls = formData.images.map((img) => img.url);
+    const allImages = formData.heroImage
+      ? [formData.heroImage, ...galleryUrls.filter((u) => u !== formData.heroImage)]
+      : galleryUrls;
 
-      setFormData(updatedData);
-      setIsSubmitting(false);
+    // Chuẩn hóa condition grade phù hợp backend
+    let condGrade = 'GOOD';
+    const cUpper = (formData.condition || '').toUpperCase();
+    if (
+      cUpper.includes('LIKE_NEW') ||
+      cUpper.includes('99') ||
+      cUpper.includes('MỚI') ||
+      cUpper.includes('PRISTINE') ||
+      cUpper.includes('MINT')
+    ) {
+      condGrade = 'LIKE_NEW';
+    } else if (cUpper.includes('EXCELLENT') || cUpper.includes('95')) {
+      condGrade = 'GOOD';
+    } else if (cUpper.includes('FAIR') || cUpper.includes('80') || cUpper.includes('VINTAGE')) {
+      condGrade = 'FAIR';
+    }
 
-      // Cập nhật vào danh sách THRIFT toàn cục trong localStorage để mock đồng bộ sàn THRIFT
-      try {
-        const thriftStoreKey = 'REUSE_HUB_THRIFT_LISTINGS_V1';
-        const existingThriftList = JSON.parse(localStorage.getItem(thriftStoreKey) || '[]');
-        const newThriftEntry = {
-          id: `thrift-${formData.unitId}-${Date.now()}`,
-          originalUnitId: formData.unitId,
-          sku: formData.sku,
-          title: formData.title,
-          category: formData.category,
-          condition: formData.condition,
-          price: formData.price,
-          description: formData.description,
-          image: formData.heroImage,
-          gallery: formData.images,
-          status: 'PENDING_APPROVAL',
-          approvalStatus: 'PENDING',
-          source: 'rent',
-          sourceTag: formData.sourceTag,
-          submittedAt: now,
-        };
-        // Tránh trùng lặp
-        const filteredOld = existingThriftList.filter(
-          (item: { originalUnitId?: string }) => item.originalUnitId !== formData.unitId
-        );
-        localStorage.setItem(thriftStoreKey, JSON.stringify([newThriftEntry, ...filteredOld]));
+    const payload: ConvertRentalToThriftPayload = {
+      rentalProductId: matchedProduct?.sku || formData.sku || targetId,
+      sellingPrice: numericPrice,
+      price: numericPrice,
+      name: formData.title,
+      description: formData.description,
+      condition: condGrade,
+      images: allImages.length > 0 ? allImages : undefined,
+      categoryId: matchedProduct?.categoryId,
+      status: 'PENDING_APPROVAL',
+    };
 
-        // Đánh dấu sản phẩm RENT đã convert để ẩn khỏi sàn RENT
-        const rentStoreKey = 'REUSE_HUB_RENT_PRODUCTS_STORE_V1';
-        const existingRentProducts = JSON.parse(localStorage.getItem(rentStoreKey) || '[]');
-        const updatedRentProducts = existingRentProducts.map(
-          (p: { sku?: string;[key: string]: unknown }) => {
-            if (p.sku === formData.sku) {
-              return {
-                ...p,
-                isVisible: false, // Ẩn khỏi RENT Marketplace theo AC 2
-                convertedToThrift: true,
-                thriftListingId: newThriftEntry.id,
-              };
-            }
-            return p;
-          }
-        );
-        localStorage.setItem(rentStoreKey, JSON.stringify(updatedRentProducts));
-      } catch (err) {
-        console.error('Lỗi khi ghi danh sách THRIFT / RENT:', err);
+    let backendSuccess = false;
+    let createdListingId = `thrift-${formData.unitId}-${Date.now()}`;
+
+    try {
+      const res = await convertRentalToThriftApi(payload);
+      if (res && res._id) {
+        backendSuccess = true;
+        createdListingId = res._id;
       }
+    } catch (err: unknown) {
+      console.warn('API convert-from-rental trả về lỗi hoặc chạy fallback:', err);
+      // Fallback qua createThriftListingApi nếu sản phẩm không match rentalProductId trên backend
+      try {
+        const fallbackRes = await createThriftListingApi({
+          name: formData.title,
+          description: formData.description,
+          price: numericPrice,
+          condition: condGrade,
+          images: allImages,
+          categoryId: matchedProduct?.categoryId,
+          status: 'PENDING_APPROVAL',
+          sourceType: 'FROM_RENTAL',
+        });
+        if (fallbackRes && fallbackRes._id) {
+          backendSuccess = true;
+          createdListingId = fallbackRes._id;
+        }
+      } catch (fbErr) {
+        console.warn('Fallback createThriftListingApi cũng thất bại:', fbErr);
+      }
+    }
 
-      showToast('ĐÃ TẠO MỤC ĐĂNG THRIFT THÀNH CÔNG! Trạng thái: Chờ duyệt (PENDING_APPROVAL).');
-    }, 1200);
+    const updatedData: ThriftConvertData = {
+      ...formData,
+      status: 'PENDING_APPROVAL',
+      rejectionReason: undefined,
+      convertedAt: now,
+    };
+
+    setFormData(updatedData);
+    setIsSubmitting(false);
+
+    // Cập nhật cả 2 key localStorage để đồng bộ tức thì cho cả sàn THRIFT và Admin Approval
+    try {
+      const thriftStoreKey = 'REUSE_HUB_THRIFT_LISTINGS_V1';
+      const existingThriftList = JSON.parse(localStorage.getItem(thriftStoreKey) || '[]');
+      const newThriftEntry = {
+        id: createdListingId,
+        _id: createdListingId,
+        originalUnitId: formData.unitId,
+        sku: formData.sku,
+        name: formData.title,
+        title: formData.title,
+        category: formData.category,
+        categoryId: matchedProduct?.categoryId,
+        condition: formData.condition,
+        price: numericPrice,
+        priceDisplay: formData.price,
+        description: formData.description,
+        image: formData.heroImage,
+        images: allImages,
+        gallery: formData.images,
+        status: 'PENDING_APPROVAL',
+        approvalStatus: 'PENDING',
+        source: 'RENTAL_PRODUCT',
+        sourceType: 'RENTAL_PRODUCT',
+        sourceTag: formData.sourceTag,
+        submittedAt: now,
+        createdAt: new Date().toISOString(),
+      };
+      // Tránh trùng lặp
+      const filteredOld = existingThriftList.filter(
+        (item: { originalUnitId?: string; id?: string }) =>
+          item.originalUnitId !== formData.unitId && item.id !== createdListingId
+      );
+      localStorage.setItem(thriftStoreKey, JSON.stringify([newThriftEntry, ...filteredOld]));
+
+      // Đánh dấu sản phẩm RENT đã convert để ẩn khỏi sàn RENT
+      const rentStoreKey = 'REUSE_HUB_RENT_PRODUCTS_STORE_V1';
+      const existingRentProducts = JSON.parse(localStorage.getItem(rentStoreKey) || '[]');
+      const updatedRentProducts = existingRentProducts.map(
+        (p: { sku?: string; [key: string]: unknown }) => {
+          if (p.sku === formData.sku || p.sku === matchedProduct?.sku) {
+            return {
+              ...p,
+              isVisible: false, // Ẩn khỏi RENT Marketplace theo AC 2
+              convertedToThrift: true,
+              thriftListingId: createdListingId,
+            };
+          }
+          return p;
+        }
+      );
+      localStorage.setItem(rentStoreKey, JSON.stringify(updatedRentProducts));
+    } catch (err) {
+      console.error('Lỗi khi ghi danh sách THRIFT / RENT:', err);
+    }
+
+    showToast(
+      backendSuccess
+        ? 'ĐÃ TẠO MỤC ĐĂNG THRIFT THÀNH CÔNG VÀO DATABASE MONGODB! Đã gửi Admin duyệt (PENDING_APPROVAL).'
+        : 'ĐÃ TẠO MỤC ĐĂNG THRIFT! Trạng thái: Chờ duyệt (PENDING_APPROVAL).'
+    );
   };
 
   const showToast = (msg: string) => {
@@ -200,7 +445,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
   const handleResetDemo = () => {
     if (window.confirm(`Bạn có chắc muốn đặt lại dữ liệu form của hiện vật ${formData.unitId} về mặc định ban đầu?`)) {
       localStorage.removeItem(storageKey);
-      setFormData(getInitialThriftDataForUnit(targetId));
+      setFormData(getInitialThriftDataForUnit(targetId, matchedProduct));
       showToast('Đã đặt lại dữ liệu form về trạng thái ban đầu.');
     }
   };
@@ -248,7 +493,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
             {/* Bộ chọn hiện vật thực tế: Bấm hiện vật nào chuyển ngay sang hiện vật đó */}
             <div className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant/60 shadow-xs">
               <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
-                <span className="material-symbols-outlined text-[15px] text-primary">camera</span>
+                <span className="material-symbols-outlined text-[15px] text-primary">inventory_2</span>
                 Đổi hiện vật:
               </span>
               <select
@@ -256,7 +501,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 onChange={(e) => handleSelectSpecimen(e.target.value)}
                 className="bg-surface text-xs font-semibold text-on-surface px-2.5 py-1 rounded border border-outline-variant focus:outline-none cursor-pointer"
               >
-                {AVAILABLE_CONVERT_SPECIMENS.map((spec) => (
+                {availableSpecimens.map((spec) => (
                   <option key={spec.id} value={spec.id}>
                     #{spec.id} — {spec.name.slice(0, 30)}... ({spec.price})
                   </option>
@@ -288,18 +533,23 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   Trạng thái hiện vật
                 </span>
                 <span
-                  className={`font-headline-sm text-headline-sm font-bold font-serif ${isAlreadyConverted
+                  className={`font-headline-sm text-headline-sm font-bold font-serif ${
+                    isRejected
+                      ? 'text-red-600'
+                      : isAlreadyConverted
                       ? 'text-primary'
                       : !isEligible
-                        ? 'text-error'
-                        : 'text-secondary'
-                    }`}
+                      ? 'text-error'
+                      : 'text-secondary'
+                  }`}
                 >
-                  {isAlreadyConverted
+                  {isRejected
+                    ? 'BỊ TỪ CHỐI (CHO PHÉP CHUYỂN LẠI)'
+                    : isAlreadyConverted
                     ? 'PENDING APPROVAL'
                     : !isEligible
-                      ? 'KHÓA: KHÔNG ĐỦ ĐIỀU KIỆN'
-                      : 'READY TO THRIFT'}
+                    ? 'KHÓA: KHÔNG ĐỦ ĐIỀU KIỆN'
+                    : 'READY TO THRIFT'}
                 </span>
                 <span className="font-label-sm text-label-sm text-on-surface-variant">
                   Khấu hao: 86.5% • {formData.cycleCount} Chu kỳ luân chuyển
@@ -313,13 +563,15 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   <select
                     className="text-xs bg-surface px-2 py-1 rounded border border-outline-variant text-on-surface font-medium focus:outline-none cursor-pointer"
                     value={
-                      formData.status === 'PENDING_APPROVAL'
+                      isRejected
+                        ? 'REJECTED'
+                        : formData.status === 'PENDING_APPROVAL'
                         ? 'CONVERTED'
                         : isCurrentlyRenting
-                          ? 'RENTING'
-                          : hasFutureBooking
-                            ? 'FUTURE_BOOKING'
-                            : 'ELIGIBLE'
+                        ? 'RENTING'
+                        : hasFutureBooking
+                        ? 'FUTURE_BOOKING'
+                        : 'ELIGIBLE'
                     }
                     onChange={(e) => {
                       const val = e.target.value;
@@ -351,6 +603,14 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                           hasFutureBooking: false,
                           status: 'PENDING_APPROVAL',
                         }));
+                      } else if (val === 'REJECTED') {
+                        setFormData((prev) => ({
+                          ...prev,
+                          currentRentStatus: 'COMPLETED',
+                          hasFutureBooking: false,
+                          status: 'REJECTED',
+                          rejectionReason: 'Hình ảnh thực tế chưa rõ góc cạnh sản phẩm. Vui lòng bổ sung ảnh chi tiết.',
+                        }));
                       }
                     }}
                   >
@@ -358,12 +618,38 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                     <option value="RENTING">✕ 2. ĐANG CHO THUÊ (status = 'RENTING')</option>
                     <option value="FUTURE_BOOKING">✕ 3. CÓ LỊCH THUÊ (has_future_booking: true)</option>
                     <option value="CONVERTED">✓ 4. ĐÃ GỬI DUYỆT (PENDING_APPROVAL)</option>
+                    <option value="REJECTED">⚠ 5. BỊ TỪ CHỐI (REJECTED - Cho phép nộp lại)</option>
                   </select>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        {/* REJECTED BY ADMIN BANNER */}
+        {isRejected && (
+          <div className="mb-space-lg p-space-md bg-red-500/10 border-2 border-red-500/40 rounded-xl flex items-start gap-3.5 text-on-surface animate-fade-in shadow-sm">
+            <div className="w-10 h-10 rounded-lg bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+              <span className="material-symbols-outlined text-[24px]">cancel</span>
+            </div>
+            <div className="flex-1 flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs uppercase tracking-wider text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                  HỒ SƠ BỊ TỪ CHỐI DUYỆT BỞI ADMIN
+                </span>
+                <span className="text-[11px] text-on-surface-variant font-mono">
+                  Mã: #{formData.unitId}
+                </span>
+              </div>
+              <p className="text-xs text-on-surface mt-1.5 leading-relaxed font-medium">
+                <strong>Lý do từ chối:</strong> {formData.rejectionReason || 'Hồ sơ thẩm định chưa đạt tiêu chuẩn hình ảnh hoặc giá trị thẩm định chưa phù hợp.'}
+              </p>
+              <p className="text-[11px] text-on-surface-variant mt-1">
+                👉 Quý xưởng vui lòng kiểm tra lại hình ảnh thực tế, mô tả chi tiết và điều chỉnh giá bán bên dưới, sau đó bấm <strong>"CHUYỂN SANG THRIFT (GỬI DUYỆT LẠI)"</strong> để gửi hồ sơ xét duyệt lại.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* INELIGIBILITY WARNING BANNER (AC 1) */}
         {!isEligible && (
@@ -552,7 +838,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 INSPECT
               </span>
               <span className={`font-label-sm text-label-sm ${activeTimelineStep === 4 ? 'opacity-90' : 'text-on-surface-variant'}`}>
-                Đối kiểm quang &amp; buồng máy
+                Kiểm định chất lượng &amp; form dáng
               </span>
             </div>
 
@@ -696,7 +982,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                       Return Received (Đã nhập kho xưởng)
                     </span>
                     <p className="font-label-sm text-label-sm text-on-surface-variant leading-snug">
-                      Hiện vật đã được bưu tá Nanuk giao về kho an toàn (Trạm tủ ẩm A2, Q.1, TP. HCM).
+                      Hiện vật đã được bàn giao về kho xưởng ReUse Hub an toàn.
                     </p>
                   </div>
                 </div>
@@ -708,10 +994,10 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   </span>
                   <div className="flex flex-col">
                     <span className="font-title-md text-title-md text-xs font-semibold text-on-surface">
-                      Inspection Completed (Giám định buồng máy)
+                      Inspection Completed (Kiểm định chất lượng)
                     </span>
                     <p className="font-label-sm text-label-sm text-on-surface-variant leading-snug">
-                      Biên bản quang học đạt Grade {formData.condition.split(' ')[0]} 98.0%, cảm biến và thấu kính đạt chuẩn thẩm định.
+                      Biên bản kiểm định đạt {formData.condition}, chất liệu và phụ kiện đạt quy chuẩn mở bán THRIFT.
                     </p>
                   </div>
                 </div>
@@ -921,20 +1207,20 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   onChange={(e) => handleInputChange('condition', e.target.value)}
                   className="w-full bg-surface px-space-md py-space-sm rounded text-on-surface font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-primary shadow-sm border border-outline-variant/40 disabled:opacity-75 cursor-pointer"
                 >
-                  <option value="Mint- (98.0% - Đã qua thẩm định buồng máy)">
-                    Mint- (98.0% - Đã qua thẩm định buồng máy)
+                  <option value="Chuẩn Thrift (79.0% - Đã kiểm định & khử khuẩn xưởng)">
+                    Chuẩn Thrift (79.0% - Đã kiểm định & khử khuẩn xưởng)
                   </option>
-                  <option value="Near Mint (99.0% - Hoàn hảo như mới)">
-                    Near Mint (99.0% - Hoàn hảo như mới)
+                  <option value="Tốt (86.0% - Vải & form dáng nguyên bản)">
+                    Tốt (86.0% - Vải & form dáng nguyên bản)
                   </option>
-                  <option value="Excellent (95.0% - Dấu vết sử dụng rất ít)">
-                    Excellent (95.0% - Dấu vết sử dụng rất ít)
+                  <option value="Rất tốt (92.0% - Dấu vết sử dụng rất ít)">
+                    Rất tốt (92.0% - Dấu vết sử dụng rất ít)
                   </option>
-                  <option value="Good Vintage (86.0% - Đã bảo dưỡng CLA)">
-                    Good Vintage (86.0% - Đã bảo dưỡng CLA)
+                  <option value="Like New (96.0% - Hoàn hảo như mới)">
+                    Like New (96.0% - Hoàn hảo như mới)
                   </option>
-                  <option value="Very Good (90.0% - Trầy xước nhẹ viền vỏ)">
-                    Very Good (90.0% - Trầy xước nhẹ viền vỏ)
+                  <option value="Nguyên bản (99.0% - Tiêu chuẩn cao cấp)">
+                    Nguyên bản (99.0% - Tiêu chuẩn cao cấp)
                   </option>
                 </select>
               </div>
@@ -1063,7 +1349,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-1 font-label-sm text-label-sm text-secondary bg-secondary/10 px-2 py-0.5 rounded font-medium">
-                    <span className="material-symbols-outlined text-[14px]">photo_camera</span>
+                    <span className="material-symbols-outlined text-[14px]">verified</span>
                     Ảnh thực tế đối kiểm
                   </span>
                   {!isAlreadyConverted && (
@@ -1127,10 +1413,10 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                   </span>
                   <div className="flex flex-col">
                     <span className="font-label-md text-label-md text-on-surface font-semibold">
-                      Insured White-Glove Nanuk Crate Courier
+                      Insured Standard Eco Courier
                     </span>
                     <span className="font-label-sm text-label-sm text-on-surface-variant">
-                      Vận chuyển chống sốc chuyên dụng kèm tem niêm phong chì ReUse Hub
+                      Vận chuyển bảo đảm tiêu chuẩn kèm tem niêm phong ReUse Hub
                     </span>
                   </div>
                 </div>
@@ -1242,12 +1528,15 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 type="button"
                 disabled={!isEligible || isAlreadyConverted || isSubmitting}
                 onClick={() => setIsConfirmModalOpen(true)}
-                className={`w-full font-label-md text-label-md uppercase tracking-wider py-space-md rounded shadow-md transition-all flex items-center justify-center gap-2 font-medium ${isAlreadyConverted
+                className={`w-full font-label-md text-label-md uppercase tracking-wider py-space-md rounded shadow-md transition-all flex items-center justify-center gap-2 font-medium ${
+                  isRejected
+                    ? 'bg-red-700 hover:bg-red-800 text-white cursor-pointer shadow-lg'
+                    : isAlreadyConverted
                     ? 'bg-secondary text-white cursor-default'
                     : !isEligible
                       ? 'bg-outline-variant/60 text-on-surface-variant cursor-not-allowed'
                       : 'bg-on-background text-background hover:bg-primary cursor-pointer'
-                  }`}
+                }`}
               >
                 {isSubmitting ? (
                   <>
@@ -1255,6 +1544,13 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                       progress_activity
                     </span>
                     <span>ĐANG KHỞI TẠO MỤC ĐĂNG THRIFT...</span>
+                  </>
+                ) : isRejected ? (
+                  <>
+                    <span>Chuyển Sang THRIFT (Gửi Duyệt Lại)</span>
+                    <span className="material-symbols-outlined text-[18px] transition-transform group-hover:translate-x-1">
+                      restart_alt
+                    </span>
                   </>
                 ) : isAlreadyConverted ? (
                   <>
@@ -1303,16 +1599,16 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
         </div>
       </div>
 
-      {/* CONFIRMATION WARNING MODAL (AC 2) */}
+      {/* CONFIRMATION WARNING MODAL (AC 2) - GỌN GÀNG, TINH TẾ */}
       {isConfirmModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-surface rounded-xl shadow-2xl max-w-lg w-full border border-outline-variant overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-surface rounded-xl shadow-2xl max-w-[420px] w-full border border-outline-variant overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-surface-container-high px-6 py-4 flex items-center justify-between border-b border-outline-variant">
+            <div className="bg-surface-container-high px-4 py-3 flex items-center justify-between border-b border-outline-variant">
               <div className="flex items-center gap-2 text-error">
-                <span className="material-symbols-outlined text-[24px]">warning</span>
-                <span className="font-headline-sm text-base font-bold text-on-surface font-serif">
-                  Xác Nhận Chuyển Giao Sang THRIFT Vĩnh Viễn
+                <span className="material-symbols-outlined text-[20px]">warning</span>
+                <span className="text-sm font-bold text-on-surface font-serif">
+                  Xác Nhận Chuyển Sang THRIFT
                 </span>
               </div>
               <button
@@ -1320,65 +1616,44 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
                 onClick={() => setIsConfirmModalOpen(false)}
                 className="p-1 rounded hover:bg-surface-container text-on-surface-variant cursor-pointer"
               >
-                <span className="material-symbols-outlined text-[18px]">close</span>
+                <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 flex flex-col gap-4 text-xs leading-relaxed text-on-surface">
-              <div className="p-3 bg-error-container/30 border border-error/20 rounded-lg text-on-error-container">
-                <p className="font-bold">
-                  CẢNH BÁO MỘT CHIỀU: THAO TÁC NÀY KHÔNG THỂ HOÀN TÁC!
+            <div className="p-4 flex flex-col gap-3 text-xs leading-relaxed text-on-surface">
+              <div className="p-2.5 bg-error-container/20 border border-error/20 rounded-lg text-on-error-container text-[11px] leading-snug">
+                <p className="font-bold text-error flex items-center gap-1 mb-0.5">
+                  <span className="material-symbols-outlined text-[14px]">error</span>
+                  <span>Thao tác không thể hoàn tác:</span>
                 </p>
-                <p className="mt-1 text-[11px] opacity-90">
-                  Sau khi xác nhận, hiện vật <strong>#{formData.unitId}</strong> ({formData.title}) sẽ lập tức ngừng cung cấp cho thuê vĩnh viễn và bị ẩn khỏi RENT Marketplace.
+                <p className="opacity-90">
+                  Hiện vật <strong>#{formData.unitId}</strong> sẽ ngừng cho thuê vĩnh viễn và được chuyển sang danh mục mở bán THRIFT.
                 </p>
               </div>
 
-              <div className="space-y-2 text-on-surface-variant">
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[16px] shrink-0 mt-0.5">
-                    check
-                  </span>
-                  <span>
-                    Hiện vật chuyển trạng thái sang <strong>CONVERTED_TO_THRIFT</strong> trong hệ thống kho RENT.
-                  </span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[16px] shrink-0 mt-0.5">
-                    check
-                  </span>
-                  <span>
-                    Tạo mới mục đăng THRIFT ở trạng thái <strong>PENDING_APPROVAL</strong> (Chờ ban kiểm duyệt phê duyệt).
-                  </span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-secondary text-[16px] shrink-0 mt-0.5">
-                    check
-                  </span>
-                  <span>
-                    Giá bán đứt thiết lập: <strong>{formData.price}</strong>.
-                  </span>
-                </div>
+              <div className="flex items-center justify-between px-3 py-2 bg-surface-container rounded-lg text-xs">
+                <span className="text-on-surface-variant font-medium">Giá bán đứt thiết lập:</span>
+                <span className="font-bold text-sm text-error">{formData.price}</span>
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="px-6 py-4 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-3">
+            <div className="px-4 py-3 bg-surface-container-low border-t border-outline-variant flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setIsConfirmModalOpen(false)}
-                className="px-4 py-2 rounded text-xs font-semibold text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
               >
-                Hủy Bỏ
+                Hủy bỏ
               </button>
               <button
                 type="button"
                 onClick={handleConfirmSubmit}
-                className="px-5 py-2 rounded text-xs font-semibold uppercase tracking-wider bg-error text-white hover:bg-error/90 shadow transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-1.5 rounded text-xs font-semibold bg-error text-white hover:bg-error/90 shadow-sm transition-colors flex items-center gap-1 cursor-pointer"
               >
-                <span>Xác Nhận Chuyển Đổi Vĩnh Viễn</span>
-                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                <span>Xác nhận chuyển đổi</span>
+                <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
               </button>
             </div>
           </div>
@@ -1472,7 +1747,7 @@ const ConvertToThriftForm: React.FC<{ targetId: string }> = ({ targetId }) => {
 
 export const ConvertToThrift: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const targetId = id || 'INV-HB907-01';
+  const targetId = id || 'INV-DRES-04';
 
   return <ConvertToThriftForm key={targetId} targetId={targetId} />;
 };

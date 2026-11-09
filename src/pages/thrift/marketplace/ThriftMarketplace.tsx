@@ -6,7 +6,6 @@ import { getCategoriesApi } from '../../../services/category.api';
 import { normalizeImageUrl } from '../../../utils/imageUrl';
 import { UserSidebar } from '../../../components/layout/UserSidebar';
 import {
-    THRIFT_PRODUCTS,
     THRIFT_CATEGORY_OPTIONS,
     THRIFT_PRICE_OPTIONS,
     THRIFT_CONDITION_OPTIONS,
@@ -33,6 +32,7 @@ export const ThriftMarketplace: React.FC = () => {
     const navigate = useNavigate();
     const { isWishlisted, toggleWishlist, addToCart } = useCartWishlist();
     const [dbProducts, setDbProducts] = useState<ThriftProduct[]>([]);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
     const [categoryOptions, setCategoryOptions] = useState<ThriftFilterOption[]>(THRIFT_CATEGORY_OPTIONS);
 
     // Load active categories from MongoDB
@@ -156,6 +156,9 @@ export const ThriftMarketplace: React.FC = () => {
             })
             .catch((err) => {
                 console.warn('Could not load thrift products from API:', err);
+            })
+            .finally(() => {
+                if (isMounted) setIsLoading(false);
             });
         return () => { isMounted = false; };
     }, []);
@@ -251,13 +254,10 @@ export const ThriftMarketplace: React.FC = () => {
         toggleWishlist(product.id, 'THRIFT');
     };
 
-    // Master Catalog: Lấy trực tiếp 33 sản phẩm từ MongoDB thriftListings
+    // Master Catalog: Lấy trực tiếp sản phẩm từ MongoDB thriftListings
     const allProducts = useMemo(() => {
         void ordersVersion;
-        if (dbProducts.length > 0) {
-            return dbProducts;
-        }
-        return THRIFT_PRODUCTS;
+        return dbProducts;
     }, [dbProducts, ordersVersion]);
 
     // Filter & sort logic
@@ -670,7 +670,23 @@ export const ThriftMarketplace: React.FC = () => {
                 {/* END: SearchAndFilters */}
 
                 {/* BEGIN: ProductGrid */}
-                {filteredProducts.length > 0 ? (
+                {isLoading ? (
+                    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                        {Array.from({ length: 8 }).map((_, i) => (
+                            <div
+                                key={i}
+                                className="bg-white rounded-2xl overflow-hidden border border-[#EFECE6] p-3 space-y-3 animate-pulse"
+                            >
+                                <div className="aspect-[4/3] w-full bg-[#EAE6DE] rounded-xl" />
+                                <div className="space-y-2 p-1">
+                                    <div className="h-4 bg-[#EAE6DE] rounded w-3/4" />
+                                    <div className="h-3 bg-[#EAE6DE] rounded w-1/2" />
+                                    <div className="h-4 bg-[#EAE6DE] rounded w-1/3" />
+                                </div>
+                            </div>
+                        ))}
+                    </section>
+                ) : filteredProducts.length > 0 ? (
                     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                         {paginatedProducts.map((product) => {
                             const isSaved = isWishlisted(product.id);
