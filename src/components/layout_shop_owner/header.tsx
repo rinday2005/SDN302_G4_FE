@@ -17,15 +17,23 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
   const user = auth?.user;
   const navigate = useNavigate();
 
-  const { notifications, unreadCount, markAsRead, markAllAsRead, total } = useNotification();
+  const {
+    notifications,
+    unreadCount,
+    popupNotification,
+    dismissPopup,
+    markAsRead,
+    markAllAsRead,
+    total,
+  } = useNotification();
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isNotifOpen, setIsNotifOpen] = useState<boolean>(false);
-  const [dismissedPopups, setDismissedPopups] = useState<string[]>([]);
 
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const notifDropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const ownerName = user?.name || user?.fullName || user?.username || defaultShopProfile.ownerName;
+  const ownerName =
+    user?.name || user?.fullName || user?.username || defaultShopProfile.ownerName;
   const shopName = defaultShopProfile.shopName;
   const userEmail = user?.email || "shopowner@reuse.vn";
 
@@ -66,58 +74,70 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
     navigate("/login");
   };
 
-  // Tìm thông báo đơn thuê cần duyệt chưa đọc và chưa bị ẩn tạm thời
-  const pendingApprovalNotif = notifications.find((n) => {
-    const id = n._id || n.id || "";
-    if (n.isRead || dismissedPopups.includes(id)) return false;
-    const titleLower = (n.title || "").toLowerCase();
-    const msgLower = (n.message || "").toLowerCase();
-    return (
-      n.type === "RENTAL_ORDER" &&
-      (titleLower.includes("chờ duyệt") ||
-        titleLower.includes("cần duyệt") ||
-        titleLower.includes("mới") ||
-        msgLower.includes("chờ duyệt") ||
-        (n.title || "").includes("RO-1794180878569-LIS0"))
-    );
-  });
+  const isPendingRentPopup = Boolean(
+    popupNotification &&
+      popupNotification.type === "RENTAL_ORDER" &&
+      ((popupNotification.title || "").toLowerCase().includes("chờ duyệt") ||
+        (popupNotification.title || "").toLowerCase().includes("cần duyệt") ||
+        (popupNotification.title || "").includes("RO-1794180878569-LIS0"))
+  );
 
-  let popupOrderCode = "RO-1794180878569-LIS0";
-  let popupProductName = "Set Áo Voan Cổ Thắt Nơ Tay Bèo Kết Hợp Chân Váy Đen Cạp Cao";
-  let popupCustomer = "Nguyễn Hơn";
+  let popupOrderCode = "";
+  let popupProductName = "";
+  let popupCustomer = "Khách hàng";
   const popupDates = "18/11/2026 - 21/11/2026";
-  const popupTotal = "505.000 ₫";
-  const popupDeposit = "250.000 ₫ (Escrow)";
-  let popupLink = "/shop/rent/orders/RO-1794180878569-LIS0";
+  let popupTotal = "505.000 ₫";
+  let popupDeposit = "250.000 ₫ (Escrow)";
+  let popupLink = "/shop/notifications";
 
-  if (pendingApprovalNotif) {
+  if (popupNotification) {
+    const meta = (popupNotification.metadata || {}) as Record<string, unknown>;
     const codeMatch =
-      (pendingApprovalNotif.title || "").match(/(RO-[A-Z0-9-]+)/i) ||
-      (pendingApprovalNotif.message || "").match(/(RO-[A-Z0-9-]+)/i);
+      (typeof meta.orderCode === "string" && meta.orderCode) ||
+      (popupNotification.title || "").match(/((?:RO|TO)-[A-Z0-9-]+)/i)?.[1] ||
+      (popupNotification.message || "").match(/((?:RO|TO)-[A-Z0-9-]+)/i)?.[1] ||
+      "";
     if (codeMatch) {
-      popupOrderCode = codeMatch[1];
-      popupLink = `/shop/rent/orders/${popupOrderCode}`;
+      popupOrderCode = codeMatch;
+      popupLink = codeMatch.startsWith("TO-")
+        ? `/shop/thrift/orders/${codeMatch}`
+        : `/shop/rent/orders/${codeMatch}`;
     }
-    if (pendingApprovalNotif.link) {
-      popupLink = pendingApprovalNotif.link;
+    if (popupNotification.link) {
+      popupLink = popupNotification.link;
     }
-    const msg = pendingApprovalNotif.message || "";
-    const nameMatch = msg.match(/Khách hàng ([^v]+) vừa/i);
+    if (typeof meta.productName === "string" && meta.productName) {
+      popupProductName = meta.productName;
+    } else {
+      const prodMatch =
+        (popupNotification.message || "").match(/sản phẩm ['"]([^'"]+)['"]/i) ||
+        (popupNotification.message || "").match(/\("([^"]+)"\)/i);
+      if (prodMatch) {
+        popupProductName = prodMatch[1].trim();
+      } else {
+        popupProductName = popupNotification.title;
+      }
+    }
+    const nameMatch = (popupNotification.message || "").match(/Khách hàng ([^v]+) vừa/i);
     if (nameMatch) {
       popupCustomer = nameMatch[1].trim();
     }
-    const prodMatch = msg.match(/sản phẩm '([^']+)'/i);
-    if (prodMatch) {
-      popupProductName = prodMatch[1].trim();
+    if (typeof meta.totalAmount === "number" && meta.totalAmount > 0) {
+      popupTotal = `${meta.totalAmount.toLocaleString("vi-VN")} ₫`;
+    }
+    if (typeof meta.depositAmount === "number" && meta.depositAmount > 0) {
+      popupDeposit = `${meta.depositAmount.toLocaleString("vi-VN")} ₫ (Escrow)`;
     }
   }
 
-  const handleOpenOrder = (notifId?: string, targetLink?: string) => {
+  const handleOpenNotification = (notifId?: string, targetLink?: string) => {
     if (notifId) {
       markAsRead(notifId);
     }
     if (targetLink) {
       navigate(targetLink);
+    } else {
+      navigate("/shop/notifications");
     }
   };
 
@@ -192,7 +212,9 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
                 title="Thông báo Shop"
                 aria-expanded={isNotifOpen}
               >
-                <span className="material-symbols-outlined text-[20px] block">notifications</span>
+                <span className="material-symbols-outlined text-[20px] block">
+                  notifications
+                </span>
                 {unreadCount > 0 && (
                   <span className="min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold absolute -top-1 -right-1 flex items-center justify-center animate-pulse">
                     {unreadCount > 9 ? "9+" : unreadCount}
@@ -229,22 +251,27 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
                         Hiện tại không có thông báo nào
                       </div>
                     ) : (
-                      notifications.slice(0, 6).map((n) => (
+                      notifications.slice(0, 7).map((n) => (
                         <div
                           key={n._id || n.id}
                           onClick={() => {
                             markAsRead(n._id || n.id || "");
                             setIsNotifOpen(false);
                             if (n.link) navigate(n.link);
+                            else navigate("/shop/notifications");
                           }}
                           className={`p-3.5 transition-colors cursor-pointer ${
-                            !n.isRead ? "bg-[#fbf9f4] hover:bg-[#f5efe3]" : "hover:bg-[#f7f3ec]"
+                            !n.isRead
+                              ? "bg-[#fbf9f4] hover:bg-[#f5efe3]"
+                              : "hover:bg-[#f7f3ec]"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <h5
                               className={`text-xs ${
-                                !n.isRead ? "font-bold text-[#141310]" : "font-medium text-[#57534e]"
+                                !n.isRead
+                                  ? "font-bold text-[#141310]"
+                                  : "font-medium text-[#57534e]"
                               }`}
                             >
                               {!n.isRead && (
@@ -321,7 +348,6 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
               {/* Dropdown Menu */}
               {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-[#dddad3] p-2 z-50 animate-fade-in font-sans">
-                  {/* Thông tin tóm tắt Shop Owner */}
                   <div className="p-3 bg-[#fbf9f4] border border-[#f1eee7] rounded-xl flex items-center gap-3 mb-1.5">
                     <div className="w-10 h-10 rounded-full bg-[#141310] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                       <span className="material-symbols-outlined text-[20px]">store</span>
@@ -340,28 +366,29 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
                     </div>
                   </div>
 
-                  {/* Các liên kết điều hướng tinh gọn */}
                   <div className="space-y-0.5">
                     <Link
                       to="/shop/profile"
                       onClick={() => setIsProfileOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#1c1c18] hover:bg-[#f7f3ec] transition-colors"
                     >
-                      <span className="material-symbols-outlined text-[18px] text-[#78716c]">badge</span>
+                      <span className="material-symbols-outlined text-[18px] text-[#78716c]">
+                        badge
+                      </span>
                       <span>Hồ sơ shop</span>
                     </Link>
                   </div>
 
-                  {/* Đường phân cách */}
                   <div className="border-t border-[#f1eee7] my-1" />
 
-                  {/* NÚT ĐĂNG XUẤT NỔI BẬT */}
                   <button
                     type="button"
                     onClick={handleLogout}
                     className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors text-left cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-[18px] text-red-500">logout</span>
+                    <span className="material-symbols-outlined text-[18px] text-red-500">
+                      logout
+                    </span>
                     <span>Đăng xuất</span>
                   </button>
                 </div>
@@ -371,10 +398,10 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
         </div>
       </header>
 
-      {/* POPUP THÔNG BÁO NHẢY RA KHI CÓ ĐƠN THUÊ CẦN DUYỆT */}
-      {pendingApprovalNotif && (
+      {/* POPUP THÔNG BÁO NỔI CHO SHOP OWNER (TẤT CẢ LUỒNG NGHIỆP VỤ) */}
+      {popupNotification && (
         <aside
-          aria-label="Thông báo đơn thuê mới cần duyệt"
+          aria-label="Thông báo xưởng mới"
           className="fixed top-20 right-4 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] sm:w-[420px] bg-white/95 backdrop-blur-md rounded-2xl p-5 border-2 border-[#141310] shadow-[0_16px_48px_rgba(0,0,0,0.2)] animate-fade-in font-sans"
         >
           <div className="flex items-center justify-between pb-3 border-b border-[#ede8df]">
@@ -384,15 +411,14 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-600"></span>
               </span>
               <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
-                ĐƠN THUÊ MỚI CẦN DUYỆT
+                {isPendingRentPopup ? "ĐƠN THUÊ MỚI CẦN DUYỆT" : "THÔNG BÁO XƯỞNG MỚI"}
               </span>
             </div>
             <button
               type="button"
-              onClick={() => {
-                const id = pendingApprovalNotif._id || pendingApprovalNotif.id || "";
-                setDismissedPopups((prev) => [...prev, id]);
-              }}
+              onClick={() =>
+                dismissPopup(popupNotification._id || popupNotification.id || "")
+              }
               className="p-1 text-[#78716c] hover:text-[#141310] hover:bg-[#ede8df] rounded-lg transition-colors cursor-pointer"
               title="Đóng thông báo"
             >
@@ -402,65 +428,92 @@ export const ShopHeader: React.FC<ShopHeaderProps> = ({
 
           <div className="mt-3">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[#141310] text-[#fdf9f2]">
-                #{popupOrderCode}
-              </span>
+              {popupOrderCode ? (
+                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-[#141310] text-[#fdf9f2]">
+                  #{popupOrderCode}
+                </span>
+              ) : (
+                <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-[#ebe8e1] text-[#141310]">
+                  {popupNotification.type || "SYSTEM"}
+                </span>
+              )}
               <span className="text-[11px] text-[#78716c]">
-                {formatTimeAgo(pendingApprovalNotif.createdAt)}
+                {formatTimeAgo(popupNotification.createdAt)}
               </span>
             </div>
             <h4 className="font-serif text-sm sm:text-base font-semibold text-[#141310] mt-1.5 leading-snug">
-              {popupProductName}
+              {isPendingRentPopup ? popupProductName : popupNotification.title}
             </h4>
 
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs bg-[#fbf9f4] p-3 rounded-xl border border-[#ede8df]">
-              <div>
-                <span className="text-[10px] uppercase text-[#78716c] font-medium block">
-                  Khách thuê
-                </span>
-                <span className="font-semibold text-[#141310] truncate block">
-                  {popupCustomer}
-                </span>
+            {isPendingRentPopup ? (
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs bg-[#fbf9f4] p-3 rounded-xl border border-[#ede8df]">
+                <div>
+                  <span className="text-[10px] uppercase text-[#78716c] font-medium block">
+                    Khách thuê
+                  </span>
+                  <span className="font-semibold text-[#141310] truncate block">
+                    {popupCustomer}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase text-[#78716c] font-medium block">
+                    Kỳ hạn thuê
+                  </span>
+                  <span className="font-semibold text-[#141310] block">
+                    {popupDates}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase text-[#78716c] font-medium block">
+                    Tổng tiền
+                  </span>
+                  <span className="font-semibold text-[#141310] block">
+                    {popupTotal}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase text-[#78716c] font-medium block">
+                    Cọc Escrow
+                  </span>
+                  <span className="font-bold text-emerald-700 block">
+                    {popupDeposit}
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] uppercase text-[#78716c] font-medium block">
-                  Kỳ hạn thuê
-                </span>
-                <span className="font-semibold text-[#141310] block">
-                  {popupDates}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase text-[#78716c] font-medium block">
-                  Tổng tiền
-                </span>
-                <span className="font-semibold text-[#141310] block">
-                  {popupTotal}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase text-[#78716c] font-medium block">
-                  Cọc Escrow
-                </span>
-                <span className="font-bold text-emerald-700 block">
-                  {popupDeposit}
-                </span>
-              </div>
-            </div>
+            ) : (
+              <p className="mt-2.5 text-xs text-[#57534e] bg-[#fbf9f4] p-3 rounded-xl border border-[#ede8df] leading-relaxed">
+                {popupNotification.message}
+              </p>
+            )}
 
-            <button
-              type="button"
-              onClick={() =>
-                handleOpenOrder(
-                  pendingApprovalNotif._id || pendingApprovalNotif.id || "",
-                  popupLink
-                )
-              }
-              className="mt-3 w-full py-2.5 px-4 rounded-xl bg-[#141310] hover:bg-[#2c2a26] text-[#fdf9f2] text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer hover:shadow-md"
-            >
-              <span>Kiểm Tra &amp; Phê Duyệt Ngay</span>
-              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-            </button>
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  handleOpenNotification(
+                    popupNotification._id || popupNotification.id || "",
+                    popupLink
+                  )
+                }
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[#141310] hover:bg-[#2c2a26] text-[#fdf9f2] text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer hover:shadow-md"
+              >
+                <span>
+                  {isPendingRentPopup ? "Kiểm Tra & Phê Duyệt Ngay" : "Xem Chi Tiết Ngay"}
+                </span>
+                <span className="material-symbols-outlined text-[16px]">
+                  arrow_forward
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  dismissPopup(popupNotification._id || popupNotification.id || "")
+                }
+                className="py-2.5 px-3 rounded-xl border border-[#dddad3] hover:bg-[#ede8df] text-xs font-semibold text-[#57534e] transition-colors cursor-pointer"
+              >
+                Để sau
+              </button>
+            </div>
           </div>
         </aside>
       )}

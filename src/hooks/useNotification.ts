@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   getNotificationsApi,
   getUnreadNotificationCountApi,
@@ -14,20 +14,54 @@ export interface UseNotificationReturn {
   total: number;
   loading: boolean;
   error: string | null;
+  popupNotification: NotificationItem | null;
+  dismissPopup: (id: string) => void;
   refresh: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
 }
 
-export const useNotification = (autoPollIntervalMs = 15000): UseNotificationReturn => {
+const DISMISSED_STORAGE_KEY = "reuse_dismissed_popup_notifs_v1";
+
+const loadDismissedIds = (): string[] => {
+  try {
+    const raw = sessionStorage.getItem(DISMISSED_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export const useNotification = (autoPollIntervalMs = 6000): UseNotificationReturn => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => loadDismissedIds());
 
   const isMountedRef = useRef(true);
+
+  const dismissPopup = useCallback(
+    (id: string) => {
+      setDismissedIds((prev) => {
+        const currentIds = notifications
+          .map((n) => n._id || n.id || "")
+          .filter(Boolean);
+        const merged = Array.from(new Set([...prev, id, ...currentIds])).filter(Boolean);
+        try {
+          sessionStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(merged));
+        } catch {
+          // ignore storage quota errors
+        }
+        return merged;
+      });
+    },
+    [notifications]
+  );
 
   const fetchNotifications = useCallback(async () => {
     const token = localStorage.getItem("token") || localStorage.getItem("accessToken");
@@ -51,7 +85,8 @@ export const useNotification = (autoPollIntervalMs = 15000): UseNotificationRetu
 
       setNotifications(listRes.notifications);
       setTotal(listRes.total);
-      const finalUnread = countRes || listRes.unreadCount || listRes.notifications.filter((n) => !n.isRead).length;
+      const finalUnread =
+        countRes || listRes.unreadCount || listRes.notifications.filter((n) => !n.isRead).length;
       setUnreadCount(finalUnread);
       setError(null);
     } catch (err: unknown) {
@@ -88,19 +123,23 @@ export const useNotification = (autoPollIntervalMs = 15000): UseNotificationRetu
   }, [fetchNotifications, autoPollIntervalMs]);
 
   // Mark single notification as read
-  const markAsRead = useCallback(async (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n._id === id || n.id === id ? { ...n, isRead: true } : n))
-    );
-    setUnreadCount((prev) => Math.max(0, prev - 1));
+  const markAsRead = useCallback(
+    async (id: string) => {
+      dismissPopup(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id || n.id === id ? { ...n, isRead: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
 
-    try {
-      await markNotificationAsReadApi(id);
-      window.dispatchEvent(new CustomEvent("notification_refresh"));
-    } catch (err) {
-      console.warn("[useNotification] Error marking notification as read:", err);
-    }
-  }, []);
+      try {
+        await markNotificationAsReadApi(id);
+        window.dispatchEvent(new CustomEvent("notification_refresh"));
+      } catch (err) {
+        console.warn("[useNotification] Error marking notification as read:", err);
+      }
+    },
+    [dismissPopup]
+  );
 
   // Mark all notifications as read
   const markAllAsRead = useCallback(async () => {
@@ -115,12 +154,35 @@ export const useNotification = (autoPollIntervalMs = 15000): UseNotificationRetu
     }
   }, []);
 
+  const popupNotification = useMemo(() => {
+    return (
+      notifications.find((n) => {
+        const id = n._id || n.id || "";
+        return !n.isRead && id && !dismissedIds.includes(id);
+      }) || null
+    );
+  }, [notifications, dismissedIds]);
+
+  // Tự động ẩn popup thông báo sau 2 giây (2000ms)
+  useEffect(() => {
+    const popupId = popupNotification?._id || popupNotification?.id || "";
+    if (!popupId) return;
+
+    const autoCloseTimer = setTimeout(() => {
+      dismissPopup(popupId);
+    }, 2000);
+
+    return () => clearTimeout(autoCloseTimer);
+  }, [popupNotification, dismissPopup]);
+
   return {
     notifications,
     unreadCount,
     total,
     loading,
     error,
+    popupNotification,
+    dismissPopup,
     refresh: fetchNotifications,
     markAsRead,
     markAllAsRead,

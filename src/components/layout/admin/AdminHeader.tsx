@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthContext } from "../../../context/auth-context";
 import { useNotification } from "../../../hooks/useNotification";
@@ -18,9 +18,35 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotification();
+  const {
+    notifications,
+    unreadCount,
+    total,
+    popupNotification,
+    dismissPopup,
+    markAsRead,
+    markAllAsRead,
+  } = useNotification();
 
-  const formatTimeAgo = (dateStr: string) => {
+  const notifRef = useRef<HTMLDivElement | null>(null);
+  const profileRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (notifRef.current && !notifRef.current.contains(target)) {
+        setShowNotifications(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(target)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const formatTimeAgo = (dateStr?: string) => {
+    if (!dateStr) return "Vừa xong";
     try {
       const diffMs = Date.now() - new Date(dateStr).getTime();
       const diffMins = Math.floor(diffMs / 60000);
@@ -46,9 +72,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-[#fdf9f2]/95 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#ccc5bc]/30">
-      <div className="h-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex items-center justify-between">
-
+    <>
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#fdf9f2]/95 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#ccc5bc]/30">
+        <div className="h-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 flex items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-4">
             {/* Sidebar toggle for mobile / drawer */}
             <button
@@ -109,7 +135,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
             <div className="flex items-center gap-3 pl-2 sm:pl-4 border-l border-[#ccc5bc]/40">
               {/* Notification Bell */}
-              <div className="relative">
+              <div className="relative" ref={notifRef}>
                 <button
                   type="button"
                   onClick={() => setShowNotifications(!showNotifications)}
@@ -131,7 +157,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                   <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-[#ccc5bc]/50 py-3 z-50 animate-fade-in">
                     <div className="px-4 py-2 border-b border-[#f1ede6] flex items-center justify-between">
                       <span className="font-semibold text-sm text-[#1c1c18]">
-                        Thông Báo Hệ Thống
+                        Thông Báo Hệ Thống ({total || notifications.length})
                       </span>
                       <div className="flex items-center gap-2">
                         {unreadCount > 0 && (
@@ -162,11 +188,23 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                               setShowNotifications(false);
                               if (n.link) navigate(n.link);
                             }}
-                            className={`p-3.5 transition-colors cursor-pointer ${!n.isRead ? "bg-[#fbf7f0] hover:bg-[#f5efe3]" : "hover:bg-[#f7f3ec]"}`}
+                            className={`p-3.5 transition-colors cursor-pointer ${
+                              !n.isRead
+                                ? "bg-[#fbf7f0] hover:bg-[#f5efe3]"
+                                : "hover:bg-[#f7f3ec]"
+                            }`}
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <h4 className={`text-xs ${!n.isRead ? "font-bold text-[#1c1c18]" : "font-medium text-[#4a463f]"}`}>
-                                {!n.isRead && <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ba1a1a] mr-1.5 mb-0.5" />}
+                              <h4
+                                className={`text-xs ${
+                                  !n.isRead
+                                    ? "font-bold text-[#1c1c18]"
+                                    : "font-medium text-[#4a463f]"
+                                }`}
+                              >
+                                {!n.isRead && (
+                                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#ba1a1a] mr-1.5 mb-0.5" />
+                                )}
                                 {n.title}
                               </h4>
                               <span className="text-[10px] text-[#7b766f] whitespace-nowrap">
@@ -182,11 +220,11 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                     </div>
                     <div className="px-4 pt-2 border-t border-[#f1ede6] flex items-center justify-between text-xs text-[#576151]">
                       <Link
-                        to="/admin/kyc"
+                        to="/admin/rent"
                         onClick={() => setShowNotifications(false)}
                         className="hover:underline font-medium"
                       >
-                        Kiểm duyệt KYC →
+                        Duyệt sản phẩm RENT →
                       </Link>
                       <Link
                         to="/admin/disputes"
@@ -201,11 +239,11 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
               </div>
 
               {/* Admin Profile Chip */}
-              <div className="relative">
+              <div className="relative" ref={profileRef}>
                 <button
                   type="button"
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="flex items-center gap-3 pl-2 py-1 pr-2 rounded-lg hover:bg-[#f1ede6] transition-all group text-left"
+                  className="flex items-center gap-3 pl-2 py-1 pr-2 rounded-lg hover:bg-[#f1ede6] transition-all group text-left cursor-pointer"
                 >
                   <div className="text-right hidden xl:block">
                     <div className="text-xs font-semibold text-[#1c1c18] truncate max-w-[140px]">
@@ -269,7 +307,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full text-left flex items-center gap-2 px-4 py-2 text-xs text-[#ba1a1a] hover:bg-[#ffdad6]/40 transition-colors"
+                      className="w-full text-left flex items-center gap-2 px-4 py-2 text-xs text-[#ba1a1a] hover:bg-[#ffdad6]/40 transition-colors cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[16px]">
                         logout
@@ -282,7 +320,78 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             </div>
           </div>
         </div>
-    </header>
+      </header>
+
+      {/* POPUP THÔNG BÁO NỔI CHO QUẢN TRỊ VIÊN (ADMIN) */}
+      {popupNotification && (
+        <aside
+          aria-label="Thông báo hệ thống quản trị mới"
+          className="fixed top-20 right-4 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] sm:w-[400px] bg-white/95 backdrop-blur-md rounded-2xl p-4 border-2 border-[#292724] shadow-[0_16px_48px_rgba(0,0,0,0.2)] animate-fade-in font-sans"
+        >
+          <div className="flex items-center justify-between pb-2.5 border-b border-[#ebe8e1]">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#ba1a1a]"></span>
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#ba1a1a] bg-[#ffdad6]/60 px-2 py-0.5 rounded-full">
+                THÔNG BÁO QUẢN TRỊ • {popupNotification.type || "SYSTEM"}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                dismissPopup(popupNotification._id || popupNotification.id || "")
+              }
+              className="p-1 text-[#7b766f] hover:text-[#1c1c18] hover:bg-[#f1ede6] rounded-lg transition-colors cursor-pointer"
+              title="Đóng thông báo"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+
+          <div className="mt-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-serif font-bold text-sm text-[#1c1c18] leading-snug">
+                {popupNotification.title}
+              </h4>
+              <span className="text-[10px] text-[#7b766f] whitespace-nowrap">
+                {formatTimeAgo(popupNotification.createdAt)}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-[#4a463f] bg-[#fbf7f0] p-3 rounded-xl border border-[#ebe8e1] leading-relaxed">
+              {popupNotification.message}
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const id = popupNotification._id || popupNotification.id || "";
+                  markAsRead(id);
+                  if (popupNotification.link) navigate(popupNotification.link);
+                  else navigate("/admin/dashboard");
+                }}
+                className="flex-1 py-2 px-3 rounded-xl bg-[#292724] hover:bg-[#1c1c18] text-[#fdf9f2] text-xs font-bold tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>Kiểm Tra Ngay</span>
+                <span className="material-symbols-outlined text-[15px]">
+                  arrow_forward
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  dismissPopup(popupNotification._id || popupNotification.id || "")
+                }
+                className="py-2 px-3 rounded-xl border border-[#ccc5bc] hover:bg-[#f1ede6] text-xs font-semibold text-[#4a463f] transition-colors cursor-pointer"
+              >
+                Để sau
+              </button>
+            </div>
+          </div>
+        </aside>
+      )}
+    </>
   );
 };
 
