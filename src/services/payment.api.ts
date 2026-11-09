@@ -13,6 +13,7 @@ export interface CreateVnPayUrlRequest {
   rentalFee?: number;
   depositAmount?: number;
   shippingFee?: number;
+  returnUrl?: string;
 }
 
 /**
@@ -43,6 +44,12 @@ export const handleVNPayPayment = async (
   }
 
   try {
+    const dynamicReturnUrl =
+      reqObj.returnUrl ||
+      (typeof window !== "undefined" && window.location.origin
+        ? `${window.location.origin}/payment-return`
+        : undefined);
+
     const res = await api.post("/payments/create-vnpay-url", {
       orderId: reqObj.orderId,
       orderCode: reqObj.orderCode,
@@ -56,6 +63,7 @@ export const handleVNPayPayment = async (
       rentalFee: reqObj.rentalFee,
       depositAmount: reqObj.depositAmount,
       shippingFee: reqObj.shippingFee,
+      returnUrl: dynamicReturnUrl,
     });
 
     // Lấy URL thanh toán và chuyển hướng sang VNPay Sandbox

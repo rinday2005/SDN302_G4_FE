@@ -380,6 +380,7 @@ export interface GroupCheckoutPayload {
   selectedRentItemIds?: string[];
   selectedThriftItemIds?: string[];
   note?: string;
+  returnUrl?: string;
 }
 
 export interface GroupCheckoutResponse {
@@ -389,7 +390,15 @@ export interface GroupCheckoutResponse {
 }
 
 export const groupCheckoutApi = async (data: GroupCheckoutPayload): Promise<GroupCheckoutResponse> => {
-  const response = await api.post("/orders/group-checkout", data);
+  const dynamicReturnUrl =
+    data.returnUrl ||
+    (typeof window !== "undefined" && window.location.origin
+      ? `${window.location.origin}/payment-return`
+      : undefined);
+  const response = await api.post("/orders/group-checkout", {
+    ...data,
+    ...(dynamicReturnUrl ? { returnUrl: dynamicReturnUrl } : {}),
+  });
   return response.data.data;
 };
 
