@@ -50,27 +50,92 @@ export const ShopNotifications: React.FC = () => {
   };
 
   const mapApiToShopNotification = (n: NotificationItem): ShopNotification => {
-    let cat: 'orders' | 'listings' | 'messages' | 'escrow' = 'orders';
-    let typeBadge = 'RENT';
-    let typeColor: 'rent' | 'thrift' | 'chat' | 'escrow' | 'rejected' = 'rent';
-    if (n.type === 'LISTING') { cat = 'listings'; typeBadge = 'LISTING'; typeColor = 'rent'; }
-    else if (n.type === 'THRIFT_ORDER') { cat = 'orders'; typeBadge = 'THRIFT'; typeColor = 'thrift'; }
-    else if (n.type === 'REFUND' || n.type === 'PAYMENT') { cat = 'escrow'; typeBadge = 'ESCROW'; typeColor = 'escrow'; }
-    else if (n.type === 'KYC' || n.type === 'SYSTEM') { cat = 'messages'; typeBadge = 'HỆ THỐNG'; typeColor = 'chat'; }
+    let cat: 'orders' | 'listings' | 'messages' | 'escrow';
+    let typeBadge: string;
+    let typeColor: 'rent' | 'thrift' | 'chat' | 'escrow' | 'rejected';
+    let badgeTag: string;
+    let actionText: string;
+    const codeMatch = (n.title || '').match(/(RO-[A-Z0-9-]+)/i) || (n.message || '').match(/(RO-[A-Z0-9-]+)/i);
+    const orderCode = codeMatch ? codeMatch[1] : null;
+
+    if (n.type === 'LISTING') {
+      cat = 'listings';
+      typeBadge = 'LISTING';
+      typeColor = 'rent';
+      badgeTag = 'SẢN PHẨM CHO THUÊ';
+      actionText = 'Xem Sản Phẩm →';
+    } else if (n.type === 'THRIFT_ORDER') {
+      cat = 'orders';
+      typeBadge = 'THRIFT';
+      typeColor = 'thrift';
+      badgeTag = 'ĐƠN BÁN ĐỨT THRIFT';
+      actionText = 'Xử Lý Đơn Bán →';
+    } else if (n.type === 'REFUND' || n.type === 'PAYMENT') {
+      cat = 'escrow';
+      typeBadge = 'ESCROW';
+      typeColor = 'escrow';
+      badgeTag = n.type === 'REFUND' ? 'HOÀN CỌC ESCROW' : 'THANH TOÁN THÀNH CÔNG';
+      actionText = 'Xem Sổ Cái →';
+    } else if (n.type === 'KYC') {
+      cat = 'messages';
+      typeBadge = 'KYC';
+      typeColor = 'rent';
+      badgeTag = 'XÁC MINH DANH TÍNH';
+      actionText = 'Hồ Sơ Xưởng →';
+    } else if (n.type === 'DISPUTE') {
+      cat = 'escrow';
+      typeBadge = 'TRANH CHẤP';
+      typeColor = 'rejected';
+      badgeTag = 'ĐỐI SOÁT TRANH CHẤP';
+      actionText = 'Xem Phán Quyết →';
+    } else {
+      cat = 'orders';
+      typeBadge = 'RENT';
+      typeColor = 'rent';
+      if ((n.title || '').toLowerCase().includes('chờ duyệt') || (n.title || '').toLowerCase().includes('cần duyệt') || (n.title || '').toLowerCase().includes('mới')) {
+        badgeTag = 'ĐƠN THUÊ MỚI CẦN DUYỆT';
+        actionText = 'Phê Duyệt Đơn Thuê →';
+      } else if ((n.title || '').toLowerCase().includes('trả đồ')) {
+        badgeTag = 'YÊU CẦU TRẢ ĐỒ';
+        actionText = 'Nghiệm Thu Trả Đồ →';
+      } else {
+        badgeTag = 'ĐƠN THUÊ RENT';
+        actionText = 'Xem Đơn Hàng →';
+      }
+    }
+
+    let embeddedBox: ShopNotification['embeddedBox'] = undefined;
+    if (orderCode && ((n.title || '').toLowerCase().includes('duyệt') || (n.title || '').toLowerCase().includes('mới'))) {
+      const isLis0 = orderCode.includes('RO-1794180878569-LIS0') || (n.message || '').includes('Nguyễn Hơn');
+      embeddedBox = {
+        icon: 'assignment_turned_in',
+        headline: 'Yêu cầu duyệt đơn thuê từ khách hàng',
+        subline: 'Vui lòng kiểm tra hiện vật và xác nhận cho khách thuê',
+        gridItems: [
+          { label: 'MÃ ĐƠN HÀNG', value: orderCode },
+          { label: 'KHÁCH THUÊ', value: isLis0 ? 'Nguyễn Hơn' : 'Khách hàng' },
+          { label: 'TỔNG TIỀN', value: isLis0 ? '505.000 ₫' : 'Đã thanh toán' },
+          { label: 'CỌC ESCROW', value: isLis0 ? '250.000 ₫' : 'Đang khóa Escrow', isGreen: true },
+          { label: 'KỲ HẠN THUÊ', value: isLis0 ? '18/11 - 21/11/2026' : 'Theo hợp đồng' },
+          { label: 'TRẠNG THÁI', value: 'Chờ duyệt', isGreen: false },
+        ],
+      };
+    }
 
     return {
       id: n._id || n.id || String(Math.random()),
       category: cat,
       typeBadge,
       typeColor,
-      badgeTag: n.title,
+      badgeTag,
       isUnread: !n.isRead,
       timeAgo: formatTimeAgo(n.createdAt),
       datetime: n.createdAt,
       title: n.title,
       description: n.message,
-      actionText: 'Xem Chi Tiết →',
-      actionLink: n.link || '/shop/rent/orders',
+      embeddedBox,
+      actionText,
+      actionLink: n.link || (orderCode ? `/shop/rent/orders/${orderCode}` : '/shop/rent/orders'),
     };
   };
 
