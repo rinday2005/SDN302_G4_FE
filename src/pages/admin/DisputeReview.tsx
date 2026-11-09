@@ -135,11 +135,10 @@ export const DisputeReview: React.FC = () => {
     shopWalletBalance?: number | null;
   } | null>(null);
 
-  // Xác định trạng thái hồ sơ đã hoàn thành hay chưa
+  // Xác định trạng thái hồ sơ đã thực sự hoàn thành phán quyết trong DB hay chưa
+  // (Không phụ thuộc vào radio state `disputeStatus` đang chọn trên form)
   const isResolvedDispute =
     isVerdictExecuted ||
-    disputeStatus === "RESOLVED" ||
-    disputeStatus === "CLOSED" ||
     data?.status === "RESOLVED" ||
     data?.status === "CLOSED" ||
     Boolean(data?.arbitration?.resolvedAt) ||
@@ -309,14 +308,13 @@ export const DisputeReview: React.FC = () => {
     const claim = currentData.claimAmount;
     const partialPayout = Math.min(claim, Math.round(escrow * 0.15) || 500000);
     const partialRefund = Math.max(0, escrow - partialPayout);
-    const claimRefund = Math.max(0, escrow - claim);
 
     if (preset === "opt_1") {
       return `Căn cứ ảnh đối soát xuất kho và kết quả giám định của Phòng Kỹ Thuật ReUse Hub (${currentData.labCode}):\n- Tổn hại được xác định là hao mòn tự nhiên (Fair Wear & Tear), không có dấu hiệu can thiệp trái phép.\nHội đồng Trọng tài quyết định: Hoàn trả 100% tiền ký quỹ (${escrow.toLocaleString("vi-VN")} ₫) cho khách hàng ${currentData.renter.fullName}. Xưởng ${currentData.shopOwner.shopName} nhận hỗ trợ bảo dưỡng phòng sạch từ Quỹ Lưu Hành Tuần Hoàn ReUse Hub.`;
     } else if (preset === "opt_2") {
       return `Căn cứ đề xuất hòa giải thiện chí và biên bản kiểm định đối soát:\n- Chia sẻ rủi ro vận hành trong quá trình lưu thông hiện vật.\n- Khấu trừ ${partialPayout.toLocaleString("vi-VN")} ₫ từ tiền ký quỹ chi trả chi phí bảo dưỡng cho Chủ Xưởng ${currentData.shopOwner.shopName}.\n- Giải tỏa và hoàn trả ngay ${partialRefund.toLocaleString("vi-VN")} ₫ tiền ký quỹ còn lại về tài khoản khách hàng ${currentData.renter.fullName}. Vụ việc hoàn tất hòa giải.`;
     } else {
-      return `Căn cứ biên bản tiếp nhận hoàn trả và đề nghị từ Chủ Xưởng:\n- Chấp thuận yêu cầu khấu trừ ${claim.toLocaleString("vi-VN")} ₫ từ khoản ký quỹ để phục hồi hiện vật tại cơ sở kiểm định.\n- Giải phóng ${claimRefund.toLocaleString("vi-VN")} ₫ số dư ký quỹ còn lại hoàn trả cho khách hàng ${currentData.renter.fullName}.`;
+      return `Căn cứ biên bản tiếp nhận hoàn trả và bằng chứng vi phạm quy chế cam kết sử dụng:\n- Xác nhận khách hàng ${currentData.renter.fullName} tự ý làm tổn hại hiện vật hoặc vi phạm cam kết bảo quản.\n- Chấp thuận toàn bộ yêu cầu của Chủ Xưởng: Trừ 100% tiền cọc (${escrow.toLocaleString("vi-VN")} ₫) đối với khách hàng (không hoàn cọc: 0 ₫) để đền bù thiệt hại và chi phí phục hồi hiện vật cho Chủ Xưởng ${currentData.shopOwner.shopName}.`;
     }
   };
 
@@ -332,7 +330,7 @@ export const DisputeReview: React.FC = () => {
     if (data) {
       setResolutionNote(generatePresetNote(preset, data));
     }
-    showToast(`Đã áp dụng mẫu phán quyết: ${preset === "opt_1" ? "Phương án 1 (Khuyến nghị B-Corp)" : preset === "opt_2" ? "Phương án 2 (Hòa giải chia sẻ)" : "Phương án 3 (Chấp thuận yêu cầu xưởng)"}`);
+    showToast(`Đã áp dụng mẫu phán quyết: ${preset === "opt_1" ? "Phương án 1 (Khuyến nghị B-Corp)" : preset === "opt_2" ? "Phương án 2 (Hòa giải chia sẻ)" : "Phương án 3 (Trừ cọc khách hàng đền bù cho Shop)"}`);
   };
 
   const handleConfirmVerdict = () => {
@@ -351,8 +349,9 @@ export const DisputeReview: React.FC = () => {
       payoutAmt = Math.min(claim, Math.round(escrow * 0.15) || 500000);
       refundAmt = Math.max(0, escrow - payoutAmt);
     } else {
-      payoutAmt = claim;
-      refundAmt = Math.max(0, escrow - payoutAmt);
+      // Phương án 3: Người dùng làm sai -> Trừ 100% tiền cọc để đền bù thiệt hại cho Shop (không hoàn cọc)
+      payoutAmt = escrow;
+      refundAmt = 0;
     }
 
     resolveDisputeApi(cleanId, {
@@ -690,46 +689,46 @@ export const DisputeReview: React.FC = () => {
 
             <div
               className={`flex items-center gap-2 text-xs ${
-                isVerdictExecuted || disputeStatus === "CLOSED"
+                isVerdictExecuted
                   ? "text-[#4c463c]"
-                  : disputeStatus === "RESOLVED"
+                  : disputeStatus === "RESOLVED" || disputeStatus === "CLOSED"
                   ? "font-bold text-[#6c5937]"
                   : "text-[#7e766a]"
               }`}
             >
               <span
                 className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-[11px] font-bold ${
-                  isVerdictExecuted || disputeStatus === "CLOSED"
+                  isVerdictExecuted
                     ? "bg-[#caebc9] text-[#05210c]"
-                    : disputeStatus === "RESOLVED"
+                    : disputeStatus === "RESOLVED" || disputeStatus === "CLOSED"
                     ? "bg-[#6c5937] text-white"
                     : "bg-[#e6e2de] text-[#7e766a]"
                 }`}
               >
-                {isVerdictExecuted || disputeStatus === "CLOSED" ? "✓" : "3"}
+                {isVerdictExecuted ? "✓" : "3"}
               </span>
               <span>3. RESOLVED (Ban hành phán quyết)</span>
             </div>
 
             <div
               className={`h-0.5 flex-1 hidden md:block ${
-                isVerdictExecuted || disputeStatus === "CLOSED" ? "bg-[#48654b]" : "bg-[#cfc5b8]/30"
+                isVerdictExecuted ? "bg-[#48654b]" : "bg-[#cfc5b8]/30"
               }`}
             ></div>
 
             <div
               className={`flex items-center gap-2 text-xs ${
-                isVerdictExecuted || disputeStatus === "CLOSED" ? "font-bold text-[#48654b]" : "text-[#7e766a]"
+                isVerdictExecuted ? "font-bold text-[#48654b]" : "text-[#7e766a]"
               }`}
             >
               <span
                 className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-[11px] font-bold ${
-                  isVerdictExecuted || disputeStatus === "CLOSED"
+                  isVerdictExecuted
                     ? "bg-[#48654b] text-white"
                     : "bg-[#e6e2de] text-[#7e766a]"
                 }`}
               >
-                {isVerdictExecuted || disputeStatus === "CLOSED" ? "✓" : "4"}
+                {isVerdictExecuted ? "✓" : "4"}
               </span>
               <span>4. CLOSED (Thanh khoản hoàn tất)</span>
             </div>
@@ -1347,7 +1346,7 @@ export const DisputeReview: React.FC = () => {
                       ? `Phương án 1 (Khuyến nghị chuẩn B-Corp): Hoàn trả 100% tiền ký quỹ cho Khách Hàng (${Number(data.escrowAmount || 0).toLocaleString("vi-VN")} ₫)`
                       : arbitrationPreset === "opt_2" || data.arbitration?.selectedPreset === "opt_2"
                       ? `Phương án 2: Hòa giải khấu trừ một phần cọc bồi thường xưởng`
-                      : `Phương án 3: Chấp thuận yêu cầu khấu trừ tiền cọc từ Chủ Xưởng`}
+                      : `Phương án 3: Chấp thuận toàn bộ yêu cầu Chủ Xưởng (Trừ 100% tiền cọc đối với Khách Hàng để đền bù thiệt hại cho Shop)`}
                   </span>
                   <p className="text-xs text-[#7e766a] leading-relaxed">
                     Tổn hại được phân xử độc lập căn cứ theo biên bản kiểm định đối soát phòng Lab và hồ sơ lưu thông hiện vật.
@@ -1357,26 +1356,58 @@ export const DisputeReview: React.FC = () => {
                 {/* Chi tiết phân bổ tài chính vào ví người dùng */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Renter Box */}
-                  <div className="p-4 bg-white rounded-xl border border-[#48654b]/20 flex flex-col gap-2 shadow-sm">
-                    <div className="flex items-center justify-between text-xs text-[#7e766a]">
-                      <span className="font-semibold flex items-center gap-1.5 text-[#1c1b19]">
-                        <span className="material-symbols-outlined text-[16px] text-[#48654b]">account_balance_wallet</span>
-                        Ví Khách Thuê ({data.renter.fullName})
-                      </span>
-                      <span className="text-[11px] font-mono bg-[#f2ede9] px-2 py-0.5 rounded">
-                        {data.renter.code}
-                      </span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-serif font-bold text-[#48654b]">
-                        +{(settlementResult?.refundToRenter ?? data.arbitration?.refundToRenter ?? data.escrowAmount).toLocaleString("vi-VN")} ₫
-                      </span>
-                      <span className="text-xs font-semibold text-[#48654b]">HOÀN CỌC</span>
-                    </div>
-                    <p className="text-[11px] text-[#7e766a] leading-relaxed">
-                      ✓ Tiền đã được hoàn vào ví ReUse Hub của Khách. Khách có thể dùng thuê sản phẩm khác hoặc rút về STK ngân hàng bất cứ lúc nào.
-                    </p>
-                  </div>
+                  {(() => {
+                    const finalRefund =
+                      settlementResult?.refundToRenter ??
+                      data.arbitration?.refundToRenter ??
+                      (arbitrationPreset === "opt_3" || data.arbitration?.selectedPreset === "opt_3" ? 0 : data.escrowAmount);
+                    const finalPayout =
+                      settlementResult?.payoutToShop ??
+                      data.arbitration?.payoutToShop ??
+                      (arbitrationPreset === "opt_3" || data.arbitration?.selectedPreset === "opt_3" ? data.escrowAmount : 0);
+                    const isFullDeduct = finalRefund === 0 && finalPayout > 0;
+                    return (
+                      <div className={`p-4 bg-white rounded-xl border ${isFullDeduct ? "border-[#ba1a1a]/30" : "border-[#48654b]/20"} flex flex-col gap-2 shadow-sm`}>
+                        <div className="flex items-center justify-between text-xs text-[#7e766a]">
+                          <span className="font-semibold flex items-center gap-1.5 text-[#1c1b19]">
+                            <span className={`material-symbols-outlined text-[16px] ${isFullDeduct ? "text-[#ba1a1a]" : "text-[#48654b]"}`}>
+                              account_balance_wallet
+                            </span>
+                            Ví Khách Thuê ({data.renter.fullName})
+                          </span>
+                          <span className="text-[11px] font-mono bg-[#f2ede9] px-2 py-0.5 rounded">
+                            {data.renter.code}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                          {isFullDeduct ? (
+                            <>
+                              <span className="text-2xl font-serif font-bold text-[#ba1a1a]">
+                                -{finalPayout.toLocaleString("vi-VN")} ₫
+                              </span>
+                              <span className="text-xs font-semibold text-[#ba1a1a]">
+                                TRỪ CỌC ĐỀN BÙ SHOP (HOÀN CỌC: 0 ₫)
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-2xl font-serif font-bold text-[#48654b]">
+                                +{finalRefund.toLocaleString("vi-VN")} ₫
+                              </span>
+                              <span className="text-xs font-semibold text-[#48654b]">
+                                HOÀN CỌC
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#7e766a] leading-relaxed">
+                          {isFullDeduct
+                            ? "✓ Khách hàng vi phạm cam kết bảo quản: Đã trừ toàn bộ tiền cọc ký quỹ để đền bù thiệt hại cho Chủ xưởng (Hoàn về ví khách: 0 ₫)."
+                            : "✓ Tiền đã được hoàn vào ví ReUse Hub của Khách. Khách có thể dùng thuê sản phẩm khác hoặc rút về STK ngân hàng bất cứ lúc nào."}
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   {/* Shop Box */}
                   <div className="p-4 bg-white rounded-xl border border-[#48654b]/20 flex flex-col gap-2 shadow-sm">
@@ -1391,13 +1422,13 @@ export const DisputeReview: React.FC = () => {
                     </div>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-serif font-bold text-[#6c5937]">
-                        +{(settlementResult?.payoutToShop ?? data.arbitration?.payoutToShop ?? 0).toLocaleString("vi-VN")} ₫
+                        +{(settlementResult?.payoutToShop ?? data.arbitration?.payoutToShop ?? (arbitrationPreset === "opt_3" || data.arbitration?.selectedPreset === "opt_3" ? data.escrowAmount : 0)).toLocaleString("vi-VN")} ₫
                       </span>
-                      <span className="text-xs font-semibold text-[#6c5937]">BỒI THƯỜNG</span>
+                      <span className="text-xs font-semibold text-[#6c5937]">BỒI THƯỜNG THIỆT HẠI</span>
                     </div>
                     <p className="text-[11px] text-[#7e766a] leading-relaxed">
-                      {(settlementResult?.payoutToShop ?? data.arbitration?.payoutToShop ?? 0) > 0
-                        ? "✓ Tiền bồi thường phục hồi hiện vật đã được cộng vào ví doanh thu của Chủ xưởng."
+                      {(settlementResult?.payoutToShop ?? data.arbitration?.payoutToShop ?? (arbitrationPreset === "opt_3" || data.arbitration?.selectedPreset === "opt_3" ? data.escrowAmount : 0)) > 0
+                        ? "✓ Tiền bồi thường thiệt hại từ tiền cọc của khách đã được cộng trực tiếp vào ví doanh thu của Chủ xưởng."
                         : "✓ Chủ xưởng nhận phiếu kiểm định/vệ sinh miễn phí từ Quỹ Bảo Dưỡng Tuần Hoàn của Sàn."}
                     </p>
                   </div>
@@ -1630,10 +1661,10 @@ export const DisputeReview: React.FC = () => {
                       />
                       <div className="flex flex-col gap-1 flex-1">
                         <span className="text-xs sm:text-sm font-semibold text-[#1c1b19]">
-                          Phương án 3: Chấp thuận toàn bộ yêu cầu Chủ Xưởng (Khấu trừ {Number(data.claimAmount || 0).toLocaleString("vi-VN")} ₫, hoàn cọc {Math.max(0, data.escrowAmount - data.claimAmount).toLocaleString("vi-VN")} ₫)
+                          Phương án 3: Chấp thuận toàn bộ yêu cầu Chủ Xưởng (Trừ cọc đối với Khách Hàng {Number(data.escrowAmount || 0).toLocaleString("vi-VN")} ₫ • Đền bù thiệt hại cho Shop {Number(data.escrowAmount || 0).toLocaleString("vi-VN")} ₫, không hoàn cọc)
                         </span>
                         <p className="text-xs text-[#4c463c] leading-relaxed">
-                          Chỉ áp dụng khi phát hiện bằng chứng khách hàng tự ý làm tổn hại hiện vật hoặc vi phạm quy chế cam kết sử dụng.
+                          Chỉ áp dụng khi phát hiện bằng chứng khách hàng tự ý làm tổn hại hiện vật hoặc vi phạm quy chế cam kết sử dụng. Trừ 100% tiền cọc của khách hàng để đền bù thiệt hại cho Chủ Xưởng (Khách hàng nhận lại 0 ₫).
                         </p>
                       </div>
                     </label>
@@ -1768,7 +1799,7 @@ export const DisputeReview: React.FC = () => {
                       ? `Hoàn trả 100% (${Number(data.escrowAmount || 0).toLocaleString("vi-VN")} ₫ cho Khách Hàng)`
                       : arbitrationPreset === "opt_2"
                       ? `Khấu trừ ${Math.min(data.claimAmount, 500000).toLocaleString("vi-VN")} ₫ • Hoàn ${Math.max(0, data.escrowAmount - Math.min(data.claimAmount, 500000)).toLocaleString("vi-VN")} ₫`
-                      : `Khấu trừ ${Number(data.claimAmount || 0).toLocaleString("vi-VN")} ₫ • Hoàn ${Math.max(0, data.escrowAmount - data.claimAmount).toLocaleString("vi-VN")} ₫`}
+                      : `Trừ cọc Khách Hàng (-${Number(data.escrowAmount || 0).toLocaleString("vi-VN")} ₫) • Đền bù thiệt hại cho Shop (+${Number(data.escrowAmount || 0).toLocaleString("vi-VN")} ₫)`}
                   </span>
                 </div>
                 <div className="flex justify-between">
