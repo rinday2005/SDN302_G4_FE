@@ -4,37 +4,39 @@ import { useAuth } from '../../hooks/useAuth';
 import { AppSidebar } from '../../components/layout/AppSidebar'; import { AIHomeRecommendations } from '../../components/ai/AIHomeRecommendations';
 
 import { getCategoriesApi, type CategoryItem as DbCategoryItem } from '../../services/category.api';
+import { getPublicRentProductsApi, type RentalProductApi } from '../../services/rentProduct.api';
+import { getPublicThriftListingsApi, type ThriftListingItemApi } from '../../services/thrift.api';
 import { normalizeImageUrl } from '../../utils/imageUrl';
 
 const DEFAULT_HOME_CATEGORIES = [
   {
     slug: 'camera',
     name: 'Camera',
-    image: './src/assets/images/camerahome.jpg',
+    image: '/images/camerahome.jpg',
     subtitle: '86+ thiết bị',
   },
   {
     slug: 'shoes',
     name: 'Giày dép',
-    image: './src/assets/images/shoeshome.jpg',
+    image: '/images/shoeshome.jpg',
     subtitle: '70+ đôi',
   },
   {
     slug: 'dam-du-tiec',
     name: 'Đầm dự tiệc',
-    image: './src/assets/images/partydresshome.jpg',
+    image: '/images/partydresshome.jpg',
     subtitle: '50+ mẫu',
   },
   {
     slug: 'clothing',
     name: 'Quần áo',
-    image: './src/assets/images/clotheshome.jpg',
+    image: '/images/clotheshome.jpg',
     subtitle: '140+ món',
   },
   {
     slug: 'phu-kien',
     name: 'Phụ kiện',
-    image: './src/assets/images/accessoryhome.jpg',
+    image: '/images/accessoryhome.jpg',
     subtitle: '64+ món',
   },
 ];
@@ -43,6 +45,8 @@ export const Home: React.FC = () => {
   const { user } = useAuth();
   const wishlistTarget = user ? '/wishlist' : '/login';
   const [dbCategories, setDbCategories] = useState<DbCategoryItem[] | null>(null);
+  const [dbRentProducts, setDbRentProducts] = useState<RentalProductApi[]>([]);
+  const [dbThriftListings, setDbThriftListings] = useState<ThriftListingItemApi[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('reuse_user_sidebar_collapsed') === 'true';
@@ -71,6 +75,28 @@ export const Home: React.FC = () => {
       }
     };
     void loadCats();
+    getPublicRentProductsApi({ limit: 50 })
+      .then((items) => {
+        if (!isMounted || !Array.isArray(items)) return;
+        const sorted = [...items].sort((a, b) => {
+          const aCld = Array.isArray(a.images) && a.images[0]?.includes('cloudinary.com') ? 1 : 0;
+          const bCld = Array.isArray(b.images) && b.images[0]?.includes('cloudinary.com') ? 1 : 0;
+          return bCld - aCld;
+        });
+        setDbRentProducts(sorted.slice(0, 4));
+      })
+      .catch(() => {});
+    getPublicThriftListingsApi()
+      .then((items) => {
+        if (!isMounted || !Array.isArray(items)) return;
+        const sorted = [...items].sort((a, b) => {
+          const aCld = Array.isArray(a.images) && a.images[0]?.includes('cloudinary.com') ? 1 : 0;
+          const bCld = Array.isArray(b.images) && b.images[0]?.includes('cloudinary.com') ? 1 : 0;
+          return bCld - aCld;
+        });
+        setDbThriftListings(sorted.slice(0, 4));
+      })
+      .catch(() => {});
     const handleUpdated = () => {
       void loadCats();
     };
@@ -99,7 +125,7 @@ export const Home: React.FC = () => {
         image:
           c.image && c.image.trim()
             ? normalizeImageUrl(c.image)
-            : def?.image || './src/assets/images/camerahome.jpg',
+            : def?.image || '/images/camerahome.jpg',
         subtitle:
           total > 0
             ? `${total} sản phẩm`
@@ -218,7 +244,7 @@ export const Home: React.FC = () => {
                   <img
                     alt="Bộ sưu tập tuần hoàn tối giản cao cấp"
                     className="w-full h-full object-cover"
-                    src="./src/assets/images/dashboard.jpg"
+                    src="/images/dashboard.jpg"
                   />
                   <div className="absolute top-4 left-4 flex gap-2">
                     <span className="px-2.5 py-1 rounded bg-[#1C1A18] text-white text-[10px] font-semibold tracking-widest uppercase">
@@ -298,13 +324,86 @@ export const Home: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {dbRentProducts.length > 0 ? (
+                  dbRentProducts.map((prod) => {
+                    const imgUrl =
+                      Array.isArray(prod.images) && prod.images.length > 0
+                        ? normalizeImageUrl(prod.images[0])
+                        : '/images/sonyhome.jpg';
+                    const catName =
+                      typeof prod.categoryId === 'object' && prod.categoryId?.name
+                        ? prod.categoryId.name
+                        : 'Sản phẩm cho thuê';
+                    const condBadge =
+                      prod.condition === 'NEW'
+                        ? 'Mới 100%'
+                        : prod.condition === 'LIKE_NEW'
+                        ? 'Tình trạng 99%'
+                        : 'Tình trạng 98%';
+                    return (
+                      <div
+                        key={prod._id}
+                        className="bg-white rounded-lg border border-[#E7E2DA] overflow-hidden flex flex-col group hover:border-[#1C1A18] transition-colors"
+                      >
+                        <div className="relative aspect-[4/3] bg-[#F4F0EA] overflow-hidden">
+                          <img
+                            alt={prod.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            src={imgUrl}
+                          />
+                          <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">
+                            RENT
+                          </span>
+                          <Link
+                            className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm border border-[#E7E2DA] text-[#1C1A18] hover:bg-white flex items-center justify-center transition-colors"
+                            to={wishlistTarget}
+                            title="Lưu yêu thích"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">favorite_border</span>
+                          </Link>
+                        </div>
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between text-[11px] text-[#78736A] mb-1.5">
+                              <span>{catName}</span>
+                              <span className="text-[#1C1A18] font-medium">{condBadge}</span>
+                            </div>
+                            <h3 className="font-semibold text-sm text-[#1C1A18] line-clamp-1 group-hover:underline">
+                              {prod.name}
+                            </h3>
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-[#E7E2DA]">
+                            <div className="flex items-baseline justify-between">
+                              <div>
+                                <span className="text-base font-bold text-[#1C1A18]">
+                                  {Number(prod.pricePerDay || 0).toLocaleString('vi-VN')}đ
+                                </span>
+                                <span className="text-xs text-[#78736A]"> / ngày</span>
+                              </div>
+                              <span className="text-[11px] text-[#5E5A53]">
+                                Cọc: {Number(prod.depositAmount || 0).toLocaleString('vi-VN')}đ
+                              </span>
+                            </div>
+                            <Link
+                              className="w-full mt-3 py-2 rounded bg-[#1C1A18] hover:bg-[#292724] text-white text-xs font-semibold text-center block transition-colors tracking-wide uppercase"
+                              to={`/rent/products/${prod._id}`}
+                            >
+                              Đặt lịch thuê
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <>
                 {/* Card 1 */}
                 <div className="bg-white rounded-lg border border-[#E7E2DA] overflow-hidden flex flex-col group hover:border-[#1C1A18] transition-colors">
                   <div className="relative aspect-[4/3] bg-[#F4F0EA] overflow-hidden">
                     <img
                       alt="Sony Alpha A7 IV"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      src="./src/assets/images/sonyhome.jpg"
+                      src="/images/sonyhome.jpg"
                     />
                     <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">RENT</span>
                     <Link
@@ -349,7 +448,7 @@ export const Home: React.FC = () => {
                     <img
                       alt="Đầm dạ hội lụa tự nhiên"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      src="./src/assets/images/silkdresshome.jpg"
+                      src="/images/silkdresshome.jpg"
                     />
                     <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">RENT</span>
                     <Link
@@ -394,7 +493,7 @@ export const Home: React.FC = () => {
                     <img
                       alt="cao gót Jimmy Choo Aveline"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      src="./src/assets/images/JimmyChooAveline.jpg"
+                      src="/images/JimmyChooAveline.jpg"
                     />
                     <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">RENT</span>
                     <Link
@@ -439,7 +538,7 @@ export const Home: React.FC = () => {
                     <img
                       alt="Fujifilm X-T4 Mirrorless"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      src="./src/assets/images/fujifilmhome.jpg"
+                      src="/images/fujifilmhome.jpg"
                     />
                     <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">RENT</span>
                     <Link
@@ -477,6 +576,8 @@ export const Home: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
             </div>
           </section>
@@ -500,13 +601,71 @@ export const Home: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {dbThriftListings.length > 0 ? (
+                dbThriftListings.map((item) => {
+                  const imgUrl =
+                    Array.isArray(item.images) && item.images.length > 0
+                      ? normalizeImageUrl(item.images[0])
+                      : '/images/setclothhome.jpg';
+                  const catName =
+                    typeof item.categoryId === 'object' && item.categoryId?.name
+                      ? item.categoryId.name
+                      : item.categoryLabel || 'Thời trang tái sử dụng';
+                  return (
+                    <div
+                      key={item._id}
+                      className="bg-white rounded-lg border border-[#E7E2DA] overflow-hidden flex flex-col group hover:border-[#1C1A18] transition-colors"
+                    >
+                      <div className="relative aspect-[4/3] bg-[#F4F0EA] overflow-hidden">
+                        <img
+                          alt={item.name || item.title || 'Sản phẩm THRIFT'}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          src={imgUrl}
+                        />
+                        <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">
+                          THRIFT
+                        </span>
+                        <span className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm border border-[#E7E2DA] text-[#1C1A18] text-[10px] font-medium px-2 py-0.5 rounded">
+                          Tái sử dụng
+                        </span>
+                      </div>
+                      <div className="p-4 flex-1 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-[11px] text-[#78736A] mb-1.5">
+                            <span>{catName}</span>
+                            <span className="text-[#1C1A18] font-medium">Tình trạng 95%</span>
+                          </div>
+                          <h3 className="font-semibold text-sm text-[#1C1A18] line-clamp-1 group-hover:underline">
+                            {item.name || item.title}
+                          </h3>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-[#E7E2DA]">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-base font-bold text-[#1C1A18]">
+                              {Number(item.price || 0).toLocaleString('vi-VN')}đ
+                            </span>
+                            <span className="text-[11px] text-[#78736A]">Mua đứt · Không cọc</span>
+                          </div>
+                          <Link
+                            className="w-full mt-3 py-2 rounded border border-[#1C1A18] bg-transparent hover:bg-[#1C1A18] hover:text-white text-[#1C1A18] text-xs font-semibold text-center block transition-colors tracking-wide uppercase"
+                            to={`/thrift/products/${item._id}`}
+                          >
+                            Mua sản phẩm
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <>
               {/* Thrift 1 */}
               <div className="bg-white rounded-lg border border-[#E7E2DA] overflow-hidden flex flex-col group hover:border-[#1C1A18] transition-colors">
                 <div className="relative aspect-[4/3] bg-[#F4F0EA] overflow-hidden">
                   <img
                     alt="Set Trang Phục Nữ All Black Phong Cách Hiện Đại"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/setclothhome.jpg"
+                    src="/images/setclothhome.jpg"
                   />
                   <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">THRIFT</span>
                   <span className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm border border-[#E7E2DA] text-[#1C1A18] text-[10px] font-medium px-2 py-0.5 rounded">
@@ -544,7 +703,7 @@ export const Home: React.FC = () => {
                   <img
                     alt="Sneaker cổ điển da thật"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/sneakerhome.jpg"
+                    src="/images/sneakerhome.jpg"
                   />
                   <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">THRIFT</span>
                   <span className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm border border-[#E7E2DA] text-[#1C1A18] text-[10px] font-medium px-2 py-0.5 rounded">
@@ -580,7 +739,7 @@ export const Home: React.FC = () => {
                   <img
                     alt="Máy ảnh Canon EOS"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/eoscamerahome.jpg"
+                    src="/images/eoscamerahome.jpg"
                   />
                   <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">THRIFT</span>
                   <span className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm border border-[#E7E2DA] text-[#1C1A18] text-[10px] font-medium px-2 py-0.5 rounded">
@@ -616,7 +775,7 @@ export const Home: React.FC = () => {
                   <img
                     alt="Set Kẹp Gắp Tóc Hợp Kim Màu Bạc Sang Trọng Nữ Tính"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    src="./src/assets/images/hairaccessory.jpg"
+                    src="/images/hairaccessory.jpg"
                   />
                   <span className="absolute top-2.5 left-2.5 bg-[#1C1A18] text-white text-[10px] font-bold px-2 py-0.5 rounded tracking-wider uppercase">THRIFT</span>
                   <span className="absolute top-2.5 right-2.5 bg-white/90 backdrop-blur-sm border border-[#E7E2DA] text-[#1C1A18] text-[10px] font-medium px-2 py-0.5 rounded">
@@ -645,6 +804,8 @@ export const Home: React.FC = () => {
                   </Link>
                 </div>
               </div>
+                </>
+              )}
             </div>
           </section>
 

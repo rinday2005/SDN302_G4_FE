@@ -61,7 +61,7 @@ export const CATEGORIES_DATA: CategoryItem[] = [
     tags: ['rent', 'thrift', 'camera'],
     spanClass: 'lg:col-span-7',
     image:
-      './src/assets/images/cameracategory.jpg',
+      '/images/cameracategory.jpg',
     alt: 'Vintage Leica rangefinder và máy ảnh Sony mirrorless trên bàn vải tự nhiên',
     rentCount: 7,
     thriftCount: 7,
@@ -79,7 +79,7 @@ export const CATEGORIES_DATA: CategoryItem[] = [
     tags: ['rent', 'thrift', 'shoes'],
     spanClass: 'lg:col-span-5',
     image:
-      './src/assets/images/shoescategory.jpg',
+      '/images/shoescategory.jpg',
     alt: 'Giày da derby cổ điển và sneaker retro tối giản trên bục đá tự nhiên',
     rentCount: 7,
     thriftCount: 6,
@@ -97,7 +97,7 @@ export const CATEGORIES_DATA: CategoryItem[] = [
     tags: ['rent', 'thrift', 'dam-du-tiec'],
     spanClass: 'lg:col-span-4',
     image:
-      './src/assets/images/dresscategory.jpg',
+      '/images/dresscategory.jpg',
     alt: 'Đầm dạ hội lụa satin cao cấp cho tiệc tối',
     rentCount: 7,
     thriftCount: 6,
@@ -115,7 +115,7 @@ export const CATEGORIES_DATA: CategoryItem[] = [
     tags: ['rent', 'thrift', 'clothing'],
     spanClass: 'lg:col-span-4',
     image:
-      './src/assets/images/clothescategory.jpg',
+      '/images/clothescategory.jpg',
     alt: 'Trang phục thiết kế tự nhiên, áo trench coat len và sơ mi linen tối giản',
     rentCount: 6,
     thriftCount: 7,
@@ -133,7 +133,7 @@ export const CATEGORIES_DATA: CategoryItem[] = [
     tags: ['rent', 'thrift', 'phu-kien'],
     spanClass: 'lg:col-span-4',
     image:
-      './src/assets/images/accessorycategory.jpg',
+      '/images/accessorycategory.jpg',
     alt: 'Dây chuyền ngọc trai và trang sức phụ kiện sang trọng',
     rentCount: 6,
     thriftCount: 7,

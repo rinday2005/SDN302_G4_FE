@@ -224,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({
                 to="/"
               >
                 <img
-                  src="/src/assets/images/logo.jpg"
+                  src="/images/logo.jpg"
                   alt="ReUse Hub Logo"
                   className="h-10 w-auto object-contain"
                   onError={(e) => {

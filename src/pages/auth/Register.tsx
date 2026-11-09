@@ -182,7 +182,7 @@ const Register = () => {
               <div className="relative aspect-[4/5] overflow-hidden rounded-lg bg-[#ebe8e1]">
                 <img
                   className="h-full w-full object-cover transition-transform duration-700 hover:scale-105"
-                  src="./src/assets/images/register.jpg"
+                  src="/images/register.jpg"
                   alt="Vintage camera and restored equipment"
                 />
 
