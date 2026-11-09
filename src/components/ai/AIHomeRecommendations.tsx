@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AI_MOCK_PRODUCTS_DB } from '../../data/aiAssistantMockDb';
+import { useShop } from '../../context/ShopContext';
+import { AI_MOCK_PRODUCTS_DB, mapShopProductToAIRec } from '../../data/aiAssistantMockDb';
 
 const formatVND = (n: number) => `${Math.round(n || 0).toLocaleString('vi-VN')}đ`;
 
 export const AIHomeRecommendations: React.FC = () => {
   const navigate = useNavigate();
+  const { products: shopProducts } = useShop();
 
   const triggerAI = (prompt?: string) => {
     window.dispatchEvent(
@@ -15,12 +17,17 @@ export const AIHomeRecommendations: React.FC = () => {
     );
   };
 
-  const featuredRecs = [
-    AI_MOCK_PRODUCTS_DB[0],
-    AI_MOCK_PRODUCTS_DB[1],
-    AI_MOCK_PRODUCTS_DB[4],
-    AI_MOCK_PRODUCTS_DB[5],
-  ];
+  const featuredRecs = useMemo(() => {
+    const liveApproved = shopProducts
+      .filter((p) => p.approvalStatus === 'APPROVED' && p.isVisible)
+      .slice(0, 3)
+      .map((p) => mapShopProductToAIRec(p, 3, 350000));
+
+    if (liveApproved.length >= 3) {
+      return [...liveApproved, AI_MOCK_PRODUCTS_DB[3]];
+    }
+    return AI_MOCK_PRODUCTS_DB.slice(0, 4);
+  }, [shopProducts]);
 
   return (
     <section className="py-12 px-6 lg:px-12 mx-auto max-w-7xl border-b border-[#E7E2DA]">
@@ -32,10 +39,10 @@ export const AIHomeRecommendations: React.FC = () => {
               <span>ReUse Hub AI · Context-Aware Recommendation</span>
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl text-[#2E1065] font-semibold">
-              Gợi ý sản phẩm thông minh từ ReUse AI
+              Gợi ý trang phục thông minh từ ReUse AI
             </h2>
             <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-              Tìm kiếm bằng ngôn ngữ tự nhiên, so sánh ưu/nhược điểm giữa các dòng máy, ước tính chi phí thuê &amp; tiền đặt cọc Smart Escrow hoặc tư vấn nên thuê (RENT) hay mua thanh lý (THRIFT).
+              Tìm kiếm đúng mẫu quần áo, đầm dạ hội, suit, giày dép hoặc phụ kiện bằng ngôn ngữ tự nhiên; so sánh chi tiết, ước tính chi phí thuê &amp; tiền đặt cọc Smart Escrow hoặc tư vấn nên thuê (RENT) hay mua thanh lý (THRIFT).
             </p>
           </div>
 
@@ -43,12 +50,12 @@ export const AIHomeRecommendations: React.FC = () => {
             <button
               type="button"
               onClick={() =>
-                triggerAI('Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.')
+                triggerAI('Tìm đầm dạ hội đi tiệc sang trọng dưới 250.000đ/ngày')
               }
               className="px-4 py-2.5 rounded-xl bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-xs font-semibold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
             >
               <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-              <span>Thử hỏi AI tìm máy ảnh du lịch</span>
+              <span>Thử hỏi AI tìm đầm dự tiệc</span>
             </button>
             <button
               type="button"
@@ -66,9 +73,9 @@ export const AIHomeRecommendations: React.FC = () => {
             Hỏi nhanh AI:
           </span>
           {[
-            'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.',
-            'So sánh Canon EOS M50 và Sony A6000',
-            'Tính chi phí thuê 4 ngày kèm tiền đặt cọc',
+            'Tìm đầm dạ hội đi tiệc 3 ngày dưới 250.000đ/ngày',
+            'Cho mình xem các mẫu giày cao gót và sneaker',
+            'Tìm bộ Suit nam hoặc Áo khoác dạ dáng dài',
             'Tư vấn khi nào nên thuê (RENT) và khi nào nên mua (THRIFT)?',
           ].map((prompt, idx) => (
             <button
@@ -111,11 +118,11 @@ export const AIHomeRecommendations: React.FC = () => {
                 {prod.type === 'RENT' ? (
                   <div>
                     <div className="text-base font-extrabold text-[#059669]">
-                      {formatVND(prod.pricePerDay || 250000)}/ngày
+                      {formatVND(prod.pricePerDay || 180000)}/ngày
                     </div>
                     <div className="text-[11px] text-stone-600 mt-0.5">
-                      {prod.calculatedDays || 4} ngày:{' '}
-                      {formatVND(prod.calculatedTotalRent || (prod.pricePerDay || 250000) * 4)} tiền
+                      {prod.calculatedDays || 3} ngày:{' '}
+                      {formatVND(prod.calculatedTotalRent || (prod.pricePerDay || 180000) * 3)} tiền
                       thuê
                     </div>
                   </div>
@@ -157,4 +164,3 @@ export const AIHomeRecommendations: React.FC = () => {
 };
 
 export default AIHomeRecommendations;
-

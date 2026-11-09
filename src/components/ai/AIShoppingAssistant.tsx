@@ -5,6 +5,16 @@ import { useShop } from '../../context/ShopContext';
 import { getMyRentalOrdersApi, type RentalOrderApi } from '../../services/order.api';
 import { sendAIChatPromptApi } from '../../services/ai.api';
 import {
+  getPublicRentProductsApi,
+  getPublicRentProductDetailApi,
+  type RentalProductApi,
+} from '../../services/rentProduct.api';
+import {
+  getPublicThriftListingsApi,
+  getPublicThriftListingByIdApi,
+  type ThriftListingItemApi,
+} from '../../services/thrift.api';
+import {
   AI_MOCK_PRODUCTS_DB,
   DEFAULT_USER_PREFERENCES,
   mapShopProductToAIRec,
@@ -15,7 +25,232 @@ import {
   type AIOrderSummaryCard,
 } from '../../data/aiAssistantMockDb';
 
+const mapRentalApiToAIRec = (
+  p: RentalProductApi,
+  days = 4,
+  maxBudget = 300000
+): AIProductRecommendation => {
+  const price = Number(p.pricePerDay) || 180000;
+  const deposit = Number(p.depositAmount) || price * 4;
+  const isWithinBudget = price <= maxBudget;
+  const catName =
+    typeof p.categoryId === 'object' && p.categoryId?.name
+      ? p.categoryId.name
+      : typeof p.category === 'object' && p.category?.name
+        ? p.category.name
+        : typeof p.category === 'string'
+          ? p.category
+          : 'Thời trang cho thuê';
+  const img =
+    Array.isArray(p.images) && p.images[0]
+      ? p.images[0]
+      : 'https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&q=80';
+  return {
+    id: String(p._id),
+    sku: p.sku || String(p._id),
+    name: p.name,
+    type: 'RENT',
+    category: catName,
+    brand: (typeof p.ownerId === 'object' && p.ownerId?.shopProfile?.shopName) || 'ReUse Atelier',
+    image: img,
+    pricePerDay: price,
+    depositAmount: deposit,
+    originalRetailPrice: deposit * 2,
+    conditionGrade: p.condition || 'Như mới 99% (Grade A+)',
+    budgetTag: isWithinBudget ? 'Phù hợp ngân sách' : 'Thiết kế Cao cấp',
+    calculatedDays: days,
+    calculatedTotalRent: price * days,
+    location: p.location || 'Đà Nẵng',
+    highlights: [
+      p.description ? p.description.slice(0, 110) : 'Trang phục chuẩn kiểm định ReUse Hub',
+    ],
+    pros: [
+      `Sẵn sàng giao từ chi nhánh ${p.location || 'Đà Nẵng'}`,
+      'Bảo vệ 100% tiền cọc qua Smart Escrow',
+      'Đã giặt hấp khử trùng trước khi giao',
+    ],
+    cons: [p.rentalRules || 'Tránh tiếp xúc hóa chất tẩy mạnh'],
+    detailUrl: `/rent/products/${p._id}`,
+  };
+};
+
+const mapThriftApiToAIRec = (
+  p: ThriftListingItemApi
+): AIProductRecommendation => {
+  const price = Number(p.price) || 590000;
+  const catName =
+    typeof p.categoryId === 'object' && p.categoryId?.name
+      ? p.categoryId.name
+      : typeof p.category === 'object' && p.category?.name
+        ? p.category.name
+        : p.categoryLabel || 'Thời trang thanh lý';
+  const img =
+    Array.isArray(p.images) && p.images[0]
+      ? p.images[0]
+      : 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&q=80';
+  return {
+    id: String(p._id),
+    sku: String(p._id),
+    name: p.name || p.title || 'Trang phục Second-Life',
+    type: 'THRIFT',
+    category: catName,
+    brand: (typeof p.ownerId === 'object' && p.ownerId?.shopProfile?.shopName) || 'ReUse Thrift Atelier',
+    image: img,
+    thriftPrice: price,
+    originalRetailPrice: Math.round(price * 2.2),
+    conditionGrade: p.condition || 'Như mới (98%)',
+    budgetTag: 'Tiết kiệm Second-Life',
+    location: p.location || 'Đà Nẵng',
+    highlights: [
+      p.description ? p.description.slice(0, 110) : 'Sản phẩm Second-Life chính hãng đã qua kiểm định',
+    ],
+    pros: [
+      'Tiết kiệm 50% – 70% so với giá mua mới',
+      `Sẵn sàng giao ngay từ chi nhánh ${p.location || 'Đà Nẵng'}`,
+    ],
+    cons: ['Số lượng giới hạn trong kho thanh lý'],
+    detailUrl: `/thrift/${p._id}`,
+  };
+};
+
 const formatVND = (n: number) => `${Math.round(n || 0).toLocaleString('vi-VN')}đ`;
+
+const normalizeVi = (str = '') =>
+  String(str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const STOP_WORDS_VI = new Set([
+  'minh', 'toi', 'em', 'shop', 'oi', 'cho', 'hoi', 'tim', 'kiem', 'can', 'muon',
+  'thue', 'mua', 'do', 'san', 'pham', 'mon', 'cai', 'chiec', 'bo', 'co', 'khong',
+  'ko', 'la', 'gi', 'nao', 'o', 'dau', 'voi', 'va', 'hoac', 'duoi', 'tren',
+  'khoang', 'tam', 'gia', 'ngan', 'sach', 'ngay', 'tuan', 'thang', 'di', 'du',
+  'lich', 'tiec', 'su', 'kien', 'chup', 'hinh', 'anh', 'tu', 'van', 'giup',
+  'xem', 'chi', 'tiet', 'thong', 'tin', 've', 'cua', 'nay', 'do', 'kia', 'mot',
+  'hai', 'ba', 'bon', 'nam', 'sau', 'bay', 'tam', 'chin', 'muoi', 'k', 'vnd', 'dong',
+]);
+
+const CATEGORY_SYNONYM_GROUPS = [
+  {
+    key: 'PARTY_DRESS',
+    label: 'Đầm dự tiệc & Váy thời trang',
+    queryKeywords: ['dam', 'vay', 'maxi', 'midi', 'sequin', 'sequins', 'da hoi', 'du tiec', 'gala', 'party dress', 'cocktail', 'cup nguc', 'xe ta', 'nhung', 'lua', 'voan', 'ren', 'hoa nhi', 'babydoll', 'vintage', 'retro', 'co vuong', 'hai day'],
+    productKeywords: ['dam', 'vay', 'maxi', 'midi', 'sequin', 'party dress', 'da hoi', 'babydoll', 'hoa nhi', 'voan', 'lua', 'nhung', 'ren', 'gala'],
+  },
+  {
+    key: 'AO_DAI',
+    label: 'Áo dài truyền thống & Cách tân',
+    queryKeywords: ['ao dai', 'cach tan', 'truyen thong', 'gam', 'to tam', 'theu hoa'],
+    productKeywords: ['ao dai', 'cach tan', 'to tam', 'gam'],
+  },
+  {
+    key: 'SUIT_VEST',
+    label: 'Suit, Vest & Tuxedo lịch lãm',
+    queryKeywords: ['suit', 'vest', 'tuxedo', 'comple', 'ao vest', 'bo vest', 'lich lam', 'chu re', 'cong so'],
+    productKeywords: ['suit', 'vest', 'tuxedo'],
+  },
+  {
+    key: 'OUTERWEAR',
+    label: 'Áo khoác dạ, Trench Coat & Blazer',
+    queryKeywords: ['ao khoac', 'khoac', 'trench coat', 'mang to', 'blazer', 'ao da', 'wool', ' tweed', 'khoac da', 'mua dong', 'da lat', 'sapa'],
+    productKeywords: ['ao khoac', 'trench coat', 'blazer', 'wool', 'tweed', 'khoac da'],
+  },
+  {
+    key: 'KNITWEAR',
+    label: 'Áo len, Cardigan & Thời trang thu đông',
+    queryKeywords: ['ao len', 'cardigan', 'len', 'det kim', 'co lo', 'thu dong', 'han quoc'],
+    productKeywords: ['ao len', 'cardigan', 'len'],
+  },
+  {
+    key: 'SKIRT_SET',
+    label: 'Chân váy & Set bộ thời trang',
+    queryKeywords: ['chan vay', 'xep ly', 'tennis', 'set bo', 'set tweed', 'set cardigan', 'ao so mi', 'so mi', 'linen'],
+    productKeywords: ['chan vay', 'set', 'so mi', 'linen'],
+  },
+  {
+    key: 'SHOES',
+    label: 'Giày cao gót, Sneaker & Boots',
+    queryKeywords: ['giay', 'cao got', 'sneaker', 'sneakers', 'boots', 'boot', 'sandal', 'stiletto', 'slingback', 'giay da', 'giay cuoi', 'chelsea', 'oxford', 'loafer', 'ankle'],
+    productKeywords: ['giay', 'cao got', 'sneaker', 'boots', 'boot', 'sandal', 'stiletto', 'slingback', 'chelsea', 'oxford', 'loafer'],
+  },
+  {
+    key: 'ACCESSORIES',
+    label: 'Phụ kiện, Túi xách, Trang sức & Kính mắt',
+    queryKeywords: ['phu kien', 'tui', 'clutch', 'vi', 'bong tai', 'khuyen tai', 'day chuyen', 'vong co', 'ngoc trai', 'cai ao', 'tram cai', 'kinh', 'kinh mat', 'khan', 'khan choang', 'that lung', 'belt', 'no', 'ca vat'],
+    productKeywords: ['phu kien', 'clutch', 'tui', 'bong tai', 'day chuyen', 'vong co', 'ngoc trai', 'cai ao', 'kinh', 'khan', 'that lung', 'no', 'ca vat'],
+  },
+];
+
+function scoreProductAgainstQuery(item: AIProductRecommendation, rawQuery: string) {
+  const qNorm = normalizeVi(rawQuery);
+  const nameNorm = normalizeVi(item.name);
+  const catNorm = normalizeVi(item.category);
+  const descNorm = normalizeVi([...(item.pros || []), item.budgetTag || ''].join(' '));
+
+  if (!qNorm) return { score: 0, isExactNameMatch: false, matchedGroup: null as (typeof CATEGORY_SYNONYM_GROUPS)[0] | null };
+
+  let score = 0;
+  let isExactNameMatch = false;
+  let matchedGroup: (typeof CATEGORY_SYNONYM_GROUPS)[0] | null = null;
+
+  if (nameNorm && (qNorm.includes(nameNorm) || (nameNorm.includes(qNorm) && qNorm.length >= 6))) {
+    score += 120;
+    isExactNameMatch = true;
+  }
+
+  for (const grp of CATEGORY_SYNONYM_GROUPS) {
+    const queryHasGroup = grp.queryKeywords.some((kw) => qNorm.includes(kw));
+    if (queryHasGroup) {
+      const prodMatchesGroup = grp.productKeywords.some(
+        (pk) => nameNorm.includes(pk) || catNorm.includes(pk)
+      );
+      if (prodMatchesGroup) {
+        score += 45;
+        matchedGroup = grp;
+      } else {
+        score -= 20;
+      }
+    }
+  }
+
+  const tokens = qNorm.split(' ').filter((t) => t.length >= 2 && !STOP_WORDS_VI.has(t) && !/^\d+$/.test(t));
+  let matchedTokenCount = 0;
+  for (const token of tokens) {
+    if (nameNorm.split(' ').includes(token)) {
+      score += 18;
+      matchedTokenCount++;
+    } else if (nameNorm.includes(token)) {
+      score += 10;
+      matchedTokenCount++;
+    } else if (catNorm.includes(token)) {
+      score += 8;
+      matchedTokenCount++;
+    } else if (descNorm.includes(token)) {
+      score += 4;
+    }
+  }
+
+  if (tokens.length >= 2 && matchedTokenCount >= Math.min(3, tokens.length)) {
+    score += 35;
+    if (matchedTokenCount === tokens.length) {
+      isExactNameMatch = true;
+    }
+  }
+
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const bigram = `${tokens[i]} ${tokens[i + 1]}`;
+    if (nameNorm.includes(bigram)) {
+      score += 28;
+    }
+  }
+
+  return { score, isExactNameMatch, matchedGroup };
+}
 
 interface PageContextInfo {
   screenKey:
@@ -80,17 +315,137 @@ export const AIShoppingAssistant: React.FC = () => {
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Hợp nhất dữ liệu sản phẩm từ DB mẫu + ShopContext thực tế
+  // Dữ liệu sản phẩm thực tế từ MongoDB
+  const [publicRentProducts, setPublicRentProducts] = useState<RentalProductApi[]>([]);
+  const [publicThriftProducts, setPublicThriftProducts] = useState<ThriftListingItemApi[]>([]);
+  const [activeProductDetail, setActiveProductDetail] = useState<AIProductRecommendation | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      getPublicRentProductsApi({ limit: 100 }),
+      getPublicThriftListingsApi({ limit: 100 }),
+    ])
+      .then(([rents, thrifts]) => {
+        if (!mounted) return;
+        if (Array.isArray(rents)) setPublicRentProducts(rents);
+        if (Array.isArray(thrifts)) setPublicThriftProducts(thrifts);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Hợp nhất dữ liệu sản phẩm từ MongoDB (RENT & THRIFT) + ShopContext + DB mẫu dự phòng
   const allCatalogProducts = useMemo<AIProductRecommendation[]>(() => {
-    const liveMapped = shopProducts
+    const liveRentMapped = publicRentProducts.map((p) =>
+      mapRentalApiToAIRec(p, preferences.travelDaysDefault || 4, preferences.maxDailyRentBudget)
+    );
+    const liveThriftMapped = publicThriftProducts.map((p) =>
+      mapThriftApiToAIRec(p)
+    );
+    const liveShopMapped = shopProducts
       .filter((p) => p.approvalStatus === 'APPROVED' && p.isVisible)
       .map((p) => mapShopProductToAIRec(p, preferences.travelDaysDefault || 4, preferences.maxDailyRentBudget));
 
-    const existingSkus = new Set(AI_MOCK_PRODUCTS_DB.map((item) => item.sku.toLowerCase()));
-    const uniqueLive = liveMapped.filter((item) => !existingSkus.has(item.sku.toLowerCase()));
+    const combinedLive = [...liveRentMapped, ...liveThriftMapped, ...liveShopMapped];
+    const existingIds = new Set(combinedLive.map((item) => item.id.toLowerCase()));
+    const existingNames = new Set(combinedLive.map((item) => normalizeVi(item.name)));
 
-    return [...AI_MOCK_PRODUCTS_DB, ...uniqueLive];
-  }, [shopProducts, preferences.travelDaysDefault, preferences.maxDailyRentBudget]);
+    const uniqueMock = AI_MOCK_PRODUCTS_DB.filter(
+      (item) => !existingIds.has(item.id.toLowerCase()) && !existingNames.has(normalizeVi(item.name))
+    );
+
+    return [...combinedLive, ...uniqueMock];
+  }, [publicRentProducts, publicThriftProducts, shopProducts, preferences.travelDaysDefault, preferences.maxDailyRentBudget]);
+
+  // Phân tích URL hiện tại để nhận diện xem có đang ở trang chi tiết sản phẩm không
+  const segs = useMemo(() => location.pathname.split('/').filter(Boolean), [location.pathname]);
+  const lastSeg = segs[segs.length - 1] || '';
+  const currentPath = location.pathname.toLowerCase();
+
+  const isRentDetail = useMemo(() => {
+    return (
+      (currentPath.startsWith('/rent/') &&
+        !currentPath.startsWith('/rent/marketplace') &&
+        !currentPath.startsWith('/rent/orders') &&
+        !currentPath.startsWith('/rent/checkout') &&
+        !currentPath.startsWith('/rent/return') &&
+        !currentPath.startsWith('/rent/shop') &&
+        segs.length >= 2) ||
+      currentPath.startsWith('/rent/products/') ||
+      currentPath.startsWith('/rent/detail/')
+    );
+  }, [currentPath, segs.length]);
+
+  const isThriftDetail = useMemo(() => {
+    return (
+      (currentPath.startsWith('/thrift/') &&
+        !currentPath.startsWith('/thrift/marketplace') &&
+        !currentPath.startsWith('/thrift/checkout') &&
+        !currentPath.startsWith('/thrift/orders') &&
+        !currentPath.startsWith('/thrift/shop') &&
+        segs.length >= 2) ||
+      currentPath.startsWith('/thrift/products/') ||
+      currentPath.startsWith('/thrift/detail/')
+    );
+  }, [currentPath, segs.length]);
+
+  // Tự động tải đúng thông tin sản phẩm người dùng đang xem khi vào trang Chi tiết sản phẩm
+  useEffect(() => {
+    if (!isRentDetail && !isThriftDetail) {
+      setActiveProductDetail(null);
+      return;
+    }
+    if (!lastSeg) return;
+
+    // 1. Kiểm tra xem đã có trong catalog chưa
+    const existing = allCatalogProducts.find(
+      (p) =>
+        p.id.toLowerCase() === lastSeg.toLowerCase() ||
+        p.sku.toLowerCase() === lastSeg.toLowerCase()
+    );
+    if (existing) {
+      setActiveProductDetail(existing);
+      return;
+    }
+
+    // 2. Nếu chưa có (ví dụ người dùng vào thẳng URL chi tiết), fetch trực tiếp từ API
+    let isCurrent = true;
+    if (isRentDetail) {
+      getPublicRentProductDetailApi(lastSeg)
+        .then((res) => {
+          if (!isCurrent || !res?.product) return;
+          const mapped = mapRentalApiToAIRec(
+            res.product,
+            preferences.travelDaysDefault || 4,
+            preferences.maxDailyRentBudget
+          );
+          setActiveProductDetail(mapped);
+        })
+        .catch(() => {});
+    } else if (isThriftDetail) {
+      getPublicThriftListingByIdApi(lastSeg)
+        .then((res) => {
+          if (!isCurrent || !res) return;
+          const mapped = mapThriftApiToAIRec(res);
+          setActiveProductDetail(mapped);
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [
+    isRentDetail,
+    isThriftDetail,
+    lastSeg,
+    allCatalogProducts,
+    preferences.travelDaysDefault,
+    preferences.maxDailyRentBudget,
+  ]);
 
   // Nạp đơn thuê của User khi đăng nhập để AI hỗ trợ tra cứu đơn & cọc
   useEffect(() => {
@@ -117,37 +472,33 @@ export const AIShoppingAssistant: React.FC = () => {
     const path = location.pathname.toLowerCase();
 
     // 1. Màn hình Chi tiết sản phẩm (RENT hoặc THRIFT)
-    if (
-      path.startsWith('/rent/products/') ||
-      path.startsWith('/rent/detail/') ||
-      path.startsWith('/thrift/products/') ||
-      path.startsWith('/thrift/detail/') ||
-      (path.startsWith('/thrift/') &&
-        !path.startsWith('/thrift/marketplace') &&
-        !path.startsWith('/thrift/checkout') &&
-        !path.startsWith('/thrift/orders'))
-    ) {
-      const segs = location.pathname.split('/').filter(Boolean);
-      const currentId = segs[segs.length - 1] || '';
+    if (isRentDetail || isThriftDetail) {
       const matched =
         allCatalogProducts.find(
           (p) =>
-            p.id.toLowerCase() === currentId.toLowerCase() ||
-            p.sku.toLowerCase() === currentId.toLowerCase()
-        ) || allCatalogProducts[0];
+            p.id.toLowerCase() === lastSeg.toLowerCase() ||
+            p.sku.toLowerCase() === lastSeg.toLowerCase()
+        ) || activeProductDetail || null;
 
       return {
         screenKey: 'PRODUCT_DETAIL',
-        screenLabel: 'Chi tiết sản phẩm',
+        screenLabel: matched ? `Chi tiết: ${matched.name}` : 'Chi tiết sản phẩm',
         badgeText: 'Hỏi AI về sản phẩm này',
-        contextHint: `AI đang nhận diện bạn xem: ${matched.name}`,
+        contextHint: matched
+          ? `AI đang nhận diện bạn xem: ${matched.name}`
+          : 'Đang xem thông tin chi tiết sản phẩm.',
         activeProduct: matched,
-        suggestedPrompts: [
-          `Đánh giá ưu/nhược điểm của ${matched.name}`,
-          `Tính tổng chi phí thuê ${matched.name} trong 4 ngày`,
-          `So sánh ${matched.name} với sản phẩm cùng phân khúc`,
-          `Sản phẩm này nên thuê ngắn hạn hay mua thanh lý?`,
-        ],
+        suggestedPrompts: matched
+          ? [
+              `Đánh giá ưu/nhược điểm của ${matched.name}`,
+              `Tính tổng chi phí thuê ${matched.name} trong 4 ngày`,
+              `So sánh ${matched.name} với sản phẩm cùng phân khúc`,
+              `Sản phẩm này nên thuê ngắn hạn hay mua thanh lý?`,
+            ]
+          : [
+              'Tư vấn chi tiết sản phẩm này cho mình',
+              'Tính chi phí thuê sản phẩm này',
+            ],
       };
     }
 
@@ -189,11 +540,11 @@ export const AIShoppingAssistant: React.FC = () => {
         screenKey: 'RENT_MARKETPLACE',
         screenLabel: 'RENT Marketplace',
         badgeText: 'Tìm đồ thuê bằng AI',
-        contextHint: 'Đang ở sàn RENT · Nhập nhu cầu tự nhiên (số ngày, ngân sách/ngày, mục đích).',
+        contextHint: 'Đang ở sàn RENT · Nhập tên sản phẩm hoặc nhu cầu tự nhiên (đầm dạ hội, vest, giày, phụ kiện...).',
         suggestedPrompts: [
-          'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.',
-          'Tìm trang phục dự tiệc Gala cuối tuần giá dưới 250.000đ/ngày',
-          'So sánh Canon EOS M50 và Sony A6000 khi đi du lịch',
+          'Mình cần thuê đầm dạ hội dự tiệc Gala 4 ngày, ngân sách dưới 300.000đ/ngày.',
+          'Tìm áo khoác dạ hoặc blazer đi Đà Lạt cuối tuần',
+          'Tìm giày cao gót hoặc phụ kiện phối đồ dự tiệc',
         ],
       };
     }
@@ -204,10 +555,10 @@ export const AIShoppingAssistant: React.FC = () => {
         screenKey: 'THRIFT_MARKETPLACE',
         screenLabel: 'THRIFT Marketplace',
         badgeText: 'Tư vấn đồ thanh lý',
-        contextHint: 'Đang ở sàn THRIFT · Tư vấn chọn hiện vật Second-Life chuẩn kiểm định.',
+        contextHint: 'Đang ở sàn THRIFT · Tư vấn chọn trang phục Second-Life chuẩn kiểm định.',
         suggestedPrompts: [
-          'Tư vấn các món đồ thanh lý THRIFT đáng mua nhất hiện nay',
-          'Đồ Second-Life từ kho RENT có đảm bảo chất lượng không?',
+          'Tư vấn các mẫu quần áo thanh lý THRIFT đáng mua nhất hiện nay',
+          'Tìm đầm hoa nhí hoặc set cardigan thanh lý THRIFT',
           'Khi nào nên mua đồ THRIFT thay vì thuê RENT?',
         ],
       };
@@ -218,15 +569,22 @@ export const AIShoppingAssistant: React.FC = () => {
       screenKey: 'HOMEPAGE',
       screenLabel: 'Trang chủ ReUse Hub',
       badgeText: 'ReUse AI Assistant',
-      contextHint: 'Trợ lý mua sắm & thuê đồ thông minh · Hiểu ngữ cảnh RENT & THRIFT.',
+      contextHint: 'Trợ lý mua sắm & thuê thời trang thông minh · Hỏi tên sản phẩm nào ra đúng sản phẩm đó.',
       suggestedPrompts: [
-        'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.',
-        'So sánh ưu nhược điểm Canon EOS M50 và Sony A6000',
-        'Tính chi phí thuê máy ảnh 4 ngày kèm tiền đặt cọc',
+        'Mình cần thuê đầm dạ hội dự tiệc 4 ngày, ngân sách dưới 300.000đ/ngày.',
+        'Tìm bộ Suit / Vest nam lịch lãm hoặc Áo dài truyền thống',
+        'Tính chi phí thuê trang phục 4 ngày kèm tiền đặt cọc',
         'Tư vấn khi nào nên thuê (RENT) và khi nào nên mua (THRIFT)?',
       ],
     };
-  }, [location.pathname, allCatalogProducts]);
+  }, [
+    location.pathname,
+    allCatalogProducts,
+    activeProductDetail,
+    isRentDetail,
+    isThriftDetail,
+    lastSeg,
+  ]);
 
   useEffect(() => {
     if (isOpen && !isMinimized) {
@@ -263,25 +621,202 @@ export const AIShoppingAssistant: React.FC = () => {
     });
   };
 
-  // Bộ xử lý AI thông minh dựa trên DB mẫu + dữ liệu thực + ngữ cảnh trang
+  // Bộ xử lý AI thông minh dựa trên dữ liệu thực + ngữ cảnh trang
   const generateAIResponse = (rawQuery: string): AIMessage => {
     const q = rawQuery.toLowerCase();
+    const qNorm = normalizeVi(rawQuery);
     const nowTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-    // Trích xuất số ngày thuê (mặc định 4 ngày nếu câu hỏi có "4 ngày" hoặc lấy từ sở thích)
     const daysMatch = q.match(/(\d+)\s*ngày/);
     const days = daysMatch ? Math.max(1, Number(daysMatch[1])) : preferences.travelDaysDefault || 4;
 
-    // Trích xuất ngân sách (ví dụ: "300.000", "300k", "250k")
     let maxBudget = 300000;
-    const kMatch = q.match(/(\d+)\s*k/);
-    const fullNumMatch = q.match(/(\d{3})[.,]?(\d{3})/);
+    let hasExplicitBudget = false;
+    const kMatch = q.match(/(\d+)\s*k\b/);
+    const fullNumMatch = q.match(/(\d{2,3})[.,](\d{3})/);
     if (fullNumMatch) {
       maxBudget = Number(`${fullNumMatch[1]}${fullNumMatch[2]}`);
+      hasExplicitBudget = true;
     } else if (kMatch) {
       maxBudget = Number(kMatch[1]) * 1000;
+      hasExplicitBudget = true;
     } else if (isLoggedIn && preferences.maxDailyRentBudget) {
       maxBudget = preferences.maxDailyRentBudget;
+    }
+
+    // Chấm điểm tất cả sản phẩm theo câu hỏi
+    const scoredAll = allCatalogProducts
+      .map((item) => ({
+        item,
+        ...scoreProductAgainstQuery(item, rawQuery),
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    // 1B. KỊCH BẢN HƯỚNG DẪN CÁCH THUÊ ĐỒ & CHÍNH SÁCH / THỦ TỤC (CHỈ TRẢ LỜI VĂN BẢN, KHÔNG GỬI SẢN PHẨM)
+    const hasHowOrGuide =
+      qNorm.includes('huong dan') ||
+      qNorm.includes('cach') ||
+      qNorm.includes('quy trinh') ||
+      qNorm.includes('lam sao') ||
+      qNorm.includes('lam the nao') ||
+      qNorm.includes('nhu the nao') ||
+      qNorm.includes('the nao') ||
+      qNorm.includes('chi toi') ||
+      qNorm.includes('chi minh') ||
+      qNorm.includes('chi em') ||
+      qNorm.includes('cho toi biet') ||
+      qNorm.includes('cac buoc') ||
+      qNorm.includes('thu tuc');
+
+    const isHowToRent =
+      (hasHowOrGuide && (qNorm.includes('thue') || qNorm.includes('muon'))) ||
+      qNorm.includes('cach thue') ||
+      qNorm.includes('thue do nhu the nao') ||
+      qNorm.includes('thue nhu the nao') ||
+      qNorm.includes('thue the nao') ||
+      qNorm.includes('lam sao de thue') ||
+      qNorm.includes('lam the nao de thue') ||
+      qNorm.includes('huong dan thue') ||
+      qNorm.includes('quy trinh thue') ||
+      qNorm.includes('cac buoc thue') ||
+      qNorm.includes('muon thue do thi') ||
+      qNorm.includes('thu tuc thue');
+
+    if (isHowToRent) {
+      return {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        timestamp: nowTime,
+        bannerTitle: 'Hướng dẫn quy trình thuê đồ trên ReUse Hub',
+        bannerSubtitle: 'Chỉ với 4 bước đơn giản, minh bạch và bảo vệ 100% tiền cọc.',
+        text:
+          'Để thuê trang phục trên **ReUse Hub**, bạn chỉ cần thực hiện theo **4 bước** sau:\n\n' +
+          '**Bước 1 — Chọn trang phục & Lịch thuê:**\n' +
+          '• Vào mục **RENT Marketplace**, chọn mẫu trang phục bạn ưng ý.\n' +
+          '• Chọn kích cỡ (Size), ngày bắt đầu nhận đồ và số ngày muốn thuê.\n\n' +
+          '**Bước 2 — Đặt đơn & Khóa cọc Smart Escrow:**\n' +
+          '• Tiến hành thanh toán **Tiền thuê + Tiền đặt cọc bảo chứng**.\n' +
+          '• Khoản tiền cọc của bạn được khóa an toàn trong hợp đồng **Smart Escrow** của hệ thống (Chủ shop không thể tự ý rút).\n\n' +
+          '**Bước 3 — Nhận đồ & Đồng kiểm CLA:**\n' +
+          '• Trang phục được giặt hấp khử trùng tia UV-C và giao tận nơi.\n' +
+          '• Khi nhận hàng, bạn kiểm tra đồ và chụp 3 góc xác nhận biên bản điện tử **CLA** để bảo vệ quyền lợi khỏi các lỗi có sẵn.\n\n' +
+          '**Bước 4 — Trả đồ & Hoàn cọc 100% tự động:**\n' +
+          '• Mặc xong bạn **không cần tự giặt**, chỉ cần bấm **"Yêu cầu trả đồ"** trong mục Đơn hàng.\n' +
+          '• Ngay khi xưởng nghiệm thu xong, **100% tiền đặt cọc** sẽ được hoàn tự động về Ví khả dụng của bạn!',
+        recommendations: [],
+        quickFollowUps: [
+          'Khi nào tôi được hoàn lại 100% tiền đặt cọc Smart Escrow?',
+          'Nếu trả đồ sớm hoặc trễ lịch hẹn thì tính phí thế nào?',
+          'Tìm đầm dạ hội dự tiệc sang trọng',
+        ],
+      };
+    }
+
+    const isHowToBuyThrift =
+      (hasHowOrGuide &&
+        (qNorm.includes('mua') || qNorm.includes('dat hang') || qNorm.includes('order')) &&
+        (qNorm.includes('thrift') ||
+          qNorm.includes('thanh ly') ||
+          qNorm.includes('second life') ||
+          qNorm.includes('do cu') ||
+          qNorm.includes('mua dut'))) ||
+      qNorm.includes('cach mua') ||
+      qNorm.includes('huong dan mua') ||
+      qNorm.includes('quy trinh mua') ||
+      qNorm.includes('mua nhu the nao') ||
+      qNorm.includes('mua the nao') ||
+      qNorm.includes('mua do nhu the nao') ||
+      qNorm.includes('mua thanh ly the nao') ||
+      qNorm.includes('lam sao de mua');
+
+    if (isHowToBuyThrift) {
+      return {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        timestamp: nowTime,
+        bannerTitle: 'Hướng dẫn mua đồ thanh lý (THRIFT) trên ReUse Hub',
+        bannerSubtitle: 'Sở hữu trang phục Second-Life chuẩn kiểm định tiết kiệm 50% – 70%.',
+        text:
+          'Cách mua đứt trang phục tại sàn **THRIFT Marketplace** rất đơn giản:\n\n' +
+          '• **Bước 1:** Vào mục **THRIFT**, chọn món đồ bạn yêu thích và xem kỹ thông số độ mới (Grade A+ / Như mới 98%-99%).\n' +
+          '• **Bước 2:** Thêm vào giỏ hàng và thanh toán trực tiếp (**Không cần đặt cọc** như khi thuê đồ).\n' +
+          '• **Bước 3:** Nhận hàng tận nơi, được quyền đồng kiểm chất lượng đúng như mô tả kiểm định trước khi xác nhận hoàn tất đơn!',
+        recommendations: [],
+        quickFollowUps: [
+          'Khi nào nên thuê (RENT) và khi nào nên mua (THRIFT)?',
+          'Cách thuê đồ như thế nào?',
+          'Tư vấn các mẫu quần áo thanh lý THRIFT đáng mua nhất hiện nay',
+        ],
+      };
+    }
+
+    const isPolicyFaq =
+      qNorm.includes('tra do the nao') ||
+      qNorm.includes('tra do nhu the nao') ||
+      qNorm.includes('khi nao duoc hoan') ||
+      qNorm.includes('khi nao toi duoc hoan') ||
+      qNorm.includes('khi nao hoan') ||
+      qNorm.includes('bao lau duoc hoan') ||
+      qNorm.includes('bao lau thi hoan') ||
+      qNorm.includes('hoan coc') ||
+      qNorm.includes('tra coc') ||
+      (qNorm.includes('tien coc') &&
+        (qNorm.includes('bao lau') ||
+          qNorm.includes('khi nao') ||
+          qNorm.includes('the nao') ||
+          qNorm.includes('nhu the nao') ||
+          qNorm.includes('la gi') ||
+          qNorm.includes('hoan') ||
+          qNorm.includes('giu') ||
+          qNorm.includes('co mat khong'))) ||
+      qNorm.includes('smart escrow la gi') ||
+      qNorm.includes('cla la gi') ||
+      qNorm.includes('bien ban dong kiem') ||
+      qNorm.includes('tra do som') ||
+      qNorm.includes('tra do tre') ||
+      qNorm.includes('tra muon') ||
+      qNorm.includes('co can giat') ||
+      qNorm.includes('phi ship') ||
+      qNorm.includes('phi van chuyen') ||
+      qNorm.includes('doi size') ||
+      qNorm.includes('giay to') ||
+      qNorm.includes('cccd');
+
+    if (isPolicyFaq) {
+      if (qNorm.includes('tra do som') || qNorm.includes('tra do tre') || qNorm.includes('tra muon')) {
+        return {
+          id: `ai-${Date.now()}`,
+          sender: 'ai',
+          timestamp: nowTime,
+          bannerTitle: 'Chính sách Trả đồ Sớm hạn & Trễ hạn',
+          bannerSubtitle: 'Linh hoạt và minh bạch theo từng ngày sử dụng thực tế.',
+          text:
+            '• **Trả sớm hơn lịch hẹn:** Hoàn trả sớm ít nhất 24h, bạn được hoàn lại **50% tiền thuê của các ngày chưa dùng** cùng với 100% tiền đặt cọc.\n' +
+            '• **Trả trễ hoặc cần gia hạn:** Bấm **"Gia hạn thuê"** trên đơn hàng trước khi hết hạn để giữ giá tốt. Trả trễ không báo trước sẽ tính phí **120% đơn giá thuê/ngày**.',
+          recommendations: [],
+          quickFollowUps: [
+            'Cách thuê đồ như thế nào?',
+            'Khi nào tôi được hoàn lại 100% tiền đặt cọc Smart Escrow?',
+          ],
+        };
+      }
+
+      return {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        timestamp: nowTime,
+        bannerTitle: 'Cơ chế Tiền cọc Smart Escrow & Biên bản CLA',
+        bannerSubtitle: 'Bảo vệ quyền lợi 100% minh bạch và không giữ giấy tờ tùy thân.',
+        text:
+          '• **Không giữ giấy tờ CCCD:** Toàn bộ giao dịch bảo chứng qua tiền cọc Smart Escrow trên hệ thống.\n' +
+          '• **Biên bản CLA 3 góc:** Chụp ảnh ghi nhận khi nhận đồ giúp bạn an tâm không bị quy trách nhiệm cho lỗi có sẵn.\n' +
+          '• **Hoàn cọc 100%:** Ngay sau khi xưởng nhận lại đồ và kiểm tra hoàn tất, tiền cọc tự động hoàn về Ví khả dụng.',
+        recommendations: [],
+        quickFollowUps: [
+          'Cách thuê đồ như thế nào?',
+          'Nếu trả đồ sớm hơn lịch hẹn thì tính phí sao?',
+        ],
+      };
     }
 
     // 1. KỊCH BẢN TRA CỨU ĐƠN HÀNG & TIỀN CỌC (MY ORDERS / WALLET)
@@ -299,19 +834,19 @@ export const AIShoppingAssistant: React.FC = () => {
           timestamp: nowTime,
           bannerTitle: 'Cần đăng nhập để tra cứu hồ sơ cá nhân',
           bannerSubtitle: 'Khách (Guest) vẫn có thể tìm kiếm, so sánh và ước tính chi phí tự do.',
-          text: 'Với vai trò Guest, mình có thể giúp bạn tìm kiếm sản phẩm, phân tích ưu/nhược điểm và ước tính chi phí thuê. Để tra cứu trực tiếp mã đơn thuê, trạng thái vận chuyển và số dư tiền đặt cọc Smart Escrow của riêng bạn, vui lòng đăng nhập tài khoản Customer nhé!',
+          text: 'Với vai trò Guest, mình có thể giúp bạn tìm kiếm trang phục, phân tích ưu/nhược điểm và ước tính chi phí thuê. Để tra cứu trực tiếp mã đơn thuê, trạng thái vận chuyển và số dư tiền đặt cọc Smart Escrow của riêng bạn, vui lòng đăng nhập tài khoản Customer nhé!',
           quickFollowUps: [
-            'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.',
+            'Mình cần thuê đầm dạ hội dự tiệc 4 ngày, ngân sách dưới 300.000đ/ngày.',
             'Giải thích cơ chế bảo vệ tiền cọc Smart Escrow',
           ],
         };
       }
 
-      // Kết hợp đơn thực tế của User hoặc đơn mẫu minh họa nếu tài khoản mới chưa có đơn
+      const defaultItem = allCatalogProducts[0] || AI_MOCK_PRODUCTS_DB[0];
       const realOrderCards: AIOrderSummaryCard[] =
         userOrders.length > 0
           ? userOrders.slice(0, 3).map((o) => {
-              const firstTitle = o.items?.[0]?.productName || 'Thiết bị thuê ReUse Hub';
+              const firstTitle = o.items?.[0]?.productName || defaultItem.name;
               const st = (o.status || 'RENTING').toUpperCase();
               const isCompleted = st === 'COMPLETED';
               return {
@@ -324,7 +859,7 @@ export const AIShoppingAssistant: React.FC = () => {
                     : st === 'RETURN_REQUESTED' || st === 'RETURNED'
                       ? 'Đang đối kiểm hoàn cọc'
                       : 'Đang trong kỳ thuê',
-                depositAmount: Number(o.depositAmount) || 3500000,
+                depositAmount: Number(o.depositAmount) || 500000,
                 escrowStatus: isCompleted
                   ? 'Đã giải tỏa 100% về Ví khả dụng'
                   : 'Đang khóa bảo chứng trong Smart Escrow',
@@ -337,12 +872,12 @@ export const AIShoppingAssistant: React.FC = () => {
           : [
               {
                 orderCode: '#RH-RNT-6519',
-                productName: 'Canon EOS M50 (Kit 15-45mm STM)',
+                productName: defaultItem.name,
                 type: 'RENT',
                 statusLabel: 'Đang thuê (Còn 2 ngày)',
-                depositAmount: 3500000,
+                depositAmount: defaultItem.depositAmount || 500000,
                 escrowStatus: 'Đang khóa bảo chứng Smart Escrow',
-                expectedRefundNote: 'Hoàn 3.500.000đ về Ví ngay sau khi trả máy & nghiệm thu CLA.',
+                expectedRefundNote: `Hoàn ${formatVND(defaultItem.depositAmount || 500000)} về Ví ngay sau khi trả đồ & nghiệm thu CLA.`,
                 detailUrl: '/rent/orders',
               },
             ];
@@ -357,77 +892,84 @@ export const AIShoppingAssistant: React.FC = () => {
         orderSummaries: realOrderCards,
         quickFollowUps: [
           'Khi nào tôi được hoàn lại 100% tiền đặt cọc Smart Escrow?',
-          'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.',
+          'Mình cần thuê đầm dạ hội dự tiệc 4 ngày, ngân sách dưới 300.000đ/ngày.',
         ],
       };
     }
 
     // 2. KỊCH BẢN SO SÁNH SẢN PHẨM (PRODUCT COMPARISON) HOẶC NÊN THUÊ HAY MUA (RENT VS THRIFT)
     if (q.includes('so sánh') || q.includes('ưu nhược điểm') || q.includes('ưu/nhược điểm')) {
-      const m50 = AI_MOCK_PRODUCTS_DB[0];
-      const a6000 = AI_MOCK_PRODUCTS_DB[1];
+      const rentCatalog = allCatalogProducts.filter((item) => item.type === 'RENT');
+      const matchedForCompare = scoredAll.filter((entry) => entry.score >= 15 && entry.item.type === 'RENT');
+      const leftItem = matchedForCompare[0]?.item || pageContext.activeProduct || rentCatalog[0] || AI_MOCK_PRODUCTS_DB[0];
+      const rightItem =
+        matchedForCompare.find((entry) => entry.item.id !== leftItem.id)?.item ||
+        rentCatalog.find((item) => item.id !== leftItem.id && item.category === leftItem.category) ||
+        rentCatalog.find((item) => item.id !== leftItem.id) ||
+        AI_MOCK_PRODUCTS_DB[1];
+
+      const leftPrice = leftItem.pricePerDay || 180000;
+      const rightPrice = rightItem.pricePerDay || 220000;
+
       return {
         id: `ai-${Date.now()}`,
         sender: 'ai',
         timestamp: nowTime,
         bannerTitle: 'Phân tích & So sánh chuyên sâu từ ReUse AI',
-        bannerSubtitle: 'Đánh giá khách quan dựa trên thông số kỹ thuật và chi phí thực tế.',
-        text: 'Mình đã lập bảng so sánh trực diện giữa 2 mẫu máy ảnh du lịch được thuê nhiều nhất dưới 300.000đ/ngày để bạn dễ chọn:',
+        bannerSubtitle: 'Đánh giá khách quan dựa trên chất liệu, phom dáng và chi phí thuê thực tế.',
+        text: `Mình đã lập bảng so sánh trực diện giữa "${leftItem.name}" và "${rightItem.name}" trong ${days} ngày thuê để bạn dễ chọn:`,
         comparison: {
-          title: 'So sánh máy ảnh du lịch (Chu kỳ thuê 4 ngày)',
-          leftTitle: 'Canon EOS M50',
-          rightTitle: 'Sony A6000',
+          title: `So sánh trang phục (Chu kỳ thuê ${days} ngày)`,
+          leftTitle: leftItem.name,
+          rightTitle: rightItem.name,
           rows: [
             {
               criteria: 'Giá thuê / ngày',
-              leftValue: '250.000đ/ngày',
-              rightValue: '280.000đ/ngày',
+              leftValue: `${formatVND(leftPrice)}/ngày`,
+              rightValue: `${formatVND(rightPrice)}/ngày`,
             },
             {
-              criteria: 'Tổng thuê 4 ngày',
-              leftValue: '1.000.000đ',
-              rightValue: '1.120.000đ',
+              criteria: `Tổng thuê ${days} ngày`,
+              leftValue: formatVND(leftPrice * days),
+              rightValue: formatVND(rightPrice * days),
             },
             {
               criteria: 'Tiền cọc Escrow',
-              leftValue: '3.500.000đ (Hoàn 100%)',
-              rightValue: '3.800.000đ (Hoàn 100%)',
+              leftValue: `${formatVND(leftItem.depositAmount || 500000)} (Hoàn 100%)`,
+              rightValue: `${formatVND(rightItem.depositAmount || 600000)} (Hoàn 100%)`,
             },
             {
-              criteria: 'Màn hình & Vlog',
-              leftValue: 'Xoay lật 180° cảm ứng (Tốt hơn)',
-              rightValue: 'Chỉ lật nghiêng 90°',
+              criteria: 'Danh mục & Phong cách',
+              leftValue: leftItem.category,
+              rightValue: rightItem.category,
             },
             {
-              criteria: 'Lấy nét & Chụp nhanh',
-              leftValue: '10 fps · Dual Pixel AF',
-              rightValue: '11 fps · 179 điểm lấy nét pha (Nhanh hơn)',
-            },
-            {
-              criteria: 'Màu sắc ảnh gốc',
-              leftValue: 'Nịnh da hồng hào, chụp chân dung đẹp ngay',
-              rightValue: 'Chi tiết sắc nét, hợp phong cảnh & đường phố',
+              criteria: 'Độ mới kiểm định',
+              leftValue: leftItem.conditionGrade,
+              rightValue: rightItem.conditionGrade,
             },
           ],
-          verdict:
-            'Chọn Canon EOS M50 nếu bạn ưu tiên quay Vlog, chụp chân dung/selfie và tiết kiệm chi phí. Chọn Sony A6000 nếu bạn thích chụp cảnh chuyển động nhanh và độ nét cao.',
+          verdict: `Chọn "${leftItem.name}" nếu bạn ưu tiên mức giá tiết kiệm (${formatVND(leftPrice)}/ngày). Chọn "${rightItem.name}" nếu bạn muốn trải nghiệm phong cách ${rightItem.category} nổi bật.`,
         },
-        recommendations: [m50, a6000],
+        recommendations: [leftItem, rightItem],
         quickFollowUps: [
-          'Tính chi phí thuê Canon EOS M50 trong 4 ngày',
+          `Tính chi phí thuê ${leftItem.name} trong ${days} ngày`,
+          `Tính chi phí thuê ${rightItem.name} trong ${days} ngày`,
           'Nên thuê ngắn hạn hay mua thanh lý THRIFT?',
         ],
       };
     }
 
     if (q.includes('nên thuê hay mua') || q.includes('rent vs thrift') || q.includes('thuê hay mua')) {
+      const sampleRent = allCatalogProducts.find((i) => i.type === 'RENT') || AI_MOCK_PRODUCTS_DB[0];
+      const sampleThrift = allCatalogProducts.find((i) => i.type === 'THRIFT') || AI_MOCK_PRODUCTS_DB[3];
       return {
         id: `ai-${Date.now()}`,
         sender: 'ai',
         timestamp: nowTime,
         bannerTitle: 'Tư vấn bài toán kinh tế: Nên Thuê (RENT) hay Mua thanh lý (THRIFT)?',
-        bannerSubtitle: 'Tối ưu ngân sách theo tần suất sử dụng thực tế của bạn.',
-        text: 'Quy tắc vàng trên ReUse Hub: Nếu bạn chỉ dùng dưới 15 ngày/năm (đi du lịch, dự tiệc), hãy chọn RENT. Nếu sử dụng thường xuyên hàng tuần, mua lại đồ Second-Life tại sàn THRIFT sẽ tiết kiệm tới 50–75%:',
+        bannerSubtitle: 'Tối ưu ngân sách theo tần suất mặc thực tế của bạn.',
+        text: 'Quy tắc vàng trên ReUse Hub: Nếu bạn chỉ mặc 1–3 lần cho dịp đặc biệt (dự tiệc Gala, đám cưới, chụp lookbook, du lịch), hãy chọn RENT. Nếu là trang phục mặc thường xuyên hàng tuần, mua thanh lý Second-Life tại sàn THRIFT sẽ tiết kiệm tới 50–75%:',
         comparison: {
           title: 'Đặt lên bàn cân: RENT vs THRIFT',
           leftTitle: 'Thuê ngắn hạn (RENT)',
@@ -435,27 +977,27 @@ export const AIShoppingAssistant: React.FC = () => {
           rows: [
             {
               criteria: 'Tần suất phù hợp',
-              leftValue: 'Dùng 1–3 lần/năm (Du lịch, Sự kiện)',
-              rightValue: 'Dùng hàng tuần / Dài hạn',
+              leftValue: 'Mặc 1–3 lần/năm (Dự tiệc, Sự kiện, Du lịch)',
+              rightValue: 'Mặc hàng tuần / Dài hạn',
             },
             {
               criteria: 'Chi phí bỏ ra',
-              leftValue: 'Chỉ 7% – 10% giá trị món đồ',
-              rightValue: 'Rẻ hơn 45% – 75% so với mua mới',
+              leftValue: 'Chỉ 7% – 12% giá trị bộ đồ',
+              rightValue: 'Rẻ hơn 50% – 75% so với mua mới',
             },
             {
-              criteria: 'Bảo dưỡng & Khấu hao',
-              leftValue: '0đ (Xưởng lo 100% vệ sinh & bảo trì)',
+              criteria: 'Giặt hấp & Bảo quản',
+              leftValue: '0đ (Xưởng lo 100% giặt hấp & ủi hơi nước)',
               rightValue: 'Sở hữu vĩnh viễn, đã kiểm định Grade A+',
             },
           ],
           verdict:
-            'Với chuyến du lịch 4 ngày sắp tới, phương án THUÊ (RENT) chỉ tốn ~1.000.000đ thay vì bỏ ra hơn 14.000.000đ mua máy mới.',
+            'Với các bộ đầm dạ hội, vest hoặc áo khoác mặc đi tiệc/du lịch ngắn ngày, phương án THUÊ (RENT) giúp bạn luôn có đồ mới lên hình đẹp mà chỉ tốn vài trăm nghìn đồng.',
         },
-        recommendations: [AI_MOCK_PRODUCTS_DB[0], AI_MOCK_PRODUCTS_DB[5]],
+        recommendations: [sampleRent, sampleThrift],
         quickFollowUps: [
-          'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.',
-          'Tư vấn các món đồ thanh lý THRIFT đáng mua nhất hiện nay',
+          'Mình cần thuê đầm dạ hội dự tiệc 4 ngày, ngân sách dưới 300.000đ/ngày.',
+          'Tư vấn các mẫu quần áo thanh lý THRIFT đáng mua nhất hiện nay',
         ],
       };
     }
@@ -469,9 +1011,10 @@ export const AIShoppingAssistant: React.FC = () => {
       q.includes('escrow') ||
       q.includes('cla')
     ) {
-      const targetProd = pageContext.activeProduct || AI_MOCK_PRODUCTS_DB[0];
-      const daily = targetProd.pricePerDay || 250000;
-      const deposit = targetProd.depositAmount || 3500000;
+      const matchedRentForCost = scoredAll.find((entry) => entry.score >= 20 && entry.item.type === 'RENT')?.item;
+      const targetProd = matchedRentForCost || pageContext.activeProduct || allCatalogProducts[0] || AI_MOCK_PRODUCTS_DB[0];
+      const daily = targetProd.pricePerDay || 180000;
+      const deposit = targetProd.depositAmount || 500000;
       const shipping = 35000;
       const rentalSubtotal = daily * days;
 
@@ -481,7 +1024,7 @@ export const AIShoppingAssistant: React.FC = () => {
         timestamp: nowTime,
         bannerTitle: `Bảng ước tính & Giải thích chi phí (${days} ngày)`,
         bannerSubtitle: 'Minh bạch 100% · AI chỉ tư vấn chi phí, quyết định thanh toán thuộc về bạn.',
-        text: `Mình bóc tách chi tiết từng khoản khi bạn thuê ${targetProd.name} trong ${days} ngày để bạn hoàn toàn yên tâm trước khi bấm đặt đơn:`,
+        text: `Mình bóc tách chi tiết từng khoản khi bạn thuê "${targetProd.name}" trong ${days} ngày để bạn hoàn toàn yên tâm trước khi bấm đặt đơn:`,
         costBreakdown: {
           title: `Dự toán chi phí thuê ${days} ngày`,
           productName: targetProd.name,
@@ -507,106 +1050,156 @@ export const AIShoppingAssistant: React.FC = () => {
           },
         ],
         quickFollowUps: [
-          'So sánh Canon EOS M50 và Sony A6000',
-          'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.',
+          `So sánh ${targetProd.name} với sản phẩm cùng phân khúc`,
+          'Mình cần thuê đầm dạ hội dự tiệc 4 ngày, ngân sách dưới 300.000đ/ngày.',
         ],
       };
     }
 
-    // 4. KỊCH BẢN TƯ VẤN SẢN PHẨM ĐANG XEM TRÊN PRODUCT DETAIL
-    if (
-      pageContext.screenKey === 'PRODUCT_DETAIL' &&
-      pageContext.activeProduct &&
-      (q.includes('sản phẩm này') ||
-        q.includes('đang xem') ||
-        q.includes(pageContext.activeProduct.name.toLowerCase()))
-    ) {
-      const p = pageContext.activeProduct;
-      const calcRent = (p.pricePerDay || 250000) * days;
+    // 4. KỊCH BẢN HỎI ĐÍCH DANH TÊN SẢN PHẨM HOẶC LOẠI TRANG PHỤC CỤ THỂ
+    const exactMatches = scoredAll.filter((entry) => entry.isExactNameMatch || entry.score >= 55);
+    if (exactMatches.length > 0) {
+      const topRecs = exactMatches.slice(0, 4).map(({ item }) => ({
+        ...item,
+        budgetTag: 'Đúng sản phẩm bạn tìm',
+        calculatedDays: days,
+        calculatedTotalRent: (item.pricePerDay || 180000) * days,
+      }));
+      const first = topRecs[0];
       return {
         id: `ai-${Date.now()}`,
         sender: 'ai',
         timestamp: nowTime,
-        bannerTitle: `Đánh giá chuyên môn: ${p.name}`,
-        bannerSubtitle: `Tình trạng kiểm định: ${p.conditionGrade} · Kho ${p.location}`,
-        text: `Ưu điểm nổi bật:\n• ${p.pros.join('\n• ')}\n\nLưu ý nhỏ:\n• ${p.cons.join('\n• ')}`,
-        recommendations: [
-          {
-            ...p,
-            calculatedDays: days,
-            calculatedTotalRent: calcRent,
-          },
-        ],
+        bannerTitle:
+          topRecs.length === 1
+            ? `Tìm thấy đúng sản phẩm: ${first.name}`
+            : `Tìm thấy ${topRecs.length} sản phẩm khớp với "${rawQuery}"`,
+        bannerSubtitle: `${first.category} · Độ mới ${first.conditionGrade} · Kho ${first.location}`,
+        text:
+          topRecs.length === 1
+            ? `Đây là thông tin chi tiết của "${first.name}" có sẵn trong kho ReUse Hub:\n• ${first.pros.join('\n• ')}`
+            : `Mình tìm thấy đúng các mẫu trang phục khớp với yêu cầu "${rawQuery}" của bạn:`,
+        recommendations: topRecs,
         quickFollowUps: [
-          `Tính tổng chi phí thuê ${p.name} trong 4 ngày`,
-          'So sánh Canon EOS M50 và Sony A6000',
+          `Tính tổng chi phí thuê ${first.name} trong ${days} ngày`,
+          `So sánh ${first.name} với mẫu cùng phân khúc`,
+          'Nên thuê ngắn hạn hay mua thanh lý THRIFT?',
+        ],
+      };
+    }
+
+    const keywordMatches = scoredAll.filter((entry) => entry.score >= 15);
+    if (keywordMatches.length > 0) {
+      const filteredByBudget = hasExplicitBudget
+        ? keywordMatches.filter((entry) => entry.item.type === 'THRIFT' || (entry.item.pricePerDay || 0) <= maxBudget)
+        : keywordMatches;
+      const chosenList = (filteredByBudget.length > 0 ? filteredByBudget : keywordMatches).slice(0, 4);
+      const groupLabel = chosenList[0]?.matchedGroup?.label || chosenList[0]?.item.category || 'Thời trang';
+      const recs = chosenList.map(({ item }) => ({
+        ...item,
+        calculatedDays: days,
+        calculatedTotalRent: (item.pricePerDay || 180000) * days,
+      }));
+      return {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        timestamp: nowTime,
+        bannerTitle: `Gợi ý ${groupLabel} phù hợp với bạn!`,
+        bannerSubtitle: `Đã lọc ${recs.length} sản phẩm khớp với nhu cầu "${rawQuery}".`,
+        text: `Dưới đây là các mẫu ${groupLabel.toLowerCase()} trong kho ReUse Hub khớp nhất với yêu cầu của bạn:`,
+        recommendations: recs,
+        quickFollowUps: [
+          `Tính tổng chi phí thuê ${recs[0].name} trong ${days} ngày`,
+          `So sánh ${recs[0].name} và ${recs[1]?.name || recs[0].name}`,
+          'Tư vấn các mẫu quần áo thanh lý THRIFT đáng mua nhất hiện nay',
         ],
       };
     }
 
     // 5. KỊCH BẢN TƯ VẤN ĐỒ THANH LÝ THRIFT
-    if (q.includes('thrift') || q.includes('thanh lý') || q.includes('mua đứt') || q.includes('second-life')) {
+    if (q.includes('thrift') || q.includes('thanh lý') || q.includes('mua đứt') || q.includes('second-life') || qNorm.includes('thanh ly')) {
       const thriftItems = allCatalogProducts.filter((item) => item.type === 'THRIFT');
       return {
         id: `ai-${Date.now()}`,
         sender: 'ai',
         timestamp: nowTime,
-        bannerTitle: 'Gợi ý hiện vật THRIFT (Second-Life) chuẩn kiểm định!',
-        bannerSubtitle: 'Đã lọc các sản phẩm thanh lý tiết kiệm 48% – 76% so với giá gốc.',
-        text: 'Các sản phẩm dưới đây được chuyển giao từ kho lưu ký định kỳ hoặc ký gửi đạt chuẩn Grade A+, đi kèm hồ sơ nguồn gốc minh bạch:',
-        recommendations: thriftItems,
+        bannerTitle: 'Gợi ý trang phục THRIFT (Second-Life) chuẩn kiểm định!',
+        bannerSubtitle: 'Đã lọc các sản phẩm thanh lý tiết kiệm 50% – 75% so với giá gốc.',
+        text: 'Các mẫu quần áo & đầm váy dưới đây được tuyển chọn kỹ lưỡng đạt chuẩn Grade A+, đã giặt hấp tiệt trùng và sẵn sàng giao ngay:',
+        recommendations: thriftItems.slice(0, 4),
         quickFollowUps: [
           'Khi nào nên mua đồ THRIFT thay vì thuê RENT?',
-          'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.',
+          'Mình cần thuê đầm dạ hội dự tiệc 4 ngày, ngân sách dưới 300.000đ/ngày.',
         ],
       };
     }
 
-    // 6. KỊCH BẢN TÌM KIẾM SẢN PHẨM BẰNG NGÔN NGỮ TỰ NHIÊN (MẶC ĐỊNH / HÌNH 2)
-    // Ví dụ: "Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày."
-    const isDressQuery = q.includes('đầm') || q.includes('váy') || q.includes('trang phục') || q.includes('dự tiệc');
-    const filteredRent = allCatalogProducts
-      .filter((item) => {
-        if (item.type !== 'RENT') return false;
-        if (isDressQuery) {
-          return (
-            item.category.toLowerCase().includes('trang phục') ||
-            item.name.toLowerCase().includes('đầm') ||
-            item.name.toLowerCase().includes('váy')
-          );
-        }
-        const priceOk = (item.pricePerDay || 0) <= maxBudget;
-        return priceOk;
-      })
-      .slice(0, 3)
-      .map((item) => ({
-        ...item,
-        budgetTag: 'Phù hợp ngân sách',
-        calculatedDays: days,
-        calculatedTotalRent: (item.pricePerDay || 250000) * days,
-      }));
+    // 6. KỊCH BẢN TÌM KIẾM THEO NGÂN SÁCH (CHỈ GỬI SẢN PHẨM KHI CÓ Ý ĐỊNH TÌM ĐỒ RÕ RÀNG)
+    const hasExplicitBrowseIntent =
+      hasExplicitBudget ||
+      qNorm.includes('tim do') ||
+      qNorm.includes('tim san pham') ||
+      qNorm.includes('tim trang phuc') ||
+      qNorm.includes('goi y') ||
+      qNorm.includes('cho minh xem') ||
+      qNorm.includes('co mau nao') ||
+      qNorm.includes('co do gi') ||
+      qNorm.includes('thue do di tiec') ||
+      qNorm.includes('thue do di du lich');
 
-    const finalRecs =
-      filteredRent.length > 0
-        ? filteredRent
-        : [AI_MOCK_PRODUCTS_DB[0], AI_MOCK_PRODUCTS_DB[1]].map((item) => ({
-            ...item,
-            calculatedDays: days,
-            calculatedTotalRent: (item.pricePerDay || 250000) * days,
-          }));
+    if (hasExplicitBrowseIntent) {
+      const filteredRent = allCatalogProducts
+        .filter((item) => item.type === 'RENT' && (item.pricePerDay || 0) <= maxBudget)
+        .slice(0, 4)
+        .map((item) => ({
+          ...item,
+          budgetTag: 'Phù hợp ngân sách',
+          calculatedDays: days,
+          calculatedTotalRent: (item.pricePerDay || 180000) * days,
+        }));
 
+      const finalRecs =
+        filteredRent.length > 0
+          ? filteredRent
+          : allCatalogProducts.slice(0, 3).map((item) => ({
+              ...item,
+              calculatedDays: days,
+              calculatedTotalRent: (item.pricePerDay || 180000) * days,
+            }));
+
+      return {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        timestamp: nowTime,
+        bannerTitle: 'Mình tìm thấy các mẫu trang phục phù hợp với bạn!',
+        bannerSubtitle: 'Đã lọc theo danh mục thời trang, giá thuê và số ngày sử dụng.',
+        text: `Dựa trên nhu cầu thuê ${days} ngày với ngân sách dưới ${formatVND(maxBudget)}/ngày, đây là các mẫu trang phục & phụ kiện nổi bật đang có sẵn tại ReUse Hub:`,
+        recommendations: finalRecs,
+        quickFollowUps: [
+          `Tính tổng chi phí thuê ${finalRecs[0]?.name || 'Đầm Dạ Hội'} trong ${days} ngày`,
+          'Tìm bộ Suit / Vest nam lịch lãm hoặc Áo dài truyền thống',
+          'Nên thuê ngắn hạn hay mua thanh lý THRIFT?',
+        ],
+      };
+    }
+
+    // 7. Mặc định cho các câu hỏi thông tin, trò chuyện (CHỈ TRẢ LỜI VĂN BẢN, KHÔNG GỬI KÈM SẢN PHẨM)
     return {
       id: `ai-${Date.now()}`,
       sender: 'ai',
       timestamp: nowTime,
-      bannerTitle: 'Mình tìm thấy một số sản phẩm phù hợp với bạn!',
-      bannerSubtitle: 'Đã lọc theo giá thuê và thời gian sử dụng.',
-      text: `Dựa trên nhu cầu thuê ${days} ngày với ngân sách dưới ${formatVND(maxBudget)}/ngày, đây là các thiết bị có sẵn trong kho được đánh giá tốt nhất:`,
-      recommendations: finalRecs,
+      bannerTitle: 'Trợ lý ảo ReUse AI sẵn sàng giải đáp cho bạn!',
+      bannerSubtitle: 'Hỏi quy trình thuê/mua hoặc nhập tên trang phục bạn muốn tìm.',
+      text:
+        'Mình có thể hỗ trợ bạn giải đáp mọi thắc mắc về:\n' +
+        '• **Quy trình thuê đồ & trả đồ:** Cách đặt thuê 4 bước, chính sách giặt hấp miễn phí, đổi size trong 4h.\n' +
+        '• **Cơ chế tiền cọc Smart Escrow & Biên bản CLA:** Bảo vệ 100% tiền cọc và hoàn tiền tự động về Ví.\n' +
+        '• **Tìm kiếm trang phục theo yêu cầu:** Khi nào bạn muốn xem sản phẩm, chỉ cần nhắn tên món đồ (ví dụ: *"Đầm dạ hội"*, *"Áo dài"*, *"Suit nam"*, *"Giày cao gót"*...) mình sẽ gửi đúng sản phẩm đó cho bạn nhé!',
+      recommendations: [],
       quickFollowUps: [
-        'So sánh ưu nhược điểm Canon EOS M50 và Sony A6000',
-        `Tính tổng chi phí thuê ${finalRecs[0]?.name || 'Canon EOS M50'} trong ${days} ngày`,
-        'Nên thuê ngắn hạn hay mua thanh lý THRIFT?',
+        'Cách thuê đồ như thế nào?',
+        'Khi nào tôi được hoàn lại 100% tiền đặt cọc Smart Escrow?',
+        'Biên bản đồng kiểm CLA 3 góc khi nhận hàng là gì?',
       ],
     };
   };
@@ -636,10 +1229,28 @@ export const AIShoppingAssistant: React.FC = () => {
         activeProductId: pageContext.activeProduct?.id || null,
         messages: updatedWithUser,
       });
-      const aiReply =
-        beReply && ((beReply.recommendations && beReply.recommendations.length > 0) || beReply.costBreakdown || beReply.orderSummaries)
-          ? { ...localReply, ...beReply }
-          : localReply;
+      const hasBeContent =
+        beReply &&
+        ((beReply.recommendations && beReply.recommendations.length > 0) ||
+          beReply.comparison ||
+          beReply.costBreakdown ||
+          beReply.orderSummaries ||
+          beReply.text);
+      const aiReply: AIMessage = hasBeContent
+        ? {
+            id: beReply.id || localReply.id,
+            sender: 'ai',
+            timestamp: beReply.timestamp || localReply.timestamp,
+            bannerTitle: beReply.bannerTitle ?? localReply.bannerTitle,
+            bannerSubtitle: beReply.bannerSubtitle ?? localReply.bannerSubtitle,
+            text: beReply.text ?? localReply.text,
+            recommendations: beReply.recommendations,
+            comparison: beReply.comparison,
+            costBreakdown: beReply.costBreakdown,
+            orderSummaries: beReply.orderSummaries,
+            quickFollowUps: beReply.quickFollowUps ?? localReply.quickFollowUps,
+          }
+        : localReply;
       const finalMessages = [...updatedWithUser, aiReply];
       setMessages(finalMessages);
       setIsTyping(false);
@@ -664,11 +1275,11 @@ export const AIShoppingAssistant: React.FC = () => {
 
   const handleQuickActionCard = (actionKey: 'FIND' | 'COMPARE' | 'COST' | 'RENT_VS_THRIFT') => {
     if (actionKey === 'FIND') {
-      handleSendPrompt('Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.');
+      handleSendPrompt('Mình cần thuê đầm dạ hội dự tiệc 4 ngày, ngân sách dưới 300.000đ/ngày.');
     } else if (actionKey === 'COMPARE') {
-      handleSendPrompt('So sánh ưu nhược điểm Canon EOS M50 và Sony A6000 khi đi du lịch.');
+      handleSendPrompt('So sánh ưu nhược điểm giữa Đầm Dạ Hội Nữ và Áo Dài Truyền Thống khi đi sự kiện.');
     } else if (actionKey === 'COST') {
-      handleSendPrompt('Tính chi phí thuê máy ảnh 4 ngày và giải thích cơ chế tiền đặt cọc.');
+      handleSendPrompt('Tính chi phí thuê trang phục 4 ngày và giải thích cơ chế tiền đặt cọc.');
     } else if (actionKey === 'RENT_VS_THRIFT') {
       handleSendPrompt('Tư vấn giúp mình khi nào nên thuê (RENT) và khi nào nên mua (THRIFT)?');
     }
@@ -957,7 +1568,7 @@ export const AIShoppingAssistant: React.FC = () => {
                     onClick={() => {
                       setActiveTab('chat');
                       handleSendPrompt(
-                        `Mình cần thuê máy ảnh đi du lịch ${preferences.travelDaysDefault} ngày, ngân sách dưới ${preferences.maxDailyRentBudget.toLocaleString('vi-VN')}đ/ngày.`
+                        `Mình cần thuê đầm dạ hội dự tiệc ${preferences.travelDaysDefault} ngày, ngân sách dưới ${preferences.maxDailyRentBudget.toLocaleString('vi-VN')}đ/ngày.`
                       );
                     }}
                     className="w-full py-2.5 rounded-xl bg-[#6D28D9] hover:bg-[#5B21B6] text-xs font-semibold text-white transition-colors cursor-pointer"
@@ -1377,10 +1988,10 @@ export const AIShoppingAssistant: React.FC = () => {
                         type="button"
                         onClick={() =>
                           handleSendPrompt(
-                            'Mình cần thuê máy ảnh đi du lịch 4 ngày, ngân sách dưới 300.000đ/ngày.'
+                            'Mình cần thuê đầm dạ hội dự tiệc 4 ngày, ngân sách dưới 300.000đ/ngày.'
                           )
                         }
-                        title="Thử câu hỏi mẫu tìm máy ảnh"
+                        title="Thử câu hỏi mẫu tìm trang phục"
                         className="text-stone-500 hover:text-[#5B21B6] transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
                       >
                         <span className="material-symbols-outlined text-[17px]">attach_file</span>
